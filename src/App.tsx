@@ -9,12 +9,12 @@ import { Navbar } from './components/Navbar';
 import { RegisterModal } from './components/RegisterModal';
 import { auth } from './firebase';
 import {
-  addActivityLogInFirestore,
-  createBatchmateInFirestore,
-  createOrderInFirestore,
-  subscribeAdminCollections,
-  subscribePublicCollections,
-} from './services/firestoreService';
+  addActivityLogInDb,
+  createBatchmateInDb,
+  createOrderInDb,
+  fetchAdminData,
+  fetchPublicPortal,
+} from './services/apiService';
 import type { Batchmate, GalleryItem, HoodieOrder, PortalState, ToastMessage, ViewMode } from './types';
 import {
   AUTHORIZED_ADMIN_EMAIL,
@@ -78,84 +78,82 @@ export default function App() {
     return () => unsubAuth();
   }, []);
 
-  useEffect(() => {
-    const defaults = createDefaultState();
-    const unsubPublic = subscribePublicCollections({
-      onBatchmates: (items) => {
-        setState((prev) => ({
-          ...prev,
-          batchmates:
-            items.length > 0 || settingsSeededRef.current
-              ? settingsSeededRef.current
-                ? items
-                : [
-                    ...items,
-                    ...defaults.batchmates.filter((d) => !items.some((i) => i.id === d.id)),
-                  ]
-              : defaults.batchmates,
-        }));
-      },
-      onNotices: (items) => {
-        setState((prev) => ({
-          ...prev,
-          notices: items.length > 0 || settingsSeededRef.current ? items : defaults.notices,
-        }));
-      },
-      onGallery: (items) => {
-        setState((prev) => ({
-          ...prev,
-          gallery: items.length > 0 || settingsSeededRef.current ? items : defaults.gallery,
-        }));
-      },
-      onSettings: (settings) => {
-        if (!settings) return;
-        settingsSeededRef.current = true;
-        setState((prev) => ({
-          ...prev,
-          profile: settings.profile || defaults.profile,
-          hoodieConfig: settings.hoodieConfig
-            ? {
-                ...defaults.hoodieConfig,
-                ...settings.hoodieConfig,
-                specs:
-                  Array.isArray(settings.hoodieConfig.specs) && settings.hoodieConfig.specs.length > 0
-                    ? settings.hoodieConfig.specs
-                    : defaults.hoodieConfig.specs,
-              }
-            : defaults.hoodieConfig,
-          siteConfig: settings.siteConfig
-            ? { ...defaults.siteConfig, ...settings.siteConfig }
-            : defaults.siteConfig,
-        }));
-      },
-      onError: () => {
-        showToast('Syncing with cloud database failed — showing cached data.', 'error');
-      },
-    });
+  const refreshPublicPortal = useCallback(async () => {
+    try {
+      const defaults = createDefaultState();
+      const payload = await fetchPublicPortal();
+      const hasSettings = payload.settings !== null;
+      if (hasSettings) settingsSeededRef.current = true;
 
-    return () => unsubPublic();
-  }, [showToast]);
+      setState((prev) => ({
+        ...prev,
+        batchmates:
+          payload.batchmates.length > 0 || hasSettings
+            ? hasSettings
+              ? payload.batchmates
+              : [
+                  ...payload.batchmates,
+                  ...defaults.batchmates.filter((d) => !payload.batchmates.some((i) => i.id === d.id)),
+                ]
+            : defaults.batchmates,
+        notices: payload.notices.length > 0 || hasSettings ? payload.notices : defaults.notices,
+        gallery: payload.gallery.length > 0 || hasSettings ? payload.gallery : defaults.gallery,
+        profile: payload.settings?.profile || defaults.profile,
+        hoodieConfig: payload.settings?.hoodieConfig
+          ? {
+              ...defaults.hoodieConfig,
+              ...payload.settings.hoodieConfig,
+              specs:
+                Array.isArray(payload.settings.hoodieConfig.specs) && payload.settings.hoodieConfig.specs.length > 0
+                  ? payload.settings.hoodieConfig.specs
+                  : defaults.hoodieConfig.specs,
+            }
+          : defaults.hoodieConfig,
+        siteConfig: payload.settings?.siteConfig
+          ? { ...defaults.siteConfig, ...payload.settings.siteConfig }
+          : defaults.siteConfig,
+      }));
+    } catch {
+      // Keep current/default state smoothly without exposing backend details
+    }
+  }, []);
 
-  useEffect(() => {
+  const refreshAdminData = useCallback(async () => {
     if (!isFirebaseAdmin) {
       setState((prev) => ({ ...prev, orders: [], activityLog: [] }));
       return;
     }
+    try {
+      const adminPayload = await fetchAdminData();
+      setState((prev) => ({
+        ...prev,
+        orders: adminPayload.orders,
+        activityLog: adminPayload.activityLog,
+      }));
+    } catch {
+      // Handled gracefully
+    }
+  }, [isFirebaseAdmin]);
 
-    const unsubAdmin = subscribeAdminCollections({
-      onOrders: (orders) => {
-        setState((prev) => ({ ...prev, orders }));
-      },
-      onLogs: (activityLog) => {
-        setState((prev) => ({ ...prev, activityLog }));
-      },
-      onError: () => {
-        showToast('Could not sync admin orders or logs.', 'error');
-      },
-    });
+  const refreshAllData = useCallback(async () => {
+    await Promise.all([refreshPublicPortal(), refreshAdminData()]);
+  }, [refreshPublicPortal, refreshAdminData]);
 
-    return () => unsubAdmin();
-  }, [isFirebaseAdmin, showToast]);
+  useEffect(() => {
+    void refreshPublicPortal();
+    const handleFocus = () => {
+      void refreshPublicPortal();
+      if (isFirebaseAdmin) {
+        void refreshAdminData();
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [refreshPublicPortal, refreshAdminData, isFirebaseAdmin]);
+
+  useEffect(() => {
+    void refreshAdminData();
+  }, [refreshAdminData]);
 
   const updateState = useCallback((next: PortalState) => {
     setState(next);
@@ -178,42 +176,44 @@ export default function App() {
   const handleRegisterSubmit = useCallback(
     async (newBatchmate: Batchmate) => {
       try {
-        await createBatchmateInFirestore(newBatchmate);
+        await createBatchmateInDb(newBatchmate);
         if (isFirebaseAdmin) {
-          void addActivityLogInFirestore(
+          void addActivityLogInDb(
             'New Registration',
             `${newBatchmate.name} (Roll ${newBatchmate.roll}) registered`
           );
         }
+        await refreshAllData();
         setRegisterOpen(false);
         setActiveView('batchmates');
         window.scrollTo({ top: 0, behavior: 'smooth' });
         showToast(`Welcome to Orthohin '27, ${newBatchmate.name}! Your profile is now live.`, 'success');
       } catch (error) {
-        showToast('Registration could not be saved to Firebase. Please retry.', 'error');
+        showToast('Could not save your registration right now. Please retry.', 'error');
         throw error;
       }
     },
-    [isFirebaseAdmin, showToast]
+    [isFirebaseAdmin, refreshAllData, showToast]
   );
 
   const handlePlaceOrder = useCallback(
     async (order: HoodieOrder) => {
       try {
-        await createOrderInFirestore(order);
+        await createOrderInDb(order);
         if (isFirebaseAdmin) {
-          void addActivityLogInFirestore(
+          void addActivityLogInDb(
             'Direct Hoodie Order',
             `${order.id}: ${order.customerName} (Size ${order.size} × ${order.quantity})`
           );
         }
+        await refreshAllData();
         showToast(`Direct order ${order.id} placed for Size ${order.size}!`, 'success');
       } catch (error) {
-        showToast('Direct order could not be saved to Firebase. Please retry.', 'error');
+        showToast('Could not place your direct order right now. Please retry.', 'error');
         throw error;
       }
     },
-    [isFirebaseAdmin, showToast]
+    [isFirebaseAdmin, refreshAllData, showToast]
   );
 
   const handleCloseAdmin = useCallback(() => {
@@ -654,6 +654,7 @@ export default function App() {
         isFirebaseAdmin={isFirebaseAdmin}
         onClose={handleCloseAdmin}
         onUpdateState={updateState}
+        onRefreshData={refreshAllData}
         onOpenRegister={() => setRegisterOpen(true)}
         onToast={showToast}
       />

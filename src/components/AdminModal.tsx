@@ -27,20 +27,21 @@ import {
 } from 'lucide-react';
 import { auth, googleProvider } from '../firebase';
 import {
-  addActivityLogInFirestore,
-  createNoticeInFirestore,
-  deleteBatchmateInFirestore,
-  deleteGalleryItemInFirestore,
-  deleteNoticeInFirestore,
-  deleteOrderInFirestore,
-  saveGalleryItemInFirestore,
-  saveSettingsInFirestore,
-  seedDefaultsIfEmpty,
-  syncPortalStateToFirestore,
-  updateBatchmateInFirestore,
-  updateNoticeInFirestore,
-  updateOrderStatusInFirestore,
-} from '../services/firestoreService';
+  addActivityLogInDb,
+  createNoticeInDb,
+  deleteBatchmateInDb,
+  deleteGalleryItemInDb,
+  deleteNoticeInDb,
+  deleteOrderInDb,
+  reorderGalleryInDb,
+  saveGalleryItemInDb,
+  saveSettingsInDb,
+  seedDefaultsIfEmptyInDb,
+  syncPortalStateInDb,
+  updateBatchmateInDb,
+  updateNoticeInDb,
+  updateOrderStatusInDb,
+} from '../services/apiService';
 import type {
   Batchmate,
   BatchNotice,
@@ -71,6 +72,7 @@ interface AdminModalProps {
   isFirebaseAdmin: boolean;
   onClose: () => void;
   onUpdateState: (next: PortalState) => void;
+  onRefreshData: () => Promise<void>;
   onOpenRegister: () => void;
   onToast: (text: string, tone?: 'success' | 'error' | 'info') => void;
 }
@@ -85,6 +87,7 @@ export function AdminModal({
   isFirebaseAdmin,
   onClose,
   onUpdateState,
+  onRefreshData,
   onOpenRegister,
   onToast,
 }: AdminModalProps) {
@@ -228,10 +231,11 @@ export function AdminModal({
     setLoginError('');
     setPasswordInput('');
     try {
-      await seedDefaultsIfEmpty(createDefaultState());
-      await addActivityLogInFirestore('Admin Signed In', `Authorized session started by ${verifiedEmail}`);
+      await seedDefaultsIfEmptyInDb(createDefaultState());
+      await addActivityLogInDb('Admin Signed In', `Authorized session started by ${verifiedEmail}`);
+      await onRefreshData();
     } catch {
-      onToast('Signed in, but could not finish cloud sync.', 'error');
+      onToast('Signed in, but could not finish data sync.', 'error');
     }
   };
 
@@ -300,22 +304,24 @@ export function AdminModal({
   /* Orders Management */
   const handleOrderStatus = async (orderId: string, status: OrderStatus) => {
     try {
-      await updateOrderStatusInFirestore(orderId, status);
-      void addActivityLogInFirestore('Order Updated', `Order ${orderId} marked as ${status}`);
+      await updateOrderStatusInDb(orderId, status);
+      void addActivityLogInDb('Order Updated', `Order ${orderId} marked as ${status}`);
+      await onRefreshData();
       onToast(`Order ${orderId} marked as ${status}.`, 'success');
     } catch {
-      onToast('Could not update order status in Firebase.', 'error');
+      onToast('Could not update order status.', 'error');
     }
   };
 
   const handleDeleteOrder = async (orderId: string) => {
     try {
-      await deleteOrderInFirestore(orderId);
-      void addActivityLogInFirestore('Order Removed', `Order ${orderId} deleted by admin`);
+      await deleteOrderInDb(orderId);
+      void addActivityLogInDb('Order Removed', `Order ${orderId} deleted by admin`);
+      await onRefreshData();
       setConfirmDeleteOrderId(null);
       onToast('Order removed.', 'info');
     } catch {
-      onToast('Could not delete order from Firebase.', 'error');
+      onToast('Could not delete order.', 'error');
     }
   };
 
@@ -352,24 +358,26 @@ export function AdminModal({
       return;
     }
     try {
-      await updateBatchmateInFirestore(bm);
-      void addActivityLogInFirestore('Batchmate Updated', `${bm.name} (Roll ${bm.roll}) updated`);
+      await updateBatchmateInDb(bm);
+      void addActivityLogInDb('Batchmate Updated', `${bm.name} (Roll ${bm.roll}) updated`);
+      await onRefreshData();
       setEditingBmId(null);
-      onToast(`${bm.name} saved to Firebase.`, 'success');
+      onToast(`${bm.name} saved.`, 'success');
     } catch {
-      onToast('Could not save batchmate changes to Firebase.', 'error');
+      onToast('Could not save batchmate changes.', 'error');
     }
   };
 
   const handleDeleteBatchmate = async (id: string) => {
     const target = state.batchmates.find((b) => b.id === id);
     try {
-      await deleteBatchmateInFirestore(id);
-      void addActivityLogInFirestore('Batchmate Removed', `${target?.name || id} removed from directory`);
+      await deleteBatchmateInDb(id);
+      void addActivityLogInDb('Batchmate Removed', `${target?.name || id} removed from directory`);
+      await onRefreshData();
       setConfirmDeleteBmId(null);
       onToast('Batchmate removed from directory.', 'info');
     } catch {
-      onToast('Could not remove batchmate from Firebase.', 'error');
+      onToast('Could not remove batchmate.', 'error');
     }
   };
 
@@ -404,11 +412,12 @@ export function AdminModal({
     if (added.length > 0) {
       const merged = [...added, ...state.gallery];
       try {
-        await Promise.all(merged.map((item, idx) => saveGalleryItemInFirestore(item, idx)));
-        void addActivityLogInFirestore('Gallery Updated', `${added.length} photo(s) uploaded`);
-        onToast(`${added.length} photo(s) uploaded to Firebase.`, 'success');
+        await reorderGalleryInDb(merged);
+        void addActivityLogInDb('Gallery Updated', `${added.length} photo(s) uploaded`);
+        await onRefreshData();
+        onToast(`${added.length} photo(s) uploaded.`, 'success');
       } catch {
-        onToast('Could not upload photos to Firebase.', 'error');
+        onToast('Could not upload photos.', 'error');
       }
     }
     e.target.value = '';
@@ -431,15 +440,16 @@ export function AdminModal({
     };
     const merged = [item, ...state.gallery];
     try {
-      await Promise.all(merged.map((g, idx) => saveGalleryItemInFirestore(g, idx)));
-      void addActivityLogInFirestore('Video Added', `Video "${item.title}" added to Memory Vault`);
+      await reorderGalleryInDb(merged);
+      void addActivityLogInDb('Video Added', `Video "${item.title}" added to Memory Vault`);
+      await onRefreshData();
       setVideoTitle('');
       setVideoCaption('');
       setVideoUrl('');
       setShowAddVideo(false);
       onToast('Video memory added.', 'success');
     } catch {
-      onToast('Could not save video memory to Firebase.', 'error');
+      onToast('Could not save video memory.', 'error');
     }
   };
 
@@ -451,7 +461,8 @@ export function AdminModal({
       const idx = state.gallery.findIndex((item) => item.id === replaceTargetId);
       const target = state.gallery[idx];
       if (target) {
-        await saveGalleryItemInFirestore({ ...target, src }, Math.max(0, idx));
+        await saveGalleryItemInDb({ ...target, src }, Math.max(0, idx));
+        await onRefreshData();
         onToast('Gallery photo replaced.', 'success');
       }
     } catch {
@@ -464,13 +475,11 @@ export function AdminModal({
 
   const handleSaveGalleryItem = async (item: GalleryItem, idx: number) => {
     try {
-      await saveGalleryItemInFirestore(
-        { ...item, title: item.title.trim() || 'Untitled Memory' },
-        idx
-      );
+      await saveGalleryItemInDb({ ...item, title: item.title.trim() || 'Untitled Memory' }, idx);
+      await onRefreshData();
       onToast('Gallery item saved.', 'success');
     } catch {
-      onToast('Could not save gallery item to Firebase.', 'error');
+      onToast('Could not save gallery item.', 'error');
     }
   };
 
@@ -482,20 +491,22 @@ export function AdminModal({
     copy.splice(targetIdx, 0, moved);
     onUpdateState({ ...state, gallery: copy });
     try {
-      await Promise.all(copy.map((item, idx) => saveGalleryItemInFirestore(item, idx)));
+      await reorderGalleryInDb(copy);
+      await onRefreshData();
     } catch {
-      onToast('Could not reorder gallery in Firebase.', 'error');
+      onToast('Could not reorder gallery.', 'error');
     }
   };
 
   const handleDeleteGallery = async (id: string) => {
     try {
-      await deleteGalleryItemInFirestore(id);
-      void addActivityLogInFirestore('Gallery Item Removed', `Item ${id} deleted`);
+      await deleteGalleryItemInDb(id);
+      void addActivityLogInDb('Gallery Item Removed', `Item ${id} deleted`);
+      await onRefreshData();
       setConfirmDeleteGalleryId(null);
       onToast('Gallery item removed.', 'info');
     } catch {
-      onToast('Could not delete gallery item from Firebase.', 'error');
+      onToast('Could not delete gallery item.', 'error');
     }
   };
 
@@ -508,10 +519,11 @@ export function AdminModal({
   ) => {
     setIsSyncing(true);
     try {
-      await saveSettingsInFirestore(nextProfile, nextHoodie, nextSite);
+      await saveSettingsInDb(nextProfile, nextHoodie, nextSite);
+      await onRefreshData();
       if (successMsg) onToast(successMsg, 'success');
     } catch {
-      onToast('Could not save settings to Firebase.', 'error');
+      onToast('Could not save settings.', 'error');
     } finally {
       setIsSyncing(false);
     }
@@ -525,11 +537,12 @@ export function AdminModal({
       const src = await compressImage(file, 900);
       const nextHoodie = { ...state.hoodieConfig, [hoodieSideTarget]: src };
       onUpdateState({ ...state, hoodieConfig: nextHoodie });
-      await saveSettingsInFirestore(state.profile, nextHoodie, state.siteConfig);
-      void addActivityLogInFirestore(
+      await saveSettingsInDb(state.profile, nextHoodie, state.siteConfig);
+      void addActivityLogInDb(
         'Hoodie Photo Updated',
         `Updated RCS Hoodie ${hoodieSideTarget === 'frontImage' ? 'Front' : 'Back'} photo`
       );
+      await onRefreshData();
       onToast(`RCS Hoodie ${hoodieSideTarget === 'frontImage' ? 'Front' : 'Back'} image saved.`, 'success');
     } catch {
       onToast('Failed to process or upload hoodie image.', 'error');
@@ -544,9 +557,10 @@ export function AdminModal({
     try {
       const src = await compressImage(file, 600);
       onUpdateState({ ...state, profile: src });
-      await saveSettingsInFirestore(src, state.hoodieConfig, state.siteConfig);
-      void addActivityLogInFirestore('Profile Updated', 'Leadership profile photo uploaded');
-      onToast('Leadership profile photo saved to Firebase.', 'success');
+      await saveSettingsInDb(src, state.hoodieConfig, state.siteConfig);
+      void addActivityLogInDb('Profile Updated', 'Leadership profile photo uploaded');
+      await onRefreshData();
+      onToast('Leadership profile photo saved.', 'success');
     } catch {
       onToast('Failed to upload profile photo.', 'error');
     }
@@ -577,14 +591,15 @@ export function AdminModal({
             ...parsed,
           };
           setIsSyncing(true);
-          await syncPortalStateToFirestore(restored, true);
-          void addActivityLogInFirestore('Backup Imported', 'Portal data restored from JSON backup');
-          onToast('Backup imported and synced to Firebase.', 'success');
+          await syncPortalStateInDb(restored, true);
+          void addActivityLogInDb('Backup Imported', 'Portal data restored from JSON backup');
+          await onRefreshData();
+          onToast('Backup imported successfully.', 'success');
         } else {
           onToast('Invalid backup file format.', 'error');
         }
       } catch {
-        onToast('Could not parse or sync backup JSON.', 'error');
+        onToast('Could not parse or import backup JSON.', 'error');
       } finally {
         setIsSyncing(false);
       }
@@ -600,7 +615,7 @@ export function AdminModal({
     }
     setAdminPassword(newPassword);
     setNewPassword('');
-    void addActivityLogInFirestore('Password Changed', 'Admin passcode updated');
+    void addActivityLogInDb('Password Changed', 'Admin passcode updated');
     onToast('Admin passcode updated.', 'success');
   };
 
@@ -621,21 +636,23 @@ export function AdminModal({
       createdAt: new Date().toISOString().slice(0, 10),
     };
     try {
-      await createNoticeInFirestore(newNotice);
-      void addActivityLogInFirestore('Notice Published', `${newNotice.category}: ${newNotice.title}`);
+      await createNoticeInDb(newNotice);
+      void addActivityLogInDb('Notice Published', `${newNotice.category}: ${newNotice.title}`);
+      await onRefreshData();
       setNoticeTitle('');
       setNoticeMessage('');
       setNoticeCategory('General');
       setNoticePinned(true);
-      onToast('Batch notice published to Firebase.', 'success');
+      onToast('Batch notice published.', 'success');
     } catch {
-      onToast('Could not publish notice to Firebase.', 'error');
+      onToast('Could not publish notice.', 'error');
     }
   };
 
   const handleToggleNoticePin = async (notice: BatchNotice) => {
     try {
-      await updateNoticeInFirestore({ ...notice, pinned: !notice.pinned });
+      await updateNoticeInDb({ ...notice, pinned: !notice.pinned });
+      await onRefreshData();
     } catch {
       onToast('Could not update notice pin state.', 'error');
     }
@@ -643,7 +660,8 @@ export function AdminModal({
 
   const handleToggleNoticeActive = async (notice: BatchNotice) => {
     try {
-      await updateNoticeInFirestore({ ...notice, active: !notice.active });
+      await updateNoticeInDb({ ...notice, active: !notice.active });
+      await onRefreshData();
     } catch {
       onToast('Could not toggle notice visibility.', 'error');
     }
@@ -651,12 +669,13 @@ export function AdminModal({
 
   const handleDeleteNotice = async (id: string) => {
     try {
-      await deleteNoticeInFirestore(id);
-      void addActivityLogInFirestore('Notice Removed', `Notice ${id} deleted`);
+      await deleteNoticeInDb(id);
+      void addActivityLogInDb('Notice Removed', `Notice ${id} deleted`);
+      await onRefreshData();
       setConfirmDeleteNoticeId(null);
       onToast('Notice deleted.', 'info');
     } catch {
-      onToast('Could not delete notice from Firebase.', 'error');
+      onToast('Could not delete notice.', 'error');
     }
   };
 
@@ -712,7 +731,7 @@ export function AdminModal({
             <div className="space-y-1.5">
               <h3 className="text-lg font-bold text-white">Authorized Admin Sign In</h3>
               <p className="text-xs text-zinc-400 leading-relaxed">
-                Protected by Firebase Auth & Admin Passcode. Only{' '}
+                Protected by Google verification & Admin Passcode. Only{' '}
                 <span className="font-mono text-zinc-200">{AUTHORIZED_ADMIN_EMAIL}</span> is authorized.
               </p>
             </div>
@@ -720,7 +739,7 @@ export function AdminModal({
             {/* Google Auth Status Pill */}
             <div className="p-3.5 rounded-xl bg-zinc-900/90 border border-zinc-800 space-y-2.5">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-medium text-zinc-300">Firebase Google Verification</span>
+                <span className="text-xs font-medium text-zinc-300">Google Account Verification</span>
                 {isFirebaseAdmin ? (
                   <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400">
                     <Check className="w-3.5 h-3.5" /> Verified
@@ -798,7 +817,7 @@ export function AdminModal({
               disabled={isAuthenticating}
               className="w-full py-2.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-sm font-semibold transition-colors cursor-pointer disabled:opacity-50"
             >
-              {isAuthenticating ? 'Unlocking Firebase Admin...' : 'Verify & Unlock Admin Panel'}
+              {isAuthenticating ? 'Unlocking Admin Panel...' : 'Verify & Unlock Admin Panel'}
             </button>
           </form>
         ) : (
@@ -1724,7 +1743,7 @@ export function AdminModal({
                             state.profile,
                             state.hoodieConfig,
                             state.siteConfig,
-                            'Hoodie page changes saved to Firebase.'
+                            'Hoodie page changes saved.'
                           )
                         }
                         className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-xs font-semibold text-white cursor-pointer disabled:opacity-50"
@@ -1833,7 +1852,7 @@ export function AdminModal({
                             state.profile,
                             state.hoodieConfig,
                             state.siteConfig,
-                            'Site content saved to Firebase.'
+                            'Site content saved.'
                           )
                         }
                         className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-xs font-semibold text-white cursor-pointer disabled:opacity-50"
@@ -1934,13 +1953,14 @@ export function AdminModal({
                               setIsSyncing(true);
                               try {
                                 const defaults = createDefaultState();
-                                await syncPortalStateToFirestore(defaults, true);
+                                await syncPortalStateInDb(defaults, true);
                                 resetAdminPassword();
-                                void addActivityLogInFirestore('Portal Reset', 'Portal data reset to factory defaults');
+                                void addActivityLogInDb('Portal Reset', 'Portal data reset to factory defaults');
+                                await onRefreshData();
                                 setConfirmReset(false);
-                                onToast('Firebase portal data reset to defaults.', 'info');
+                                onToast('Portal data reset to defaults.', 'info');
                               } catch {
-                                onToast('Failed to reset Firebase portal data.', 'error');
+                                onToast('Failed to reset portal data.', 'error');
                               } finally {
                                 setIsSyncing(false);
                               }
