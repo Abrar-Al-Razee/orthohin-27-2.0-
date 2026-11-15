@@ -1,0 +1,222 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global safety net: default deny everything
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Shared primitive helpers
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() &&
+        request.auth.token.email == 'abraralraze@gmail.com' &&
+        request.auth.token.email_verified == true;
+    }
+
+    // Startup connection check document
+    match /test/connection {
+      allow get: if true;
+      allow list, write: if false;
+    }
+
+    // Entity validation blueprints
+    function isValidBatchmate(data) {
+      return data.keys().hasAll(['name', 'roll', 'group', 'createdAt']) &&
+        data.keys().hasOnly(['name', 'roll', 'group', 'social', 'quote', 'photo', 'registeredAt', 'createdAt']) &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+        data.roll is string && data.roll.size() >= 1 && data.roll.size() <= 32 &&
+        data.group is string && data.group.size() >= 1 && data.group.size() <= 60 &&
+        (!('social' in data) || (data.social is string && data.social.size() <= 100)) &&
+        (!('quote' in data) || (data.quote is string && data.quote.size() <= 400)) &&
+        (!('photo' in data) || (data.photo is string && data.photo.size() <= 300000)) &&
+        (!('registeredAt' in data) || (data.registeredAt is string && data.registeredAt.size() <= 32)) &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidNotice(data) {
+      return data.keys().hasAll(['title', 'message', 'category', 'pinned', 'active', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['title', 'message', 'category', 'pinned', 'active', 'createdAt', 'updatedAt']) &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 140 &&
+        data.message is string && data.message.size() >= 1 && data.message.size() <= 1000 &&
+        data.category in ['General', 'Urgent', 'Event'] &&
+        data.pinned is bool &&
+        data.active is bool &&
+        data.createdAt is string && data.createdAt.size() >= 1 && data.createdAt.size() <= 32 &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidGalleryItem(data) {
+      return data.keys().hasAll(['src', 'title', 'caption', 'sortOrder', 'updatedAt']) &&
+        data.keys().hasOnly(['src', 'title', 'caption', 'date', 'isVideo', 'videoUrl', 'sortOrder', 'updatedAt']) &&
+        data.src is string && data.src.size() <= 300000 &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 140 &&
+        data.caption is string && data.caption.size() <= 400 &&
+        (!('date' in data) || (data.date is string && data.date.size() <= 40)) &&
+        (!('isVideo' in data) || data.isVideo is bool) &&
+        (!('videoUrl' in data) || (data.videoUrl is string && data.videoUrl.size() <= 500)) &&
+        data.sortOrder is number && data.sortOrder >= 0 && data.sortOrder <= 10000 &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidOrder(data) {
+      return data.keys().hasAll(['orderCode', 'customerName', 'roll', 'size', 'quantity', 'contact', 'status', 'createdAt']) &&
+        data.keys().hasOnly(['orderCode', 'customerName', 'roll', 'size', 'quantity', 'contact', 'notes', 'status', 'createdAt']) &&
+        data.orderCode is string && data.orderCode.size() >= 3 && data.orderCode.size() <= 32 &&
+        data.customerName is string && data.customerName.size() >= 1 && data.customerName.size() <= 100 &&
+        data.roll is string && data.roll.size() >= 1 && data.roll.size() <= 32 &&
+        data.size in ['S', 'M', 'L', 'XL', 'XXL', 'XXXL'] &&
+        data.quantity is int && data.quantity >= 1 && data.quantity <= 5 &&
+        data.contact is string && data.contact.size() >= 1 && data.contact.size() <= 100 &&
+        (!('notes' in data) || (data.notes is string && data.notes.size() <= 300)) &&
+        data.status in ['Pending', 'Confirmed', 'Delivered'] &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidHoodieMap(h) {
+      return h is map &&
+        h.keys().hasAll(['title', 'subtitle', 'frontImage', 'backImage', 'specs', 'directOrderOpen']) &&
+        h.keys().hasOnly(['title', 'subtitle', 'frontImage', 'backImage', 'specs', 'directOrderOpen']) &&
+        h.title is string && h.title.size() >= 1 && h.title.size() <= 120 &&
+        h.subtitle is string && h.subtitle.size() <= 500 &&
+        h.frontImage is string && h.frontImage.size() <= 300000 &&
+        h.backImage is string && h.backImage.size() <= 300000 &&
+        h.specs is list && h.specs.size() > 0 && h.specs.size() <= 10 && h.specs[0] is string &&
+        h.directOrderOpen is bool;
+    }
+
+    function isValidSiteMap(s) {
+      return s is map &&
+        s.keys().hasAll(['heroKicker', 'heroTitle', 'heroHighlight', 'heroDescription', 'announcement', 'instagramUrl', 'devNote']) &&
+        s.keys().hasOnly(['heroKicker', 'heroTitle', 'heroHighlight', 'heroDescription', 'announcement', 'instagramUrl', 'devNote']) &&
+        s.heroKicker is string && s.heroKicker.size() <= 120 &&
+        s.heroTitle is string && s.heroTitle.size() <= 120 &&
+        s.heroHighlight is string && s.heroHighlight.size() <= 120 &&
+        s.heroDescription is string && s.heroDescription.size() <= 600 &&
+        s.announcement is string && s.announcement.size() <= 300 &&
+        s.instagramUrl is string && s.instagramUrl.size() <= 300 &&
+        s.devNote is string && s.devNote.size() <= 600;
+    }
+
+    function isValidSettings(data) {
+      return data.keys().hasAll(['profile', 'hoodieConfig', 'siteConfig', 'updatedAt']) &&
+        data.keys().hasOnly(['profile', 'hoodieConfig', 'siteConfig', 'updatedAt']) &&
+        data.profile is string && data.profile.size() <= 300000 &&
+        isValidHoodieMap(data.hoodieConfig) &&
+        isValidSiteMap(data.siteConfig) &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidActivityLog(data) {
+      return data.keys().hasAll(['action', 'detail', 'createdAt']) &&
+        data.keys().hasOnly(['action', 'detail', 'createdAt']) &&
+        data.action is string && data.action.size() >= 1 && data.action.size() <= 80 &&
+        data.detail is string && data.detail.size() >= 1 && data.detail.size() <= 300 &&
+        data.createdAt is timestamp;
+    }
+
+    // Public cohort directory; anyone may register with valid schema, admin manages edits/deletes
+    match /batchmates/{batchmateId} {
+      allow get: if isValidId(batchmateId);
+      allow list: if true;
+      allow create: if isValidId(batchmateId) &&
+        isValidBatchmate(incoming()) &&
+        incoming().createdAt == request.time;
+      allow update: if isValidId(batchmateId) &&
+        isAdmin() &&
+        isValidBatchmate(incoming()) &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'roll', 'group', 'social', 'quote', 'photo', 'registeredAt']);
+      allow delete: if isValidId(batchmateId) && isAdmin();
+    }
+
+    // Official notices: public read, admin-only write
+    match /notices/{noticeId} {
+      allow get: if isValidId(noticeId);
+      allow list: if true;
+      allow create: if isValidId(noticeId) &&
+        isAdmin() &&
+        isValidNotice(incoming()) &&
+        incoming().updatedAt == request.time;
+      allow update: if isValidId(noticeId) &&
+        isAdmin() &&
+        isValidNotice(incoming()) &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['title', 'message', 'category', 'pinned', 'active', 'updatedAt']);
+      allow delete: if isValidId(noticeId) && isAdmin();
+    }
+
+    // Memory Vault gallery: public read, admin-only write
+    match /gallery/{galleryId} {
+      allow get: if isValidId(galleryId);
+      allow list: if true;
+      allow create: if isValidId(galleryId) &&
+        isAdmin() &&
+        isValidGalleryItem(incoming()) &&
+        incoming().updatedAt == request.time;
+      allow update: if isValidId(galleryId) &&
+        isAdmin() &&
+        isValidGalleryItem(incoming()) &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['src', 'title', 'caption', 'date', 'isVideo', 'videoUrl', 'sortOrder', 'updatedAt']);
+      allow delete: if isValidId(galleryId) && isAdmin();
+    }
+
+    // Direct Hoodie orders: public create (Pending only), PII read/manage strictly Admin-only
+    match /orders/{orderId} {
+      allow get: if isValidId(orderId) && isAdmin();
+      allow list: if isAdmin();
+      allow create: if isValidId(orderId) &&
+        isValidOrder(incoming()) &&
+        incoming().status == 'Pending' &&
+        incoming().createdAt == request.time;
+      allow update: if isValidId(orderId) &&
+        isAdmin() &&
+        isValidOrder(incoming()) &&
+        incoming().orderCode == existing().orderCode &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'notes']);
+      allow delete: if isValidId(orderId) && isAdmin();
+    }
+
+    // Portal settings (hoodieConfig, siteConfig, profile): public read, admin-only write
+    match /settings/{settingId} {
+      allow get: if isValidId(settingId);
+      allow list: if false;
+      allow create, update: if isValidId(settingId) &&
+        isAdmin() &&
+        isValidSettings(incoming()) &&
+        incoming().updatedAt == request.time;
+      allow delete: if isValidId(settingId) && isAdmin();
+    }
+
+    // Admin audit log: admin-only read/create, immutable
+    match /activityLogs/{logId} {
+      allow get: if isValidId(logId) && isAdmin();
+      allow list: if isAdmin();
+      allow create: if isValidId(logId) &&
+        isAdmin() &&
+        isValidActivityLog(incoming()) &&
+        incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if isValidId(logId) && isAdmin();
+    }
+  }
+}

@@ -1,0 +1,278 @@
+{
+  "entities": {
+    "Batchmate": {
+      "title": "Batchmate",
+      "description": "A registered student member of Orthohin '27.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "description": "Full name of the batchmate."
+        },
+        "roll": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "description": "Roll or batch ID number."
+        },
+        "group": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60,
+          "description": "Academic group or section."
+        },
+        "social": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Optional Instagram or social handle."
+        },
+        "quote": {
+          "type": "string",
+          "maxLength": 400,
+          "description": "Optional batch bio or memory note."
+        },
+        "photo": {
+          "type": "string",
+          "maxLength": 300000,
+          "description": "Optional compressed portrait data URL or asset path."
+        },
+        "registeredAt": {
+          "type": "string",
+          "maxLength": 32,
+          "description": "Display registration date string."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        }
+      },
+      "required": ["name", "roll", "group", "createdAt"]
+    },
+    "BatchNotice": {
+      "title": "BatchNotice",
+      "description": "An official announcement or notice published by the batch admin.",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 140,
+          "description": "Notice headline."
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000,
+          "description": "Notice body text."
+        },
+        "category": {
+          "type": "string",
+          "enum": ["General", "Urgent", "Event"],
+          "description": "Notice priority category."
+        },
+        "pinned": {
+          "type": "boolean",
+          "description": "Whether the notice is pinned to top."
+        },
+        "active": {
+          "type": "boolean",
+          "description": "Whether the notice is visible on the public portal."
+        },
+        "createdAt": {
+          "type": "string",
+          "maxLength": 32,
+          "description": "Display creation date."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": ["title", "message", "category", "pinned", "active", "createdAt", "updatedAt"]
+    },
+    "GalleryItem": {
+      "title": "GalleryItem",
+      "description": "A photo or video memory in the Memory Vault.",
+      "type": "object",
+      "properties": {
+        "src": {
+          "type": "string",
+          "maxLength": 300000,
+          "description": "Compressed image data URL or empty string."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 140,
+          "description": "Memory title."
+        },
+        "caption": {
+          "type": "string",
+          "maxLength": 400,
+          "description": "Memory description."
+        },
+        "date": {
+          "type": "string",
+          "maxLength": 40,
+          "description": "Display month/year."
+        },
+        "isVideo": {
+          "type": "boolean",
+          "description": "Whether this item links to a video."
+        },
+        "videoUrl": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Optional external video URL."
+        },
+        "sortOrder": {
+          "type": "number",
+          "description": "Ordering index."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp."
+        }
+      },
+      "required": ["src", "title", "caption", "sortOrder", "updatedAt"]
+    },
+    "HoodieOrder": {
+      "title": "HoodieOrder",
+      "description": "A direct RCS Hoodie '26-'27 order submitted by a batchmate.",
+      "type": "object",
+      "properties": {
+        "orderCode": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 32,
+          "description": "Short order reference code."
+        },
+        "customerName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "description": "Ordering student name."
+        },
+        "roll": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "description": "Student roll or batch ID."
+        },
+        "size": {
+          "type": "string",
+          "enum": ["S", "M", "L", "XL", "XXL", "XXXL"],
+          "description": "Hoodie size."
+        },
+        "quantity": {
+          "type": "integer",
+          "description": "Number of hoodies ordered (1-5)."
+        },
+        "contact": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "description": "Phone number or social handle."
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "Optional delivery or section note."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["Pending", "Confirmed", "Delivered"],
+          "description": "Fulfillment status."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        }
+      },
+      "required": ["orderCode", "customerName", "roll", "size", "quantity", "contact", "status", "createdAt"]
+    },
+    "PortalSettings": {
+      "title": "PortalSettings",
+      "description": "Global portal configuration document (hoodieConfig, siteConfig, profile).",
+      "type": "object",
+      "properties": {
+        "profile": {
+          "type": "string",
+          "maxLength": 300000,
+          "description": "Lead developer profile image."
+        },
+        "hoodieConfig": {
+          "type": "object",
+          "description": "RCS Hoodie title, subtitle, front/back images, specs, and directOrderOpen flag."
+        },
+        "siteConfig": {
+          "type": "object",
+          "description": "Hero copy, announcement, Instagram URL, and developer note."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp."
+        }
+      },
+      "required": ["profile", "hoodieConfig", "siteConfig", "updatedAt"]
+    },
+    "ActivityLogEntry": {
+      "title": "ActivityLogEntry",
+      "description": "Audit log item for admin actions.",
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Action label."
+        },
+        "detail": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300,
+          "description": "Action summary."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp."
+        }
+      },
+      "required": ["action", "detail", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/batchmates/{batchmateId}": {
+      "schema": { "$ref": "#/entities/Batchmate" },
+      "description": "Public directory of registered Orthohin '27 batchmates."
+    },
+    "/notices/{noticeId}": {
+      "schema": { "$ref": "#/entities/BatchNotice" },
+      "description": "Official batch notices managed by admin."
+    },
+    "/gallery/{galleryId}": {
+      "schema": { "$ref": "#/entities/GalleryItem" },
+      "description": "Memory Vault photos and video links."
+    },
+    "/orders/{orderId}": {
+      "schema": { "$ref": "#/entities/HoodieOrder" },
+      "description": "Direct RCS Hoodie orders (admin-readable only; public create)."
+    },
+    "/settings/{settingId}": {
+      "schema": { "$ref": "#/entities/PortalSettings" },
+      "description": "Portal configuration document (settings/main)."
+    },
+    "/activityLogs/{logId}": {
+      "schema": { "$ref": "#/entities/ActivityLogEntry" },
+      "description": "Admin-only audit log entries."
+    }
+  }
+}

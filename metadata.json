@@ -1,0 +1,6 @@
+{
+  "name": "ORTHOHIN '27",
+  "description": "Official Batch Web Portal for the Class of 2027 — batchmate directory, registration, memory vault, and official merchandise.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

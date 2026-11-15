@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ORTHOHIN '27 — Official Batch Web Portal</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config={theme:{extend:{colors:{brand:{400:'#f87171',500:'#ef4444',600:'#dc2626',900:'#7f1d1d'}}}}}
+</script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+body{font-family:'Inter',sans-serif;background:#09090b;color:#f4f4f5;overflow-x:hidden}
+.gradient-text{background:linear-gradient(135deg,#ef4444,#f43f5e,#e11d48);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+
+@keyframes glowMoveSmooth {
+  0% { text-shadow: 0 0 15px rgba(239,68,68,0.3), 0 0 30px rgba(225,29,72,0.15); transform: translateY(0px); }
+  50% { text-shadow: 0 0 35px rgba(239,68,68,0.7), 0 0 65px rgba(225,29,72,0.4); transform: translateY(-3px); }
+  100% { text-shadow: 0 0 15px rgba(239,68,68,0.3), 0 0 30px rgba(225,29,72,0.15); transform: translateY(0px); }
+}
+
+h1, h2, h3, .glow-move-text {
+  animation: glowMoveSmooth 3.5s ease-in-out infinite;
+}
+
+.glass-card{background:rgba(24,24,27,.85);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.1);transition:.3s}
+.glass-card:hover{border-color:rgba(239,68,68,.5)}
+::-webkit-scrollbar{width:8px}::-webkit-scrollbar-track{background:#09090b}::-webkit-scrollbar-thumb{background:#27272a;border-radius:4px}
+.inp{width:100%;background:#18181b;border:1px solid #27272a;border-radius:.6rem;padding:.6rem .8rem;font-size:.85rem;color:#f4f4f5;outline:none}
+.inp:focus{border-color:#ef4444}
+.ab{padding:.45rem .7rem;border-radius:.6rem;font-size:.72rem;font-weight:700;background:#27272a;color:#e4e4e7;display:inline-flex;align-items:center;gap:.4rem;cursor:pointer}
+.ab:hover{background:#3f3f46}.ab.red{background:#dc2626;color:#fff}.ab.red:hover{background:#b91c1c}
+#admin-modal{padding-top:env(safe-area-inset-top,0px)}
+</style>
+</head>
+<body class="selection:bg-brand-600 selection:text-white bg-[#09090b] text-[#f4f4f5]">
+
+<!-- NAV -->
+<nav class="fixed top-0 inset-x-0 z-40 bg-zinc-950/80 backdrop-blur-xl border-b border-zinc-800/80">
+ <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-20">
+  <a href="#hero" onclick="showSection('hero')" class="flex items-center gap-3">
+   <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-rose-600 p-0.5"><div class="w-full h-full bg-zinc-950 rounded-[10px] flex items-center justify-center"><i class="fab fa-instagram text-brand-500 text-xl"></i></div></div>
+   <div><span class="text-xl font-black block leading-none">ORTHOHIN <span class="text-brand-500">'27</span></span><span class="text-[11px] text-zinc-400">@orthohin_27</span></div>
+  </a>
+  <div class="hidden lg:flex gap-6 text-sm font-semibold text-zinc-400 items-center">
+   <a href="#" onclick="showSection('hero')" class="hover:text-white">Home</a>
+   <a href="#" onclick="showSection('hero'); setTimeout(()=>location.hash='#about', 50);" class="hover:text-white">About Us</a>
+   <a href="#" onclick="showSection('hero'); setTimeout(()=>location.hash='#gallery', 50);" class="hover:text-white">Gallery</a>
+   <a href="#" onclick="showSection('batchmates')" class="hover:text-white text-brand-400 font-bold">Batchmates</a>
+   <a href="#" onclick="showSection('register')" class="hover:text-white">Register</a>
+   <a href="#" onclick="showSection('hoodie')" class="hover:text-white text-rose-400">Hoodie '26-'27</a>
+   <a href="#" onclick="showSection('hero'); setTimeout(()=>location.hash='#directory', 50);" class="hover:text-white">Directory</a>
+  </div>
+  <div class="hidden md:flex items-center gap-3">
+   <button onclick="showSection('register')" class="px-4 py-2 rounded-xl bg-gradient-to-r from-brand-600 to-rose-600 text-white font-bold text-xs uppercase tracking-wider flex items-center gap-2"><i class="fas fa-user-plus"></i> Register Now</button>
+  </div>
+  <button id="mobile-menu-btn" class="lg:hidden text-zinc-400 text-2xl" aria-label="Menu"><i class="fas fa-bars"></i></button>
+ </div>
+ <div id="mobile-drawer" class="hidden lg:hidden bg-zinc-950/95 border-b border-zinc-800 px-6 py-5 space-y-3 text-center font-medium">
+  <a href="#" onclick="showSection('hero'); toggleMob();" class="block text-zinc-300 py-2">Home</a>
+  <a href="#" onclick="showSection('batchmates'); toggleMob();" class="block text-brand-400 font-bold py-2">Batchmates Directory</a>
+  <a href="#" onclick="showSection('register'); toggleMob();" class="block text-zinc-300 py-2">Register Membership Form</a>
+  <a href="#" onclick="showSection('hoodie'); toggleMob();" class="block text-rose-400 font-bold py-2">Hoodie '26-'27</a>
+  <a href="#" onclick="showSection('hero'); toggleMob(); setTimeout(()=>location.hash='#gallery', 50);" class="block text-zinc-300 py-2">Gallery</a>
+  <button onclick="showSection('register'); toggleMob();" class="w-full py-3 rounded-xl bg-brand-600 text-white font-bold text-xs uppercase tracking-wider">Register Now</button>
+ </div>
+</nav>
+
+<!-- CONTAINER FOR DYNAMIC VIEWS -->
+<div id="main-view-container">
+
+<!-- HERO -->
+<section id="view-hero" class="sec-view relative pt-32 pb-20 md:pt-44 md:pb-28 overflow-hidden flex items-center justify-center min-h-[85vh]">
+ <div class="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-brand-900/30 rounded-full blur-[130px] pointer-events-none"></div>
+ <div class="max-w-7xl mx-auto px-4 relative z-10 text-center">
+  <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-zinc-900/90 border border-brand-500/40 text-brand-400 text-xs sm:text-sm font-semibold mb-6"><span class="w-2.5 h-2.5 rounded-full bg-brand-500 animate-ping"></span>Official Batch Archive — Class of 2027</div>
+  <h1 class="text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-black tracking-tight mb-6 leading-tight">THE UNSTOPPABLE <br class="sm:hidden"><span class="gradient-text">ORTHOHIN '27</span></h1>
+  <p class="max-w-2xl mx-auto text-zinc-400 text-base sm:text-lg md:text-xl leading-relaxed mb-10">Resilient, united, and timeless. Welcome to the official hub of Batch 2027. Honoring our journey, capturing memories, and stepping into the future together.</p>
+  <div class="flex flex-col sm:flex-row items-center justify-center gap-4 mb-14">
+   <button onclick="showSection('batchmates')" class="w-full sm:w-auto px-8 py-3.5 rounded-2xl bg-gradient-to-r from-brand-600 to-rose-600 text-white font-bold text-sm shadow-xl shadow-brand-600/35 hover:scale-105 transition">View Batchmates Directory</button>
+   <button onclick="showSection('hoodie')" class="w-full sm:w-auto px-8 py-3.5 rounded-2xl bg-zinc-900 border border-rose-500/50 text-rose-400 font-bold text-sm hover:bg-rose-950/30 transition flex items-center justify-center gap-2"><i class="fas fa-shirt"></i> Hoodie '26-'27</button>
+   <button onclick="showSection('register')" class="w-full sm:w-auto px-8 py-3.5 rounded-2xl bg-brand-600 text-white font-bold text-sm shadow-lg shadow-brand-600/30 hover:bg-brand-500 transition"><i class="fas fa-user-plus mr-1"></i> Register Now</button>
+  </div>
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto">
+   <div class="glass-card p-5 rounded-2xl"><p class="text-3xl font-extrabold gradient-text" id="stat-batchmates-count">85+</p><p class="text-xs text-zinc-400 uppercase tracking-wider mt-1">Registered Batchmates</p></div>
+   <div class="glass-card p-5 rounded-2xl"><p class="text-3xl font-extrabold gradient-text" id="stat-photos">500+</p><p class="text-xs text-zinc-400 uppercase tracking-wider mt-1">Memories Captured</p></div>
+   <div class="glass-card p-5 rounded-2xl"><p class="text-3xl font-extrabold gradient-text">15+</p><p class="text-xs text-zinc-400 uppercase tracking-wider mt-1">Events & Outings</p></div>
+   <div class="glass-card p-5 rounded-2xl"><p class="text-3xl font-extrabold gradient-text">2027</p><p class="text-xs text-zinc-400 uppercase tracking-wider mt-1">Graduation Year</p></div>
+  </div>
+ </div>
+</section>
+
+<!-- ABOUT -->
+<section id="about" class="py-20 bg-zinc-950/60 border-y border-zinc-900">
+ <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid md:grid-cols-2 gap-12 items-center">
+  <div class="space-y-6">
+   <div class="inline-block px-3 py-1 rounded-md bg-brand-500/10 border border-brand-500/30 text-brand-400 text-xs font-semibold uppercase tracking-widest">Who We Are</div>
+   <h2 class="text-3xl sm:text-4xl font-extrabold">Bound by Passion, Driven by Excellence: <span class="gradient-text">Orthohin '27</span></h2>
+   <p class="text-zinc-400 leading-relaxed">The name <strong>"Orthohin"</strong> signifies unmatched spirit and endless dedication. As the Class of 2027, our journey has been defined by late-night study sessions, sports triumphs, cultural celebrations, and unbreakable friendships.</p>
+   <div class="grid sm:grid-cols-2 gap-4 pt-2">
+    <div class="p-4 rounded-xl bg-zinc-900/60 border border-zinc-800"><i class="fas fa-bullseye text-brand-500 text-xl mb-2"></i><h4 class="font-bold text-sm">Vision & Spirit</h4><p class="text-zinc-400 text-xs mt-1">To achieve excellence in our fields while staying deeply connected as a family.</p></div>
+    <div class="p-4 rounded-xl bg-zinc-900/60 border border-zinc-800"><i class="fas fa-heart text-brand-500 text-xl mb-2"></i><h4 class="font-bold text-sm">Unbreakable Unity</h4><p class="text-zinc-400 text-xs mt-1">Supporting every member through every challenge and victory along the way.</p></div>
+   </div>
+  </div>
+  <div class="glass-card p-6 rounded-3xl text-center space-y-4">
+   <div class="w-20 h-20 mx-auto rounded-full bg-gradient-to-tr from-yellow-500 via-rose-500 to-purple-600 p-1"><div class="w-full h-full bg-zinc-950 rounded-full flex items-center justify-center"><i class="fab fa-instagram text-4xl"></i></div></div>
+   <h3 class="text-2xl font-black">@orthohin_27</h3>
+   <p class="text-zinc-400 text-sm max-w-xs mx-auto">Follow our official Instagram page for real-time photo uploads, stories, and batch updates.</p>
+   <a href="https://www.instagram.com/orthohin_27/" target="_blank" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-brand-600 to-rose-600 text-white font-bold text-xs uppercase tracking-wider">View Posts on Instagram <i class="fas fa-external-link-alt text-xs"></i></a>
+  </div>
+ </div>
+</section>
+
+<!-- GALLERY -->
+<section id="gallery" class="py-20">
+ <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+  <span class="text-brand-500 font-bold text-xs uppercase tracking-widest block mb-2">Memory Vault</span>
+  <h2 class="text-3xl sm:text-5xl font-black mb-12">Captured Moments</h2>
+  <div id="gallery-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+ </div>
+</section>
+
+<!-- DIRECTORY -->
+<section id="directory" class="py-20 bg-zinc-950/80 border-t border-zinc-900">
+ <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+  <div class="text-center max-w-3xl mx-auto mb-16">
+   <span class="text-brand-500 font-bold text-xs uppercase tracking-widest block mb-2">Leadership & Technical Team</span>
+   <h2 class="text-3xl sm:text-5xl font-black mb-4">Batch Directory</h2>
+   <p class="text-zinc-400 text-sm sm:text-base">Meet the head organizer and developer keeping the Orthohin '27 digital platform alive.</p>
+  </div>
+  <div class="max-w-md mx-auto relative group">
+   <div class="absolute -inset-1 rounded-3xl bg-gradient-to-r from-brand-600 via-rose-600 to-red-600 opacity-30 group-hover:opacity-75 blur-xl transition-all duration-500"></div>
+   <div class="relative bg-zinc-950 border border-zinc-800/80 rounded-3xl p-8 text-center">
+    <div class="w-36 h-36 mx-auto mb-6 rounded-full bg-gradient-to-tr from-brand-600 via-rose-600 to-red-600 p-1 cursor-pointer" id="dev-img-container" title="Click 5 times for Admin Panel">
+     <div class="w-full h-full rounded-full bg-zinc-950 overflow-hidden border-2 border-zinc-900"><img id="dev-profile-img" alt="Abrar Al Razee Oytizzoh" class="w-full h-full object-cover object-top"></div>
+    </div>
+    <span class="px-4 py-1.5 rounded-full text-xs font-black bg-brand-500/20 text-brand-400 border border-brand-500/30 uppercase tracking-wider mb-3 inline-block"><i class="fas fa-code mr-1.5 text-brand-500"></i> Website Developed by Oytizzoh</span>
+    <h3 class="text-2xl font-black mb-1">Abrar Al Razee Oytizzoh</h3>
+    <p class="text-xs sm:text-sm text-zinc-400 font-semibold mb-6">Head Orthohin-27 & Lead Developer</p>
+    <div class="bg-zinc-900/80 rounded-2xl p-4 border border-zinc-800 text-left space-y-2">
+     <p class="text-xs text-brand-400 font-bold uppercase tracking-wider flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>Developer's Note</p>
+     <p class="text-xs italic text-zinc-300 leading-relaxed">"Designed and developed this official portal as Head Orthohin-27 to preserve our batch memories and milestones. Forever united as one batch!"</p>
+    </div>
+    <div class="mt-6"><a href="https://www.instagram.com/orthohin_27/" target="_blank" class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-brand-600 to-rose-600 text-white text-xs font-bold inline-flex items-center gap-2"><i class="fab fa-instagram text-sm"></i> Connect on Instagram</a></div>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- TIMELINE -->
+<section id="timeline" class="py-20 border-t border-zinc-900">
+ <div class="max-w-3xl mx-auto px-4">
+  <h2 class="text-3xl sm:text-5xl font-black mb-10 text-center">Our Journey</h2>
+  <ol class="border-l border-zinc-800 space-y-8 ml-2">
+   <li class="pl-6 relative"><span class="absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full bg-brand-500"></span><p class="text-xs text-brand-400 font-bold">Day one</p><p class="text-zinc-300 text-sm">Batch 2027 comes together.</p></li>
+   <li class="pl-6 relative"><span class="absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full bg-brand-500"></span><p class="text-xs text-brand-400 font-bold">Along the way</p><p class="text-zinc-300 text-sm">Events, outings, and friendships that last.</p></li>
+   <li class="pl-6 relative"><span class="absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full bg-zinc-600"></span><p class="text-xs text-brand-400 font-bold">2027</p><p class="text-zinc-300 text-sm">Graduation and the next chapter.</p></li>
+  </ol>
+ </div>
+</section>
+
+</div> <!-- END HERO / HOME CONTAINER -->
+
+<!-- BATCHMATES DIRECTORY PAGE VIEW -->
+<section id="view-batchmates" class="sec-view hidden py-28 max-w-7xl mx-auto px-4">
+ <div class="text-center max-w-2xl mx-auto mb-12 space-y-3">
+  <span class="px-3 py-1 rounded-full bg-brand-500/10 border border-brand-500/30 text-brand-400 text-xs font-bold uppercase tracking-widest">Community Directory</span>
+  <h2 class="text-3xl sm:text-5xl font-black">Registered Batchmates</h2>
+  <p class="text-zinc-400 text-sm">Explore all batchmates who have completed their registration on the Orthohin '27 portal.</p>
+  <div class="pt-4 flex justify-center gap-3">
+   <button onclick="showSection('register')" class="px-6 py-3 rounded-xl bg-brand-600 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-brand-600/30">Register Now</button>
+  </div>
+ </div>
+ <div id="batchmates-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+  <!-- Populated dynamically -->
+ </div>
+</section>
+
+<!-- REGISTER FORM PAGE VIEW -->
+<section id="view-register" class="sec-view hidden py-28 max-w-xl mx-auto px-4">
+ <div class="glass-card p-8 rounded-3xl border border-zinc-800 shadow-2xl space-y-6">
+  <div class="text-center space-y-2">
+   <div class="w-12 h-12 rounded-2xl bg-brand-950/80 border border-brand-600/40 flex items-center justify-center mx-auto text-brand-400">
+    <i class="fas fa-user-plus text-lg"></i>
+   </div>
+   <h2 class="text-2xl font-black">Batchmate Registration Form</h2>
+   <p class="text-zinc-400 text-xs">Fill out your details and upload your photo. Once submitted, your profile will instantly appear in the Batchmates Directory!</p>
+  </div>
+
+  <form onsubmit="handleBatchmateRegister(event)" class="space-y-4">
+   <div>
+    <label class="block text-xs font-semibold text-zinc-400 mb-1.5">Full Name</label>
+    <input id="reg-name" required type="text" placeholder="e.g. Abrar Al Razee" class="inp">
+   </div>
+   <div class="grid grid-cols-2 gap-4">
+    <div>
+     <label class="block text-xs font-semibold text-zinc-400 mb-1.5">Roll / ID Number</label>
+     <input id="reg-roll" type="text" placeholder="e.g. 2701" class="inp">
+    </div>
+    <div>
+     <label class="block text-xs font-semibold text-zinc-400 mb-1.5">Institution / Group</label>
+     <input id="reg-group" type="text" placeholder="e.g. Science / Section A" class="inp">
+    </div>
+   </div>
+   <div>
+    <label class="block text-xs font-semibold text-zinc-400 mb-1.5">Instagram / Social Link (Optional)</label>
+    <input id="reg-social" type="text" placeholder="e.g. @username" class="inp">
+   </div>
+   <div>
+    <label class="block text-xs font-semibold text-zinc-400 mb-1.5">Upload Your Photo (Required)</label>
+    <div class="flex items-center gap-4 p-3 rounded-xl bg-zinc-900 border border-zinc-800">
+     <div class="w-14 h-14 rounded-full bg-zinc-800 overflow-hidden flex-shrink-0 border border-zinc-700">
+      <img id="reg-photo-prev" src="https://placehold.co/150x150/18181b/ef4444?text=Photo" class="w-full h-full object-cover" alt="Preview">
+     </div>
+     <div class="flex-grow">
+      <input type="file" id="reg-photo-file" accept="image/*" required onchange="previewRegPhoto(event)" class="hidden">
+      <button type="button" onclick="$('#reg-photo-file').click()" class="ab red text-xs"><i class="fas fa-camera"></i> Choose Photo</button>
+      <p class="text-[10px] text-zinc-500 mt-1">Select a clear headshot or portrait</p>
+     </div>
+    </div>
+   </div>
+   <button type="submit" class="w-full py-3.5 rounded-xl bg-gradient-to-r from-brand-600 to-rose-600 text-white font-bold text-sm shadow-lg shadow-brand-600/30">Submit Registration & View Batchmates</button>
+  </form>
+ </div>
+</section>
+
+<!-- HOODIE 26-27 PAGE VIEW -->
+<section id="view-hoodie" class="sec-view hidden py-28 max-w-4xl mx-auto px-4">
+ <div class="glass-card p-8 md:p-12 rounded-3xl border border-rose-500/30 shadow-2xl space-y-8">
+  <div class="text-center space-y-3">
+   <span class="px-4 py-1.5 rounded-full bg-rose-500/20 border border-rose-500/40 text-rose-400 text-xs font-extrabold uppercase tracking-widest"><i class="fas fa-shirt mr-1"></i> Official Merchandise</span>
+   <h2 class="text-3xl sm:text-5xl font-black">HOODIE '26-'27</h2>
+   <p class="text-zinc-400 text-sm max-w-lg mx-auto">The official Orthohin '27 batch hoodie is here! Premium heavyweight fleece fabric, custom embroidery, and sleek winter styling.</p>
+  </div>
+
+  <div class="grid md:grid-cols-2 gap-8 items-center">
+   <div class="rounded-2xl overflow-hidden border border-zinc-800 bg-zinc-900 aspect-[4/3] relative flex items-center justify-center">
+    <div class="absolute inset-0 bg-gradient-to-tr from-rose-950/40 to-transparent"></div>
+    <div class="text-center p-6 space-y-2 relative z-10">
+     <i class="fas fa-shirt text-6xl text-rose-500 mb-2 animate-bounce"></i>
+     <h4 class="text-xl font-black">Orthohin '27 Signature Hoodie</h4>
+     <p class="text-xs text-zinc-400">Matte Black Edition with Crimson Red Emblem</p>
+     <div class="pt-2"><span class="px-3 py-1 rounded bg-brand-600 text-white font-mono text-xs font-bold">Limited Pre-Order</span></div>
+    </div>
+   </div>
+
+   <div class="space-y-6">
+    <div class="space-y-2">
+     <h3 class="text-lg font-black text-white">Hoodie Specifications:</h3>
+     <ul class="text-xs text-zinc-300 space-y-2">
+      <li class="flex items-center gap-2"><i class="fas fa-check text-rose-500"></i> 350 GSM Heavyweight Cotton Fleece</li>
+      <li class="flex items-center gap-2"><i class="fas fa-check text-rose-500"></i> High-Density Batch Embroidery on Chest</li>
+      <li class="flex items-center gap-2"><i class="fas fa-check text-rose-500"></i> Custom Orthohin '27 Sleeve Tag</li>
+      <li class="flex items-center gap-2"><i class="fas fa-check text-rose-500"></i> Available Sizes: S, M, L, XL, XXL</li>
+     </ul>
+    </div>
+
+    <div class="p-4 rounded-2xl bg-zinc-900/90 border border-zinc-800 space-y-3">
+     <div class="flex justify-between items-center text-sm font-bold">
+      <span>Pre-Order Price:</span>
+      <span class="text-rose-400 font-mono text-lg">BDT 1,250/-</span>
+     </div>
+     <p class="text-[11px] text-zinc-400">To secure your hoodie, contact any batch representative or place your request via our Instagram page.</p>
+    </div>
+
+    <div class="flex gap-3">
+     <a href="https://www.instagram.com/orthohin_27/" target="_blank" class="flex-1 py-3 rounded-xl bg-gradient-to-r from-brand-600 to-rose-600 text-white text-center font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2"><i class="fab fa-instagram"></i> Pre-Order via Instagram</a>
+     <button onclick="showSection('batchmates')" class="px-5 py-3 rounded-xl bg-zinc-900 border border-zinc-800 text-xs font-semibold hover:bg-zinc-800">View Batchmates</button>
+    </div>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="py-8 text-center text-xs text-zinc-500 border-t border-zinc-900 mt-20">© 2026 ORTHOHIN '27 — Forever united as one batch. Website Developed by Oytizzoh (Head Orthohin-27).</footer>
+
+<!-- LIGHTBOX / VIDEO MODAL -->
+<div id="lightbox" class="hidden fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-center p-4">
+ <button id="lb-close" class="absolute top-4 right-4 text-white text-2xl" aria-label="Close"><i class="fas fa-times"></i></button>
+ <div id="lightbox-content" class="w-full max-w-3xl flex flex-col items-center justify-center">
+  <img id="lb-img" class="max-h-[70vh] max-w-full rounded-xl hidden" alt="">
+  <div id="lb-video-container" class="w-full aspect-video rounded-xl overflow-hidden hidden bg-zinc-900 border border-zinc-800 flex flex-col items-center justify-center p-6 text-center space-y-4">
+   <i class="fab fa-facebook text-6xl text-brand-500"></i>
+   <h4 class="text-xl font-bold">Featured Facebook Video Memory</h4>
+   <p class="text-xs text-zinc-400 max-w-md">Click below to watch the official batch video directly on Facebook.</p>
+   <a id="fb-video-link" href="https://www.facebook.com/share/v/1EQKpXcSqm/" target="_blank" class="px-6 py-3 rounded-xl bg-brand-600 text-white font-bold text-xs uppercase tracking-wider inline-flex items-center gap-2"><i class="fab fa-facebook-f"></i> Open Facebook Video <i class="fas fa-external-link-alt text-xs"></i></a>
+  </div>
+  <p id="lb-cap" class="mt-4 text-sm text-zinc-300 text-center max-w-lg"></p>
+ </div>
+</div>
+
+<!-- ADMIN MODAL -->
+<div id="admin-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm overflow-y-auto">
+ <div class="min-h-full flex items-start sm:items-center justify-center p-3 sm:p-6">
+  <div class="w-full max-w-3xl bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl">
+   <div class="flex items-center justify-between px-5 py-4 border-b border-zinc-800">
+    <h3 class="font-black flex items-center gap-2"><i class="fas fa-user-shield text-brand-500"></i> Admin Panel</h3>
+    <button id="admin-close" class="text-zinc-400 hover:text-white text-xl" aria-label="Close"><i class="fas fa-times"></i></button>
+   </div>
+
+   <!-- login -->
+   <div id="admin-login" class="p-6 space-y-3">
+    <p class="text-sm text-zinc-400">Enter the admin password to edit photos and manage batchmates (Default: <code class="text-brand-400 font-mono">orthohin27</code>).</p>
+    <input id="admin-pass" type="password" class="inp" placeholder="Password" autocomplete="current-password">
+    <p id="login-err" class="text-xs text-brand-400 hidden">Wrong password. Try again.</p>
+    <button id="login-btn" class="ab red w-full justify-center py-2.5">Unlock</button>
+   </div>
+
+   <!-- panel -->
+   <div id="admin-panel" class="hidden">
+    <div class="flex gap-2 px-5 pt-4 text-xs font-bold overflow-x-auto">
+     <button class="tab ab red" data-tab="t-gallery">Gallery photos</button>
+     <button class="tab ab" data-tab="t-batchmates">Batchmates list</button>
+     <button class="tab ab" data-tab="t-profile">Profile photo</button>
+     <button class="tab ab" data-tab="t-data">Backup & security</button>
+    </div>
+
+    <div id="t-gallery" class="tabp p-5 space-y-4">
+     <div class="flex flex-wrap gap-2 items-center justify-between">
+      <p class="text-xs text-zinc-400"><span id="count">0</span> photos · changes save automatically</p>
+      <button id="add-btn" class="ab red"><i class="fas fa-plus"></i> Add photos</button>
+     </div>
+     <div id="admin-list" class="space-y-3 max-h-[50vh] overflow-y-auto pr-2"></div>
+    </div>
+
+    <div id="t-batchmates" class="tabp hidden p-5 space-y-4">
+     <div class="flex justify-between items-center">
+      <p class="text-xs text-zinc-400">Manage registered batchmates</p>
+      <button onclick="showSection('register'); $('#admin-modal').classList.add('hidden');" class="ab red"><i class="fas fa-plus"></i> Add new</button>
+     </div>
+     <div id="admin-batchmates-list" class="space-y-3 max-h-[50vh] overflow-y-auto pr-2"></div>
+    </div>
+
+    <div id="t-profile" class="tabp hidden p-5 space-y-3">
+     <img id="prof-prev" class="w-28 h-28 rounded-full object-cover object-top border border-zinc-800" alt="">
+     <input id="prof-url" class="inp" placeholder="Image URL or file name">
+     <div class="flex flex-wrap gap-2">
+      <button id="prof-upload" class="ab red"><i class="fas fa-upload"></i> Upload new photo</button>
+      <button id="prof-apply" class="ab">Apply URL</button>
+      <button id="prof-reset" class="ab">Reset</button>
+     </div>
+    </div>
+
+    <div id="t-data" class="tabp hidden p-5 space-y-5">
+     <div class="space-y-2">
+      <p class="text-sm font-bold">Backup</p>
+      <p class="text-xs text-zinc-400">Edits live in this browser. Export a backup file, and import it on another device.</p>
+      <div class="flex flex-wrap gap-2">
+       <button id="exp-btn" class="ab"><i class="fas fa-download"></i> Export backup</button>
+       <button id="imp-btn" class="ab"><i class="fas fa-file-import"></i> Import backup</button>
+       <button id="reset-all" class="ab"><i class="fas fa-rotate-left"></i> Reset everything</button>
+      </div>
+     </div>
+     <div class="space-y-2">
+      <p class="text-sm font-bold">Change password</p>
+      <input id="new-pass" type="password" class="inp" placeholder="New password (min 6 characters)">
+      <button id="pass-btn" class="ab red">Save password</button>
+     </div>
+     <button id="logout-btn" class="ab"><i class="fas fa-lock"></i> Lock panel</button>
+    </div>
+    <p id="toast" class="px-5 pb-4 text-xs text-emerald-400 h-5"></p>
+   </div>
+  </div>
+ </div>
+</div>
+
+<input type="file" id="file-add" accept="image/*" multiple class="hidden">
+<input type="file" id="file-replace" accept="image/*" class="hidden">
+<input type="file" id="file-prof" accept="image/*" class="hidden">
+<input type="file" id="file-imp" accept="application/json" class="hidden">
+
+<script>
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const KEY='orthohin27_site', PKEY='orthohin27_pass', DEFAULT_PASS='orthohin27';
+const DEFAULT_PROFILE='WhatsApp_Image_2026-11-09_at_12.39.00_AM-removebg-preview.png';
+const FALLBACK='https://placehold.co/400x400/18181b/ef4444?text=AO';
+const sampleBatchmates=[
+ {name:'Abrar Al Razee Oytizzoh',roll:'2701',group:'Science',social:'@oytizzoh',photo:'https://placehold.co/300x300/18181b/ef4444?text=Abrar'},
+ {name:'Tasnim Ahmed',roll:'2702',group:'Science',social:'@tasnim',photo:'https://placehold.co/300x300/18181b/3f3f46?text=Tasnim'},
+ {name:'Raihan Islam',roll:'2703',group:'Commerce',social:'@raihan',photo:'https://placehold.co/300x300/18181b/3f3f46?text=Raihan'}
+];
+
+const DEFAULT_GALLERY=[
+ {src:'https://scontent.fdac14-1.fna.fbcdn.net/v/t39.30808-6/473551532_...jpg',isVideo:true,videoUrl:'https://www.facebook.com/share/v/1EQKpXcSqm/',title:'Memory 1',caption:'Official batch video on Facebook.'},
+ {src:'https://scontent.fdac14-1.fna.fbcdn.net/v/t39.30808-6/473551532_...jpg',isVideo:true,videoUrl:'https://www.facebook.com/share/v/1EQKpXcSqm/',title:'Memory 2',caption:'Official batch video on Facebook.'},
+ {src:'https://placehold.co/800x600/18181b/ef4444?text=UPCOMING',title:'UPCOMING',caption:'Upcoming batch memories and events.'}
+];
+
+const DEFAULTS=()=>({gallery:DEFAULT_GALLERY,profile:DEFAULT_PROFILE,batchmates:sampleBatchmates});
+
+let state;
+try{state=JSON.parse(localStorage.getItem(KEY))||DEFAULTS()}catch(e){state=DEFAULTS()}
+if(!state.batchmates) state.batchmates=sampleBatchmates;
+if(!state.gallery || state.gallery.length>3){
+  state.gallery=DEFAULT_GALLERY;
+}
+
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+let tt;
+function toast(m,bad){const t=$('#toast');if(!t)return;t.textContent=m;t.style.color=bad?'#f87171':'#34d399';clearTimeout(tt);tt=setTimeout(()=>t.textContent='',2500)}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(state));toast('Saved successfully');renderSite();return true}catch(e){toast('Storage limit reached.',true);return false}}
+
+/* image helpers */
+function compress(file,max=1200){return new Promise((res,rej)=>{
+ const fr=new FileReader();fr.onerror=rej;
+ fr.onload=()=>{const im=new Image();im.onerror=rej;im.onload=()=>{
+  const k=Math.min(1,max/Math.max(im.width,im.height));const c=document.createElement('canvas');
+  c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext('2d').drawImage(im,0,0,c.width,c.height);
+  res(c.toDataURL(file.type==='image/png'&&file.size<300000?'image/png':'image/jpeg',.82))};im.src=fr.result};
+ fr.readAsDataURL(file)})}
+
+/* view switching */
+function showSection(secId){
+ $$('.sec-view').forEach(s=>s.classList.add('hidden'));
+ const target=$('#view-'+secId);
+ if(target){
+  target.classList.remove('hidden');
+  window.scrollTo({top:0,behavior:'smooth'});
+ }
+}
+
+/* public render */
+function renderSite(){
+ $('#gallery-grid').innerHTML=state.gallery.length?state.gallery.map((g,i)=>`
+  <figure class="glass-card rounded-2xl overflow-hidden cursor-pointer relative group" data-lb="${i}">
+   ${g.isVideo?`<div class="absolute inset-0 bg-black/40 flex items-center justify-center z-10"><div class="w-14 h-14 rounded-full bg-brand-600 text-white flex items-center justify-center shadow-lg group-hover:scale-110 transition"><i class="fas fa-play text-xl ml-1"></i></div></div>`:''}
+   <img src="${g.isVideo?'https://placehold.co/800x600/18181b/ef4444?text=Facebook+Video+Memory':esc(g.src)}" alt="${esc(g.title)}" loading="lazy" class="w-full aspect-[4/3] object-cover" onerror="this.src='https://placehold.co/800x600/18181b/71717a?text=Image+missing'">
+   <figcaption class="p-4"><p class="font-bold text-sm">${esc(g.title)}</p><p class="text-xs text-zinc-400 mt-1">${esc(g.caption)}</p></figcaption>
+  </figure>`).join(''):'<p class="text-zinc-500 text-sm col-span-full text-center">No photos yet.</p>';
+ 
+ const p=$('#dev-profile-img');p.src=state.profile||DEFAULT_PROFILE;p.onerror=()=>{p.onerror=null;p.src=FALLBACK};
+ $('#stat-photos').textContent='500+';
+ $('#stat-batchmates-count').textContent=state.batchmates.length;
+
+ // Render batchmates
+ $('#batchmates-grid').innerHTML=state.batchmates.length?state.batchmates.map(b=>`
+  <div class="glass-card rounded-2xl p-6 text-center space-y-3">
+   <div class="w-24 h-24 mx-auto rounded-full overflow-hidden border-2 border-brand-500/50 bg-zinc-900 shadow-md">
+    <img src="${esc(b.photo)}" alt="${esc(b.name)}" class="w-full h-full object-cover object-top" onerror="this.src='https://placehold.co/200x200/18181b/ef4444?text=User'">
+   </div>
+   <div>
+    <h4 class="font-bold text-base text-white">${esc(b.name)}</h4>
+    <p class="text-xs text-zinc-400 mt-0.5">Roll: ${esc(b.roll||'N/A')} • ${esc(b.group||'Batchmate')}</p>
+    ${b.social?`<p class="text-xs text-brand-400 font-mono mt-1">${esc(b.social)}</p>`:''}
+   </div>
+  </div>`).join(''):'<p class="text-zinc-500 text-sm col-span-full text-center">No registered batchmates yet.</p>';
+}
+
+$('#gallery-grid').addEventListener('click',e=>{
+ const f=e.target.closest('[data-lb]');if(!f)return;
+ const g=state.gallery[f.dataset.lb];
+ if(g.isVideo){
+  $('#lb-img').classList.add('hidden');
+  $('#lb-video-container').classList.remove('hidden');
+  $('#lb-cap').textContent=g.title+' — '+g.caption;
+  $('#lightbox').classList.remove('hidden');
+ }else{
+  $('#lb-video-container').classList.add('hidden');
+  $('#lb-img').classList.remove('hidden');
+  $('#lb-img').src=g.src;$('#lb-cap').textContent=g.title+(g.caption?' — '+g.caption:'');
+  $('#lightbox').classList.remove('hidden');
+ }
+});
+$('#lb-close').addEventListener('click',()=>$('#lightbox').classList.add('hidden'));
+$('#lightbox').addEventListener('click',e=>{if(e.target===$('#lightbox'))$('#lightbox').classList.add('hidden')});
+
+/* registration photo preview */
+let tempRegPhoto=null;
+async function previewRegPhoto(e){
+ const f=e.target.files[0];if(!f)return;
+ try{
+  tempRegPhoto=await compress(f,600);
+  $('#reg-photo-prev').src=tempRegPhoto;
+ }catch(err){alert('Failed to process image')}
+}
+
+function handleBatchmateRegister(e){
+ e.preventDefault();
+ const name=$('#reg-name').value.trim();
+ const roll=$('#reg-roll').value.trim();
+ const group=$('#reg-group').value.trim();
+ const social=$('#reg-social').value.trim();
+ if(!tempRegPhoto){alert('Please upload your photo.');return;}
+
+ state.batchmates.unshift({name,roll,group,social,photo:tempRegPhoto});
+ save();
+ alert('Registration successful! You have been added to the Batchmates Directory.');
+ e.target.reset();
+ tempRegPhoto=null;
+ $('#reg-photo-prev').src='https://placehold.co/150x150/18181b/ef4444?text=Photo';
+ showSection('batchmates');
+}
+
+/* admin list rendering & management */
+function renderAdminList(){
+ $('#count').textContent=state.gallery.length;
+ $('#admin-list').innerHTML=state.gallery.map((g,i)=>`
+  <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-3 flex flex-col sm:flex-row gap-3 items-center" data-i="${i}">
+   <img src="${g.isVideo?'https://placehold.co/200x150/18181b/ef4444?text=Video':esc(g.src)}" class="w-20 h-16 rounded-lg object-cover flex-shrink-0" onerror="this.src='https://placehold.co/200x150/18181b/ef4444?text=Error'">
+   <div class="flex-grow w-full space-y-2">
+    <input class="inp adm-title" value="${esc(g.title)}" placeholder="Title">
+    <input class="inp adm-cap" value="${esc(g.caption)}" placeholder="Caption">
+   </div>
+   <div class="flex sm:flex-col gap-1 w-full sm:w-auto justify-end">
+    ${!g.isVideo?`<button class="ab replace-btn" title="Replace image"><i class="fas fa-image"></i></button>`:''}
+    <button class="ab red del-btn" title="Delete"><i class="fas fa-trash"></i></button>
+   </div>
+  </div>`).join('');
+
+ $('#admin-batchmates-list').innerHTML=state.batchmates.map((b,i)=>`
+  <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-3 flex items-center gap-3" data-bi="${i}">
+   <img src="${esc(b.photo)}" class="w-12 h-12 rounded-full object-cover flex-shrink-0" onerror="this.src='https://placehold.co/100x100/18181b/ef4444?text=User'">
+   <div class="flex-grow">
+    <p class="font-bold text-sm">${esc(b.name)}</p>
+    <p class="text-xs text-zinc-400">Roll: ${esc(b.roll)} • ${esc(b.group)}</p>
+   </div>
+   <button class="ab red adm-del-bm" title="Delete"><i class="fas fa-trash"></i></button>
+  </div>`).join('');
+}
+
+// Admin event bindings
+$('#admin-list').addEventListener('input',e=>{
+ const row=e.target.closest('[data-i]');if(!row)return;
+ const i=+row.dataset.i;
+ state.gallery[i].title=row.querySelector('.adm-title').value;
+ state.gallery[i].caption=row.querySelector('.adm-cap').value;
+ save();
+});
+
+$('#admin-batchmates-list').addEventListener('click',e=>{
+ const row=e.target.closest('[data-bi]');if(!row)return;
+ const i=+row.dataset.bi;
+ if(e.target.closest('.adm-del-bm')){
+  if(confirm('Remove this batchmate from directory?')){state.batchmates.splice(i,1);save();renderAdminList()}
+ }
+});
+
+let activeReplaceIdx=null;
+$('#admin-list').addEventListener('click',e=>{
+ const row=e.target.closest('[data-i]');if(!row)return;
+ const i=+row.dataset.i;
+ if(e.target.closest('.del-btn')){
+  if(confirm('Delete this photo?')){state.gallery.splice(i,1);save();renderAdminList()}
+ }
+ if(e.target.closest('.replace-btn')){
+  activeReplaceIdx=i;$('#file-replace').click();
+ }
+});
+
+$('#file-replace').addEventListener('change',async e=>{
+ const f=e.target.files[0];if(!f||activeReplaceIdx===null)return;
+ try{
+  const url=await compress(f);
+  state.gallery[activeReplaceIdx].src=url;
+  save();renderAdminList();toast('Photo replaced');
+ }catch(err){toast('Failed to load image',true)}
+ e.target.value='';activeReplaceIdx=null;
+});
+
+$('#add-btn').addEventListener('click',()=>$('#file-add').click());
+$('#file-add').addEventListener('change',async e=>{
+ const files=[...e.target.files];if(!files.length)return;
+ for(const f of files){
+  try{
+   const url=await compress(f);
+   state.gallery.unshift({src:url,title:f.name.replace(/\.[^/.]+$/, ''),caption:'Batch memory'});
+  }catch(err){}
+ }
+ save();renderAdminList();toast(files.length+' photo(s) added');
+ e.target.value='';
+});
+
+/* profile admin */
+function initProfileTab(){
+ const p=$('#prof-prev');p.src=state.profile||DEFAULT_PROFILE;p.onerror=()=>{p.onerror=null;p.src=FALLBACK};
+ $('#prof-url').value=state.profile||'';
+}
+$('#prof-apply').addEventListener('click',()=>{
+ state.profile=$('#prof-url').value.trim();save();initProfileTab();toast('Profile photo updated');
+});
+$('#prof-reset').addEventListener('click',()=>{
+ state.profile=DEFAULT_PROFILE;save();initProfileTab();toast('Profile photo reset');
+});
+$('#prof-upload').addEventListener('click',()=>$('#file-prof').click());
+$('#file-prof').addEventListener('change',async e=>{
+ const f=e.target.files[0];if(!f)return;
+ try{
+  state.profile=await compress(f,600);
+  save();initProfileTab();toast('Profile photo uploaded');
+ }catch(err){toast('Failed to load image',true)}
+ e.target.value='';
+});
+
+/* backup & data */
+$('#exp-btn').addEventListener('click',()=>{
+ const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
+ const url=URL.createObjectURL(blob);
+ const a=document.createElement('a');a.href=url;a.download=`orthohin27_backup_${new Date().toISOString().slice(0,10)}.json`;
+ a.click();URL.revokeObjectURL(url);toast('Backup exported');
+});
+$('#imp-btn').addEventListener('click',()=>$('#file-imp').click());
+$('#file-imp').addEventListener('change',e=>{
+ const f=e.target.files[0];if(!f)return;
+ const r=new FileReader();
+ r.onload=ev=>{
+  try{
+   const d=JSON.parse(ev.target.result);
+   if(d&&Array.isArray(d.gallery)){
+    state=d;if(!state.batchmates)state.batchmates=sampleBatchmates;save();renderAdminList();initProfileTab();toast('Backup imported successfully');
+   }else{toast('Invalid backup file format',true)}
+  }catch(err){toast('Failed to parse backup JSON',true)}
+ };
+ r.readAsText(f);e.target.value='';
+});
+$('#reset-all').addEventListener('click',()=>{
+ if(confirm('Reset all gallery photos and settings to default?')){
+  state=DEFAULTS();localStorage.removeItem(PKEY);save();renderAdminList();initProfileTab();toast('Reset to default');
+ }
+});
+$('#pass-btn').addEventListener('click',()=>{
+ const p=$('#new-pass').value;
+ if(p.length<6){toast('Password must be at least 6 characters',true);return}
+ localStorage.setItem(PKEY,p);$('#new-pass').value='';toast('Password updated successfully');
+});
+
+/* modal & auth flow */
+let taps=0,tapTimer=null;
+$('#dev-img-container').addEventListener('click',()=>{
+ taps++;clearTimeout(tapTimer);
+ if(taps>=5){taps=0;openAdminModal()}
+ else{tapTimer=setTimeout(()=>taps=0,600)}
+});
+
+function openAdminModal(){
+ $('#admin-modal').classList.remove('hidden');
+ $('#admin-pass').value='';$('#login-err').classList.add('hidden');
+ $('#admin-login').classList.remove('hidden');
+ $('#admin-panel').classList.add('hidden');
+}
+$('#admin-close').addEventListener('click',()=>$('#admin-modal').classList.add('hidden'));
+$('#admin-modal').addEventListener('click',e=>{if(e.target===$('#admin-modal'))$('#admin-modal').classList.add('hidden')});
+
+$('#login-btn').addEventListener('click',()=>{
+ const p=$('#admin-pass').value;
+ const pass=localStorage.getItem(PKEY)||DEFAULT_PASS;
+ if(p===pass){
+  $('#admin-login').classList.add('hidden');
+  $('#admin-panel').classList.remove('hidden');
+  renderAdminList();initProfileTab();
+ }else{
+  $('#login-err').classList.remove('hidden');
+ }
+});
+$('#admin-pass').addEventListener('keypress',e=>{if(e.key==='Enter')$('#login-btn').click()});
+$('#logout-btn').addEventListener('click',openAdminModal);
+
+// Tabs in admin
+$$('.tab').forEach(b=>{
+ b.addEventListener('click',()=>{
+  $$('.tab').forEach(x=>{x.classList.remove('red');x.classList.add('zinc-800')});
+  b.classList.add('red');b.classList.remove('zinc-800');
+  $$('.tabp').forEach(p=>p.classList.add('hidden'));
+  $(`#${b.dataset.tab}`).classList.remove('hidden');
+ });
+});
+
+// Mobile menu
+function toggleMob(){$('#mobile-drawer').classList.toggle('hidden')}
+$('#mobile-menu-btn').addEventListener('click',toggleMob);
+
+// Init
+renderSite();
+</script>
+</body>
+</html>
