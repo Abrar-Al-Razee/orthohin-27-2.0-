@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Menu, X } from 'lucide-react';
+import { Lock, Menu, X } from 'lucide-react';
 import type { SiteConfig, ViewMode } from '../types';
 
 interface NavbarProps {
@@ -30,7 +30,7 @@ export function Navbar({ activeView, siteConfig, onNavigate, onOpenRegister }: N
 
   return (
     <header className="fixed top-0 inset-x-0 z-40 bg-[#070709]/90 backdrop-blur-md border-b border-zinc-800/80">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4 lg:gap-8">
         {/* Zone 1: Single text element wordmark */}
         <button
           type="button"
@@ -41,7 +41,7 @@ export function Navbar({ activeView, siteConfig, onNavigate, onOpenRegister }: N
         </button>
 
         {/* Zone 2: Concise single-line nav links */}
-        <nav className="hidden md:flex items-center gap-7 text-sm font-medium text-zinc-400">
+        <nav className="hidden md:flex items-center gap-4 lg:gap-7 text-xs lg:text-sm font-medium text-zinc-400">
           <button
             type="button"
             onClick={() => handleNav('home')}
@@ -93,6 +93,16 @@ export function Navbar({ activeView, siteConfig, onNavigate, onOpenRegister }: N
               Directory
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => handleNav('admin')}
+            className={`inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer hover:text-rose-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 rounded ${
+              activeView === 'admin' ? 'text-rose-400' : 'text-zinc-300'
+            }`}
+          >
+            <Lock className="w-3.5 h-3.5 text-rose-500" />
+            Admin Login
+          </button>
         </nav>
 
         {/* Zone 3: Primary action */}
@@ -199,6 +209,16 @@ export function Navbar({ activeView, siteConfig, onNavigate, onOpenRegister }: N
             }`}
           >
             Our Journey
+          </button>
+          <button
+            type="button"
+            onClick={() => handleNav('admin')}
+            className={`w-full text-left px-3 py-3 rounded-lg text-sm font-medium hover:bg-zinc-900 flex items-center gap-2 ${
+              activeView === 'admin' ? 'text-rose-400 bg-zinc-900/60' : 'text-zinc-200'
+            }`}
+          >
+            <Lock className="w-4 h-4 text-rose-500" />
+            Admin Login
           </button>
           {registrationOpen && (
             <div className="pt-2">
