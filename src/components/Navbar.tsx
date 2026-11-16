@@ -54,8 +54,10 @@ export function Navbar({ activeView, siteConfig, onNavigate, onOpenRegister }: N
           {showGallery && (
             <button
               type="button"
-              onClick={() => handleNav('home', 'gallery')}
-              className="whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 rounded"
+              onClick={() => handleNav('gallery')}
+              className={`whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 rounded ${
+                activeView === 'gallery' ? 'text-white' : ''
+              }`}
             >
               Gallery
             </button>
@@ -83,8 +85,10 @@ export function Navbar({ activeView, siteConfig, onNavigate, onOpenRegister }: N
           {showDirectory && (
             <button
               type="button"
-              onClick={() => handleNav('home', 'directory')}
-              className="whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 rounded"
+              onClick={() => handleNav('directory')}
+              className={`whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 rounded ${
+                activeView === 'directory' ? 'text-white' : ''
+              }`}
             >
               Directory
             </button>
@@ -121,15 +125,37 @@ export function Navbar({ activeView, siteConfig, onNavigate, onOpenRegister }: N
           <button
             type="button"
             onClick={() => handleNav('home')}
-            className="w-full text-left px-3 py-3 rounded-lg text-sm font-medium text-zinc-200 hover:bg-zinc-900"
+            className={`w-full text-left px-3 py-3 rounded-lg text-sm font-medium hover:bg-zinc-900 ${
+              activeView === 'home' ? 'text-white bg-zinc-900/60' : 'text-zinc-200'
+            }`}
           >
             Home
+          </button>
+          <button
+            type="button"
+            onClick={() => handleNav('notices')}
+            className={`w-full text-left px-3 py-3 rounded-lg text-sm font-medium hover:bg-zinc-900 ${
+              activeView === 'notices' ? 'text-white bg-zinc-900/60' : 'text-zinc-200'
+            }`}
+          >
+            Notices
+          </button>
+          <button
+            type="button"
+            onClick={() => handleNav('about')}
+            className={`w-full text-left px-3 py-3 rounded-lg text-sm font-medium hover:bg-zinc-900 ${
+              activeView === 'about' ? 'text-white bg-zinc-900/60' : 'text-zinc-200'
+            }`}
+          >
+            About
           </button>
           {showGallery && (
             <button
               type="button"
-              onClick={() => handleNav('home', 'gallery')}
-              className="w-full text-left px-3 py-3 rounded-lg text-sm font-medium text-zinc-200 hover:bg-zinc-900"
+              onClick={() => handleNav('gallery')}
+              className={`w-full text-left px-3 py-3 rounded-lg text-sm font-medium hover:bg-zinc-900 ${
+                activeView === 'gallery' ? 'text-white bg-zinc-900/60' : 'text-zinc-200'
+              }`}
             >
               Gallery
             </button>
@@ -137,15 +163,19 @@ export function Navbar({ activeView, siteConfig, onNavigate, onOpenRegister }: N
           <button
             type="button"
             onClick={() => handleNav('batchmates')}
-            className="w-full text-left px-3 py-3 rounded-lg text-sm font-medium text-zinc-200 hover:bg-zinc-900"
+            className={`w-full text-left px-3 py-3 rounded-lg text-sm font-medium hover:bg-zinc-900 ${
+              activeView === 'batchmates' ? 'text-white bg-zinc-900/60' : 'text-zinc-200'
+            }`}
           >
-            Batchmates Directory
+            Batchmates
           </button>
           {showHoodieNav && (
             <button
               type="button"
               onClick={() => handleNav('hoodie')}
-              className="w-full text-left px-3 py-3 rounded-lg text-sm font-medium text-zinc-200 hover:bg-zinc-900"
+              className={`w-full text-left px-3 py-3 rounded-lg text-sm font-medium hover:bg-zinc-900 ${
+                activeView === 'hoodie' ? 'text-white bg-zinc-900/60' : 'text-zinc-200'
+              }`}
             >
               Hoodie '26-'27
             </button>
@@ -153,12 +183,23 @@ export function Navbar({ activeView, siteConfig, onNavigate, onOpenRegister }: N
           {showDirectory && (
             <button
               type="button"
-              onClick={() => handleNav('home', 'directory')}
-              className="w-full text-left px-3 py-3 rounded-lg text-sm font-medium text-zinc-200 hover:bg-zinc-900"
+              onClick={() => handleNav('directory')}
+              className={`w-full text-left px-3 py-3 rounded-lg text-sm font-medium hover:bg-zinc-900 ${
+                activeView === 'directory' ? 'text-white bg-zinc-900/60' : 'text-zinc-200'
+              }`}
             >
-              Leadership Directory
+              Directory
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => handleNav('timeline')}
+            className={`w-full text-left px-3 py-3 rounded-lg text-sm font-medium hover:bg-zinc-900 ${
+              activeView === 'timeline' ? 'text-white bg-zinc-900/60' : 'text-zinc-200'
+            }`}
+          >
+            Our Journey
+          </button>
           {registrationOpen && (
             <div className="pt-2">
               <button

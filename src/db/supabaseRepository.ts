@@ -33,10 +33,19 @@ function clampStr(val: string | undefined, max: number): string {
 
 function throwIfSupabaseError(error: { code?: string; message?: string } | null, fallbackMsg: string): void {
   if (!error) return;
-  if (error.code === 'PGRST205' || error.message?.includes('schema cache')) {
-    throw new SupabaseSchemaMissingError();
+  const msg = String(error.message || '');
+  if (
+    error.code === 'PGRST205' ||
+    error.code === '42P01' ||
+    error.code === '42501' ||
+    msg.includes('schema cache') ||
+    msg.includes('does not exist') ||
+    msg.includes('row-level security') ||
+    msg.includes('Invalid API key')
+  ) {
+    throw new SupabaseSchemaMissingError(msg || 'Supabase schema setup pending.');
   }
-  console.error('Supabase query failed:', error);
+  console.error(`Supabase query failed (${error.code || 'ERR'}): ${msg}`);
   throw new Error(fallbackMsg);
 }
 
@@ -486,11 +495,14 @@ export async function seedDefaultsIfEmpty(defaults: PortalState): Promise<void> 
 
 export async function syncFullPortalState(nextState: PortalState, replaceCollections: boolean): Promise<void> {
   if (replaceCollections) {
-    await Promise.all([
+    const [bmDel, noticeDel, galleryDel] = await Promise.all([
       supabase.from('batchmates').delete().neq('id', ''),
       supabase.from('notices').delete().neq('id', ''),
       supabase.from('gallery_items').delete().neq('id', ''),
     ]);
+    throwIfSupabaseError(bmDel.error, 'Failed to clear batchmates.');
+    throwIfSupabaseError(noticeDel.error, 'Failed to clear notices.');
+    throwIfSupabaseError(galleryDel.error, 'Failed to clear gallery.');
   }
 
   await Promise.all([

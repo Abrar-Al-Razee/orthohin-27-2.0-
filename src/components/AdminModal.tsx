@@ -81,6 +81,7 @@ import {
   resetAdminPassword,
   setAdminPassword,
 } from '../utils/storage';
+import { downloadOrderInvoicePng } from '../utils/invoice';
 
 interface AdminModalProps {
   isOpen: boolean;
@@ -1110,8 +1111,8 @@ export function AdminModal({
   return (
     <div
       className="fixed inset-0 z-50 bg-[#070709] text-zinc-100 flex flex-col overflow-hidden"
-      role="dialog"
-      aria-modal="true"
+      role={isRouteAdmin ? 'main' : 'dialog'}
+      aria-modal={isRouteAdmin ? undefined : true}
       aria-label="ORTHOHIN '27 Smart Admin Panel"
     >
       {/* Dedicated Top Bar */}
@@ -1135,7 +1136,7 @@ export function AdminModal({
               ORTHOHIN '27 · Smart Admin Control
             </h2>
             <p className="text-[11px] text-zinc-400 truncate">
-              {unlocked ? `Authorized: ${authorizedAdmin}` : `Protected Route · ${AUTHORIZED_ADMIN_EMAIL}`}
+              {unlocked ? `Authorized: ${authorizedAdmin}` : `Protected /admin Page · ${AUTHORIZED_ADMIN_EMAIL}`}
             </p>
           </div>
         </div>
@@ -2234,6 +2235,15 @@ export function AdminModal({
                               </div>
 
                               <div className="flex flex-wrap items-center gap-2 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => void downloadOrderInvoicePng(order, hc)}
+                                  title="Download official order invoice"
+                                  className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-200 inline-flex items-center gap-1 cursor-pointer"
+                                >
+                                  <Download className="w-3 h-3" />
+                                  Invoice
+                                </button>
                                 <button
                                   type="button"
                                   onClick={() => {

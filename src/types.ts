@@ -1,4 +1,14 @@
-export type ViewMode = 'home' | 'batchmates' | 'hoodie';
+export type ViewMode =
+  | 'home'
+  | 'gallery'
+  | 'batchmates'
+  | 'hoodie'
+  | 'directory'
+  | 'notices'
+  | 'about'
+  | 'timeline'
+  | 'register'
+  | 'admin';
 
 export type OrderStatus = 'Pending' | 'Confirmed' | 'Delivered';
 

@@ -1,7 +1,7 @@
+import 'dotenv/config';
 import express, { type Response } from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import * as dotenv from 'dotenv';
 import {
   addActivityLog,
   createBatchmate,
@@ -25,15 +25,13 @@ import {
 import { requireAdmin, requireAuth, type AuthRequest } from './src/middleware/auth.ts';
 import type { Batchmate, BatchNotice, GalleryItem, HoodieOrder, OrderStatus, PortalState } from './src/types.ts';
 
-dotenv.config();
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 function sendRepoError(res: Response, error: unknown, fallbackMessage: string) {
   if (error instanceof SupabaseSchemaMissingError) {
-    res.status(503).json({
-      error: error.message,
+    res.status(200).json({
+      useFallback: true,
       code: 'SUPABASE_SCHEMA_MISSING',
     });
     return;

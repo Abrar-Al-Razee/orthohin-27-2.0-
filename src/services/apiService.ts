@@ -49,19 +49,27 @@ async function getAuthHeaders(): Promise<HeadersInit> {
 }
 
 async function handleApiResponse<T>(res: Response): Promise<T> {
+  let payload: unknown = null;
+  try {
+    payload = await res.json();
+  } catch {
+    payload = null;
+  }
+  const meta = (payload && typeof payload === 'object' ? payload : {}) as {
+    error?: string;
+    code?: string;
+    useFallback?: boolean;
+  };
+  if (meta.useFallback && meta.code === 'SUPABASE_SCHEMA_MISSING') {
+    throw new SchemaNotReadyError();
+  }
   if (!res.ok) {
-    let payload: { error?: string; code?: string } = {};
-    try {
-      payload = (await res.json()) as { error?: string; code?: string };
-    } catch {
-      // Ignore parse error
-    }
-    if (res.status === 503 && payload.code === 'SUPABASE_SCHEMA_MISSING') {
+    if (res.status === 503 && meta.code === 'SUPABASE_SCHEMA_MISSING') {
       throw new SchemaNotReadyError();
     }
-    throw new Error(payload.error || 'Request failed');
+    throw new Error(meta.error || 'Request failed');
   }
-  return (await res.json()) as T;
+  return payload as T;
 }
 
 async function withSupabaseOrFallback<T>(supabaseCall: () => Promise<T>, fallbackCall: () => Promise<T>): Promise<T> {

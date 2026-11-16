@@ -1,12 +1,30 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { ArrowUpRight, Camera, Heart, Instagram, Megaphone, Play, Shirt, Target, UserPlus, Users } from 'lucide-react';
+import {
+  ArrowUpRight,
+  Camera,
+  ChevronRight,
+  Heart,
+  Instagram,
+  Megaphone,
+  Play,
+  Shirt,
+  Target,
+  UserPlus,
+  Users,
+} from 'lucide-react';
+import { AboutPage } from './components/AboutPage';
 import { AdminModal } from './components/AdminModal';
 import { BatchmatesView } from './components/BatchmatesView';
+import { DirectoryPage } from './components/DirectoryPage';
+import { GalleryPage } from './components/GalleryPage';
 import { HoodieView } from './components/HoodieView';
 import { LightboxModal } from './components/LightboxModal';
 import { Navbar } from './components/Navbar';
+import { NoticesPage } from './components/NoticesPage';
 import { RegisterModal } from './components/RegisterModal';
+import { RegisterPage } from './components/RegisterPage';
+import { TimelinePage } from './components/TimelinePage';
 import { auth } from './firebase';
 import {
   addActivityLogInDb,
@@ -25,24 +43,71 @@ import {
   mergeSiteConfig,
 } from './utils/storage';
 
-function isAdminPath(): boolean {
-  if (typeof window === 'undefined') return false;
-  const path = window.location.pathname.replace(/\/+$/, '');
-  return (
-    path === '/admin-login' ||
-    path === '/admin' ||
-    window.location.hash === '#/admin-login' ||
-    window.location.hash === '#/admin'
-  );
+const ROUTE_PATHS: Record<ViewMode, string> = {
+  home: '/',
+  gallery: '/gallery',
+  batchmates: '/batchmates',
+  hoodie: '/hoodie',
+  directory: '/directory',
+  notices: '/notices',
+  about: '/about',
+  timeline: '/timeline',
+  register: '/register',
+  admin: '/admin',
+};
+
+const ROUTE_TITLES: Record<ViewMode, string> = {
+  home: "ORTHOHIN '27 · Official Batch Portal (Class of 2027)",
+  gallery: "Gallery · ORTHOHIN '27",
+  batchmates: "Batchmates · ORTHOHIN '27",
+  hoodie: "Hoodie '26-'27 · ORTHOHIN '27",
+  directory: "Directory · ORTHOHIN '27",
+  notices: "Notices · ORTHOHIN '27",
+  about: "About · ORTHOHIN '27",
+  timeline: "Our Journey · ORTHOHIN '27",
+  register: "Register · ORTHOHIN '27",
+  admin: "Admin Panel · ORTHOHIN '27",
+};
+
+function resolveViewFromLocation(): ViewMode {
+  if (typeof window === 'undefined') return 'home';
+  const rawHash = window.location.hash.replace(/^#/, '').replace(/\/+$/, '');
+  const rawPath = window.location.pathname.replace(/\/+$/, '') || '/';
+  const candidate = rawHash.startsWith('/') ? rawHash : rawPath;
+
+  switch (candidate) {
+    case '/admin':
+    case '/admin-login':
+      return 'admin';
+    case '/gallery':
+      return 'gallery';
+    case '/batchmates':
+      return 'batchmates';
+    case '/hoodie':
+      return 'hoodie';
+    case '/directory':
+      return 'directory';
+    case '/notices':
+      return 'notices';
+    case '/about':
+      return 'about';
+    case '/timeline':
+      return 'timeline';
+    case '/register':
+      return 'register';
+    default:
+      return 'home';
+  }
 }
 
 export default function App() {
+  const initialView = resolveViewFromLocation();
   const [state, setState] = useState<PortalState>(() => createDefaultState());
   const [authUser, setAuthUser] = useState<User | null>(null);
-  const [activeView, setActiveView] = useState<ViewMode>('home');
+  const [activeView, setActiveView] = useState<ViewMode>(initialView);
   const [registerOpen, setRegisterOpen] = useState(false);
-  const [isRouteAdmin, setIsRouteAdmin] = useState<boolean>(() => isAdminPath());
-  const [adminOpen, setAdminOpen] = useState<boolean>(() => isAdminPath());
+  const [isRouteAdmin, setIsRouteAdmin] = useState<boolean>(initialView === 'admin');
+  const [adminOpen, setAdminOpen] = useState<boolean>(initialView === 'admin');
   const [lightboxItem, setLightboxItem] = useState<GalleryItem | null>(null);
   const [toast, setToast] = useState<ToastMessage | null>(null);
 
@@ -62,8 +127,14 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    document.title = ROUTE_TITLES[activeView] || ROUTE_TITLES.home;
+  }, [activeView]);
+
+  useEffect(() => {
     const syncRoute = () => {
-      const onAdmin = isAdminPath();
+      const resolved = resolveViewFromLocation();
+      const onAdmin = resolved === 'admin';
+      setActiveView(resolved);
       setIsRouteAdmin(onAdmin);
       setAdminOpen(onAdmin);
     };
@@ -154,8 +225,21 @@ export default function App() {
   }, []);
 
   const handleNavigate = useCallback((view: ViewMode, sectionId?: string) => {
+    const targetPath = ROUTE_PATHS[view] || '/';
+    if (typeof window !== 'undefined' && window.location.pathname !== targetPath) {
+      window.history.pushState({}, '', targetPath);
+    }
+
+    if (view === 'admin') {
+      setIsRouteAdmin(true);
+      setAdminOpen(true);
+    } else {
+      setIsRouteAdmin(false);
+      setAdminOpen(false);
+    }
+
     setActiveView(view);
-    if (sectionId) {
+    if (sectionId && view === 'home') {
       window.setTimeout(() => {
         const target = document.getElementById(sectionId);
         if (target) {
@@ -179,15 +263,14 @@ export default function App() {
         }
         await refreshAllData();
         setRegisterOpen(false);
-        setActiveView('batchmates');
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        handleNavigate('batchmates');
         showToast(`Welcome to Orthohin '27, ${newBatchmate.name}! Your profile is now live.`, 'success');
       } catch (error) {
         showToast('Could not save your registration right now. Please retry.', 'error');
         throw error;
       }
     },
-    [isFirebaseAdmin, refreshAllData, showToast]
+    [handleNavigate, isFirebaseAdmin, refreshAllData, showToast]
   );
 
   const handlePlaceOrder = useCallback(
@@ -214,6 +297,7 @@ export default function App() {
     setAdminOpen(false);
     if (isRouteAdmin) {
       setIsRouteAdmin(false);
+      setActiveView('home');
       window.history.pushState({}, '', '/');
     }
   }, [isRouteAdmin]);
@@ -244,7 +328,7 @@ export default function App() {
         onNavigate={handleNavigate}
         onOpenRegister={() => {
           if (sc.registrationOpen !== false) {
-            setRegisterOpen(true);
+            handleNavigate('register');
           } else {
             showToast('Batchmate registration is currently paused by the admin.', 'info');
           }
@@ -278,7 +362,7 @@ export default function App() {
                     {sc.registrationOpen !== false && (
                       <button
                         type="button"
-                        onClick={() => setRegisterOpen(true)}
+                        onClick={() => handleNavigate('register')}
                         className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-sm font-semibold whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
                       >
                         <UserPlus className="w-4 h-4" />
@@ -321,7 +405,12 @@ export default function App() {
               {/* Full-Width 4-Column KPI Strip */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-12 pt-10 border-t border-zinc-800/80">
                 {(sc.kpis || []).map((kpi, idx) => (
-                  <div key={kpi.id || idx} className="p-5 rounded-2xl bg-[#111114] border border-zinc-800/80">
+                  <button
+                    key={kpi.id || idx}
+                    type="button"
+                    onClick={() => handleNavigate(kpi.autoBatchmateCount ? 'batchmates' : 'about')}
+                    className="text-left p-5 rounded-2xl bg-[#111114] border border-zinc-800/80 hover:border-zinc-700 transition-colors cursor-pointer"
+                  >
                     <p
                       className={`text-3xl font-bold font-mono tabular-nums ${
                         idx === (sc.kpis || []).length - 1 ? 'text-rose-500' : 'text-white'
@@ -330,25 +419,41 @@ export default function App() {
                       {kpi.autoBatchmateCount ? state.batchmates.length : kpi.value}
                     </p>
                     <p className="text-xs text-zinc-400 mt-1">{kpi.label}</p>
-                  </div>
+                  </button>
                 ))}
               </div>
 
               {/* Official Notice Board */}
               {sec.notices && (state.notices || []).some((n) => n.active) && (
                 <div className="mt-10 space-y-4">
-                  <div className="flex items-center gap-2 text-xs font-medium text-rose-400">
-                    <Megaphone className="w-3.5 h-3.5" />
-                    <span>Official Batch Notices</span>
+                  <div className="flex items-center justify-between gap-4">
+                    <button
+                      type="button"
+                      onClick={() => handleNavigate('notices')}
+                      className="inline-flex items-center gap-2 text-xs font-medium text-rose-400 hover:text-rose-300 transition-colors cursor-pointer"
+                    >
+                      <Megaphone className="w-3.5 h-3.5" />
+                      <span>Official Batch Notices</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleNavigate('notices')}
+                      className="inline-flex items-center gap-1 text-xs font-medium text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                    >
+                      View All Notices
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                   <div className="grid md:grid-cols-2 gap-4">
                     {[...(state.notices || [])]
                       .filter((n) => n.active)
                       .sort((a, b) => Number(b.pinned) - Number(a.pinned))
                       .map((notice) => (
-                        <div
+                        <button
                           key={notice.id}
-                          className="p-5 rounded-2xl bg-[#111114] border border-zinc-800/80 space-y-2"
+                          type="button"
+                          onClick={() => handleNavigate('notices')}
+                          className="text-left p-5 rounded-2xl bg-[#111114] border border-zinc-800/80 hover:border-zinc-700 transition-colors space-y-2 cursor-pointer"
                         >
                           <div className="flex items-center gap-2 text-xs">
                             <span
@@ -373,7 +478,7 @@ export default function App() {
                           </div>
                           <h3 className="text-base font-semibold text-white">{notice.title}</h3>
                           <p className="text-sm text-zinc-400 leading-relaxed">{notice.message}</p>
-                        </div>
+                        </button>
                       ))}
                   </div>
                 </div>
@@ -385,7 +490,17 @@ export default function App() {
               <section id="about" className="py-20 bg-[#0b0b0e] border-y border-zinc-900">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid lg:grid-cols-12 gap-12 items-center">
                   <div className="lg:col-span-7 space-y-6">
-                    <p className="text-xs font-medium text-rose-400">{sc.aboutKicker}</p>
+                    <div className="flex items-center justify-between gap-4">
+                      <p className="text-xs font-medium text-rose-400">{sc.aboutKicker}</p>
+                      <button
+                        type="button"
+                        onClick={() => handleNavigate('about')}
+                        className="inline-flex items-center gap-1 text-xs font-medium text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                      >
+                        About Page
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                     <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white text-balance">
                       {sc.aboutTitle}
                     </h2>
@@ -393,24 +508,37 @@ export default function App() {
                       {sc.aboutDescription}
                     </p>
                     <div className="grid sm:grid-cols-2 gap-4 pt-2">
-                      <div className="p-5 rounded-2xl bg-[#111114] border border-zinc-800/80 space-y-2">
+                      <button
+                        type="button"
+                        onClick={() => handleNavigate('about')}
+                        className="text-left p-5 rounded-2xl bg-[#111114] border border-zinc-800/80 hover:border-zinc-700 transition-colors space-y-2 cursor-pointer"
+                      >
                         <Target className="w-5 h-5 text-rose-500" />
                         <h3 className="text-sm font-semibold text-white">{sc.visionTitle}</h3>
                         <p className="text-xs text-zinc-400 leading-relaxed">{sc.visionText}</p>
-                      </div>
-                      <div className="p-5 rounded-2xl bg-[#111114] border border-zinc-800/80 space-y-2">
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleNavigate('about')}
+                        className="text-left p-5 rounded-2xl bg-[#111114] border border-zinc-800/80 hover:border-zinc-700 transition-colors space-y-2 cursor-pointer"
+                      >
                         <Heart className="w-5 h-5 text-rose-500" />
                         <h3 className="text-sm font-semibold text-white">{sc.unityTitle}</h3>
                         <p className="text-xs text-zinc-400 leading-relaxed">{sc.unityText}</p>
-                      </div>
+                      </button>
                     </div>
                   </div>
 
                   <div className="lg:col-span-5">
                     <div className="p-8 rounded-2xl bg-[#111114] border border-zinc-800/80 text-center space-y-5">
-                      <div className="w-14 h-14 mx-auto rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center">
+                      <button
+                        type="button"
+                        onClick={() => handleNavigate('about')}
+                        className="w-14 h-14 mx-auto rounded-xl bg-zinc-900 border border-zinc-800 hover:border-rose-500/40 flex items-center justify-center transition-colors cursor-pointer"
+                        aria-label="Open About Page"
+                      >
                         <Instagram className="w-7 h-7 text-rose-500" />
-                      </div>
+                      </button>
                       <div className="space-y-1.5">
                         <h3 className="text-xl font-bold text-white">{sc.instagramHandle}</h3>
                         <p className="text-sm text-zinc-400 max-w-xs mx-auto leading-relaxed">{sc.instagramBio}</p>
@@ -435,10 +563,24 @@ export default function App() {
               <section id="gallery" className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
                   <div>
-                    <p className="text-xs font-medium text-rose-400 mb-1">Memory Vault</p>
+                    <button
+                      type="button"
+                      onClick={() => handleNavigate('gallery')}
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-rose-400 hover:text-rose-300 mb-1 transition-colors cursor-pointer"
+                    >
+                      <Camera className="w-3.5 h-3.5" />
+                      Memory Vault
+                    </button>
                     <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">Captured Moments</h2>
                   </div>
-                  <p className="text-sm text-zinc-400">Select any frame to open the fullscreen viewer.</p>
+                  <button
+                    type="button"
+                    onClick={() => handleNavigate('gallery')}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#111114] hover:bg-zinc-900 border border-zinc-800 text-xs font-medium text-zinc-200 transition-colors cursor-pointer w-fit"
+                  >
+                    Open Gallery Page
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
                 </div>
 
                 {state.gallery.length === 0 ? (
@@ -506,7 +648,12 @@ export default function App() {
                   </div>
 
                   <div className="max-w-md mx-auto rounded-2xl bg-[#111114] border border-zinc-800/80 p-8 text-center space-y-5">
-                    <div className="w-32 h-32 mx-auto rounded-full overflow-hidden border-2 border-zinc-700">
+                    <button
+                      type="button"
+                      onClick={() => handleNavigate('directory')}
+                      className="w-32 h-32 mx-auto rounded-full overflow-hidden border-2 border-zinc-700 hover:border-rose-500 transition-colors block cursor-pointer"
+                      aria-label="Open Directory Page"
+                    >
                       <img
                         src={
                           state.profile &&
@@ -518,7 +665,7 @@ export default function App() {
                         referrerPolicy="no-referrer"
                         className="w-full h-full object-cover object-[center_22%]"
                       />
-                    </div>
+                    </button>
 
                     <div className="space-y-1">
                       <p className="text-xs font-medium text-rose-400">{sc.leadRole}</p>
@@ -539,6 +686,13 @@ export default function App() {
                       </a>
                       <button
                         type="button"
+                        onClick={() => handleNavigate('directory')}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-200 text-xs font-medium transition-colors cursor-pointer"
+                      >
+                        Directory Page
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => handleNavigate('batchmates')}
                         className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-200 text-xs font-medium transition-colors cursor-pointer"
                       >
@@ -556,6 +710,14 @@ export default function App() {
                 <div className="text-center mb-12 space-y-2">
                   <p className="text-xs font-medium text-rose-400">Cohort Milestones</p>
                   <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">Our Journey</h2>
+                  <button
+                    type="button"
+                    onClick={() => handleNavigate('timeline')}
+                    className="inline-flex items-center gap-1 text-xs font-medium text-zinc-400 hover:text-white pt-1 transition-colors cursor-pointer"
+                  >
+                    Open Journey Page
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
                 </div>
 
                 <ol className="relative border-l border-zinc-800 space-y-8 ml-3">
@@ -583,12 +745,50 @@ export default function App() {
           </>
         )}
 
+        {activeView === 'gallery' && (
+          <GalleryPage
+            gallery={state.gallery}
+            onSelectLightbox={setLightboxItem}
+            onNavigate={handleNavigate}
+          />
+        )}
+
+        {activeView === 'notices' && <NoticesPage notices={state.notices} onNavigate={handleNavigate} />}
+
+        {activeView === 'about' && (
+          <AboutPage
+            siteConfig={sc}
+            batchmateCount={state.batchmates.length}
+            onNavigate={handleNavigate}
+          />
+        )}
+
+        {activeView === 'directory' && (
+          <DirectoryPage
+            siteConfig={sc}
+            profileImage={state.profile}
+            batchmateCount={state.batchmates.length}
+            onNavigate={handleNavigate}
+          />
+        )}
+
+        {activeView === 'timeline' && <TimelinePage siteConfig={sc} onNavigate={handleNavigate} />}
+
+        {activeView === 'register' && (
+          <RegisterPage
+            registrationOpen={sc.registrationOpen !== false}
+            onNavigate={handleNavigate}
+            onRegister={handleRegisterSubmit}
+          />
+        )}
+
         {activeView === 'batchmates' && (
           <BatchmatesView
             batchmates={state.batchmates}
+            onBackHome={() => handleNavigate('home')}
             onOpenRegister={() => {
               if (sc.registrationOpen !== false) {
-                setRegisterOpen(true);
+                handleNavigate('register');
               } else {
                 showToast('Batchmate registration is currently paused by the admin.', 'info');
               }
@@ -602,6 +802,7 @@ export default function App() {
             instagramUrl={sc.instagramUrl}
             onPlaceOrder={handlePlaceOrder}
             onViewBatchmates={() => handleNavigate('batchmates')}
+            onBackHome={() => handleNavigate('home')}
           />
         )}
       </main>
@@ -610,14 +811,39 @@ export default function App() {
       <footer className="py-8 border-t border-zinc-900 text-center px-4">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-zinc-500">
           <p>{sc.footerText}</p>
-          <div className="flex items-center gap-5">
-            {sc.registrationOpen !== false && (
+          <div className="flex flex-wrap items-center justify-center gap-5">
+            <button
+              type="button"
+              onClick={() => handleNavigate('home')}
+              className="hover:text-zinc-200 transition-colors cursor-pointer"
+            >
+              Home
+            </button>
+            {sec.notices && (
               <button
                 type="button"
-                onClick={() => setRegisterOpen(true)}
+                onClick={() => handleNavigate('notices')}
                 className="hover:text-zinc-200 transition-colors cursor-pointer"
               >
-                Register
+                Notices
+              </button>
+            )}
+            {sec.about && (
+              <button
+                type="button"
+                onClick={() => handleNavigate('about')}
+                className="hover:text-zinc-200 transition-colors cursor-pointer"
+              >
+                About
+              </button>
+            )}
+            {sec.gallery && (
+              <button
+                type="button"
+                onClick={() => handleNavigate('gallery')}
+                className="hover:text-zinc-200 transition-colors cursor-pointer"
+              >
+                Gallery
               </button>
             )}
             <button
@@ -634,6 +860,33 @@ export default function App() {
                 className="hover:text-zinc-200 transition-colors cursor-pointer"
               >
                 Hoodie '26-'27
+              </button>
+            )}
+            {sec.directory && (
+              <button
+                type="button"
+                onClick={() => handleNavigate('directory')}
+                className="hover:text-zinc-200 transition-colors cursor-pointer"
+              >
+                Directory
+              </button>
+            )}
+            {sec.timeline && (
+              <button
+                type="button"
+                onClick={() => handleNavigate('timeline')}
+                className="hover:text-zinc-200 transition-colors cursor-pointer"
+              >
+                Our Journey
+              </button>
+            )}
+            {sc.registrationOpen !== false && (
+              <button
+                type="button"
+                onClick={() => handleNavigate('register')}
+                className="hover:text-zinc-200 transition-colors cursor-pointer"
+              >
+                Register
               </button>
             )}
           </div>
@@ -658,7 +911,7 @@ export default function App() {
         onClose={handleCloseAdmin}
         onUpdateState={updateState}
         onRefreshData={refreshAllData}
-        onOpenRegister={() => setRegisterOpen(true)}
+        onOpenRegister={() => handleNavigate('register')}
         onToast={showToast}
       />
 

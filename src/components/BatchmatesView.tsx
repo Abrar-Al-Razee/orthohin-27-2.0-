@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Search, UserPlus, X } from 'lucide-react';
+import { ArrowLeft, Search, UserPlus, X } from 'lucide-react';
 import type { Batchmate } from '../types';
 import { getInitials } from '../utils/storage';
 
 interface BatchmatesViewProps {
   batchmates: Batchmate[];
   onOpenRegister: () => void;
+  onBackHome?: () => void;
 }
 
-export function BatchmatesView({ batchmates, onOpenRegister }: BatchmatesViewProps) {
+export function BatchmatesView({ batchmates, onOpenRegister, onBackHome }: BatchmatesViewProps) {
   const [search, setSearch] = useState('');
   const [activeGroup, setActiveGroup] = useState('All');
   const [selectedBatchmate, setSelectedBatchmate] = useState<Batchmate | null>(null);
@@ -42,6 +43,16 @@ export function BatchmatesView({ batchmates, onOpenRegister }: BatchmatesViewPro
 
   return (
     <section className="pt-28 pb-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      {onBackHome && (
+        <button
+          type="button"
+          onClick={onBackHome}
+          className="inline-flex items-center gap-2 text-xs font-medium text-zinc-400 hover:text-white mb-6 transition-colors cursor-pointer"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          Back to Home
+        </button>
+      )}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-8 border-b border-zinc-800/80">
         <div className="space-y-2 max-w-2xl">
           <p className="text-xs font-medium text-rose-400">Community Directory · Class of 2027</p>

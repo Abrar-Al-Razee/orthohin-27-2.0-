@@ -1,19 +1,21 @@
 import { useState } from 'react';
-import { ArrowUpRight, Check, CheckCircle2, ShoppingBag, Users } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, Check, CheckCircle2, Download, FileText, ShoppingBag, Users } from 'lucide-react';
 import type { HoodieConfig, HoodieOrder } from '../types';
+import { downloadOrderInvoiceHtml, downloadOrderInvoicePng, formatInvoiceDate } from '../utils/invoice';
 
 interface HoodieViewProps {
   config: HoodieConfig;
   instagramUrl: string;
   onPlaceOrder: (order: HoodieOrder) => Promise<void> | void;
   onViewBatchmates: () => void;
+  onBackHome?: () => void;
 }
 
 type HoodieSide = 'front' | 'back';
 
 const SIZES: HoodieOrder['size'][] = ['S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
 
-export function HoodieView({ config, instagramUrl, onPlaceOrder, onViewBatchmates }: HoodieViewProps) {
+export function HoodieView({ config, instagramUrl, onPlaceOrder, onViewBatchmates, onBackHome }: HoodieViewProps) {
   const [activeSide, setActiveSide] = useState<HoodieSide>('front');
   const [selectedSize, setSelectedSize] = useState<HoodieOrder['size']>('L');
   const [quantity, setQuantity] = useState(1);
@@ -69,6 +71,16 @@ export function HoodieView({ config, instagramUrl, onPlaceOrder, onViewBatchmate
 
   return (
     <section className="pt-28 pb-24 max-w-5xl mx-auto px-4 sm:px-6">
+      {onBackHome && (
+        <button
+          type="button"
+          onClick={onBackHome}
+          className="inline-flex items-center gap-2 text-xs font-medium text-zinc-400 hover:text-white mb-6 transition-colors cursor-pointer"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          Back to Home
+        </button>
+      )}
       <div className="bg-zinc-900/75 backdrop-blur-xl p-6 sm:p-10 md:p-12 rounded-3xl border border-rose-500/30 shadow-2xl space-y-8">
         {/* Centered Header (User Design) */}
         <div className="text-center space-y-3">
@@ -174,20 +186,70 @@ export function HoodieView({ config, instagramUrl, onPlaceOrder, onViewBatchmate
               </div>
 
               {lastOrder ? (
-                <div className="p-4 rounded-xl bg-emerald-950/40 border border-emerald-500/30 space-y-2">
-                  <div className="flex items-center gap-2 text-emerald-300 text-sm font-bold">
-                    <CheckCircle2 className="w-4 h-4 shrink-0" />
-                    Direct Order Placed ({lastOrder.id})
+                <div className="p-4 rounded-xl bg-zinc-900/90 border border-emerald-500/40 space-y-3.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 text-emerald-300 text-sm font-bold">
+                      <CheckCircle2 className="w-4 h-4 shrink-0" />
+                      Order Confirmed — Official Invoice Ready
+                    </div>
+                    <span className="px-2 py-0.5 rounded bg-emerald-950/80 border border-emerald-500/30 font-mono text-[10px] font-bold text-emerald-300">
+                      {lastOrder.id}
+                    </span>
                   </div>
-                  <p className="text-xs text-zinc-300 leading-relaxed">
-                    Order recorded for <strong className="text-white">{lastOrder.customerName}</strong> (Roll{' '}
-                    <span className="font-mono">{lastOrder.roll}</span>) · Size{' '}
-                    <span className="font-mono text-white">{lastOrder.size}</span> × {lastOrder.quantity}.
-                  </p>
+
+                  {/* Invoice Summary Slip */}
+                  <div className="rounded-lg bg-zinc-950/90 border border-zinc-800 p-3 space-y-2 text-xs">
+                    <div className="flex items-center justify-between text-zinc-400">
+                      <span>Batchmate</span>
+                      <span className="font-semibold text-white">{lastOrder.customerName}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-zinc-400">
+                      <span>Roll · Contact</span>
+                      <span className="font-mono text-zinc-200">
+                        {lastOrder.roll} · {lastOrder.contact}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-zinc-400">
+                      <span>Item · Size × Qty</span>
+                      <span className="font-mono font-bold text-rose-400">
+                        {lastOrder.size} × {lastOrder.quantity}
+                      </span>
+                    </div>
+                    {lastOrder.notes && (
+                      <div className="flex items-center justify-between gap-3 text-zinc-400">
+                        <span className="shrink-0">Note</span>
+                        <span className="text-zinc-200 text-right truncate">{lastOrder.notes}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between text-zinc-500 pt-1.5 border-t border-zinc-800/80 text-[11px]">
+                      <span>Issued</span>
+                      <span>{formatInvoiceDate(lastOrder.createdAt)}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void downloadOrderInvoicePng(lastOrder, config)}
+                      className="flex-1 py-2.5 px-3 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      Download Invoice (PNG)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => downloadOrderInvoiceHtml(lastOrder, config)}
+                      className="py-2.5 px-3 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      Printable Slip
+                    </button>
+                  </div>
+
                   <button
                     type="button"
                     onClick={() => setLastOrder(null)}
-                    className="text-xs font-semibold text-rose-400 hover:text-rose-300 cursor-pointer pt-1"
+                    className="text-xs font-semibold text-zinc-400 hover:text-white cursor-pointer"
                   >
                     Place another direct order
                   </button>
