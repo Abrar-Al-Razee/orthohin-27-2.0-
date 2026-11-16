@@ -239,10 +239,16 @@ export async function createOrder(order: HoodieOrder): Promise<HoodieOrder> {
   }
 }
 
-export async function updateOrderStatus(id: string, status: OrderStatus, notes?: string): Promise<void> {
+export async function updateOrderStatus(
+  id: string,
+  status: OrderStatus,
+  notes?: string,
+  extra?: Partial<Pick<HoodieOrder, 'customerName' | 'roll' | 'size' | 'quantity' | 'contact'>>
+): Promise<void> {
   const docId = sanitizeId(id, 'RCS');
   const allowedStatuses: OrderStatus[] = ['Pending', 'Confirmed', 'Delivered'];
   const safeStatus = allowedStatuses.includes(status) ? status : 'Pending';
+  const allowedSizes: HoodieOrder['size'][] = ['S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
 
   try {
     await db
@@ -250,11 +256,18 @@ export async function updateOrderStatus(id: string, status: OrderStatus, notes?:
       .set({
         status: safeStatus,
         ...(notes !== undefined ? { notes: clampStr(notes, 300) || null } : {}),
+        ...(extra?.customerName ? { customerName: clampStr(extra.customerName, 100) } : {}),
+        ...(extra?.roll ? { roll: clampStr(extra.roll, 32) } : {}),
+        ...(extra?.size && allowedSizes.includes(extra.size) ? { size: extra.size } : {}),
+        ...(extra?.quantity !== undefined
+          ? { quantity: Math.min(5, Math.max(1, Math.round(Number(extra.quantity) || 1))) }
+          : {}),
+        ...(extra?.contact ? { contact: clampStr(extra.contact, 100) } : {}),
       })
       .where(eq(hoodieOrders.id, docId));
   } catch (error) {
     console.error('Database query failed in updateOrderStatus:', error);
-    throw new Error('Failed to update order status.', { cause: error });
+    throw new Error('Failed to update order.', { cause: error });
   }
 }
 
@@ -385,25 +398,79 @@ export async function saveSettings(
   const cleanSpecs = (hoodieConfig.specs || [])
     .map((s) => clampStr(s, 140))
     .filter(Boolean)
-    .slice(0, 10);
+    .slice(0, 12);
 
   const safeHoodie: HoodieConfig = {
+    kicker: clampStr(hoodieConfig.kicker, 140) || undefined,
     title: clampStr(hoodieConfig.title, 120) || "RCS HOODIE '26-'27",
     subtitle: clampStr(hoodieConfig.subtitle, 500),
     frontImage: hoodieConfig.frontImage && hoodieConfig.frontImage.length <= 350000 ? hoodieConfig.frontImage : '',
     backImage: hoodieConfig.backImage && hoodieConfig.backImage.length <= 350000 ? hoodieConfig.backImage : '',
+    frontLabel: clampStr(hoodieConfig.frontLabel, 80) || undefined,
+    backLabel: clampStr(hoodieConfig.backLabel, 80) || undefined,
     specs: cleanSpecs.length > 0 ? cleanSpecs : ['350 GSM Cotton Fleece'],
     directOrderOpen: Boolean(hoodieConfig.directOrderOpen),
   };
 
+  const safeKpis = Array.isArray(siteConfig.kpis)
+    ? siteConfig.kpis.slice(0, 4).map((k, idx) => ({
+        id: clampStr(k.id || `kpi-${idx + 1}`, 40),
+        value: clampStr(k.value, 40) || '0',
+        label: clampStr(k.label, 80) || 'Metric',
+        autoBatchmateCount: Boolean(k.autoBatchmateCount),
+      }))
+    : undefined;
+
+  const safeTimeline = Array.isArray(siteConfig.timeline)
+    ? siteConfig.timeline.slice(0, 20).map((t, idx) => ({
+        id: clampStr(t.id || `tl-${idx + 1}`, 40),
+        tag: clampStr(t.tag, 60) || 'Milestone',
+        title: clampStr(t.title, 120) || 'Batch Milestone',
+        description: clampStr(t.description, 400),
+      }))
+    : undefined;
+
   const safeSite: SiteConfig = {
+    brandName: clampStr(siteConfig.brandName, 40) || undefined,
+    brandAccent: clampStr(siteConfig.brandAccent, 20) || undefined,
     heroKicker: clampStr(siteConfig.heroKicker, 120),
     heroTitle: clampStr(siteConfig.heroTitle, 120),
     heroHighlight: clampStr(siteConfig.heroHighlight, 120),
     heroDescription: clampStr(siteConfig.heroDescription, 600),
+    heroImage: siteConfig.heroImage && siteConfig.heroImage.length <= 350000 ? siteConfig.heroImage : undefined,
     announcement: clampStr(siteConfig.announcement, 300),
     instagramUrl: clampStr(siteConfig.instagramUrl, 300),
+    instagramHandle: clampStr(siteConfig.instagramHandle, 80) || undefined,
+    instagramBio: clampStr(siteConfig.instagramBio, 300) || undefined,
     devNote: clampStr(siteConfig.devNote, 600),
+    aboutKicker: clampStr(siteConfig.aboutKicker, 80) || undefined,
+    aboutTitle: clampStr(siteConfig.aboutTitle, 160) || undefined,
+    aboutDescription: clampStr(siteConfig.aboutDescription, 800) || undefined,
+    visionTitle: clampStr(siteConfig.visionTitle, 100) || undefined,
+    visionText: clampStr(siteConfig.visionText, 300) || undefined,
+    unityTitle: clampStr(siteConfig.unityTitle, 100) || undefined,
+    unityText: clampStr(siteConfig.unityText, 300) || undefined,
+    leadSectionKicker: clampStr(siteConfig.leadSectionKicker, 80) || undefined,
+    leadSectionTitle: clampStr(siteConfig.leadSectionTitle, 120) || undefined,
+    leadSectionSubtitle: clampStr(siteConfig.leadSectionSubtitle, 240) || undefined,
+    leadRole: clampStr(siteConfig.leadRole, 120) || undefined,
+    leadName: clampStr(siteConfig.leadName, 120) || undefined,
+    footerText: clampStr(siteConfig.footerText, 240) || undefined,
+    registrationOpen: siteConfig.registrationOpen !== undefined ? Boolean(siteConfig.registrationOpen) : true,
+    maintenanceMode: Boolean(siteConfig.maintenanceMode),
+    maintenanceMessage: clampStr(siteConfig.maintenanceMessage, 400) || undefined,
+    sections: siteConfig.sections
+      ? {
+          notices: Boolean(siteConfig.sections.notices),
+          about: Boolean(siteConfig.sections.about),
+          gallery: Boolean(siteConfig.sections.gallery),
+          directory: Boolean(siteConfig.sections.directory),
+          timeline: Boolean(siteConfig.sections.timeline),
+          hoodieNav: Boolean(siteConfig.sections.hoodieNav),
+        }
+      : undefined,
+    kpis: safeKpis,
+    timeline: safeTimeline,
   };
 
   const safeProfile = profile && profile.length <= 350000 ? profile : '';

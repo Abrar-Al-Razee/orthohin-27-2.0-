@@ -73,7 +73,7 @@ export function HoodieView({ config, instagramUrl, onPlaceOrder, onViewBatchmate
         {/* Centered Header (User Design) */}
         <div className="text-center space-y-3">
           <p className="text-xs font-bold uppercase tracking-widest text-rose-400">
-            Official Merchandise · Rajshahi Collegiate School
+            {config.kicker || 'Official Merchandise · Rajshahi Collegiate School'}
           </p>
           <h1 className="text-3xl sm:text-5xl font-black tracking-tight text-white">{config.title}</h1>
           <p className="text-zinc-400 text-sm max-w-lg mx-auto leading-relaxed">{config.subtitle}</p>
@@ -91,7 +91,9 @@ export function HoodieView({ config, instagramUrl, onPlaceOrder, onViewBatchmate
                 className="w-full h-full object-cover"
               />
               <div className="absolute bottom-3 left-3 px-3 py-1.5 rounded-lg bg-black/80 border border-zinc-800 text-xs font-semibold text-white">
-                {activeSide === 'front' ? 'Front View · RCS Crest' : "Back View · Orthohin '27"}
+                {activeSide === 'front'
+                  ? `Front View · ${config.frontLabel || 'RCS Crest'}`
+                  : `Back View · ${config.backLabel || "Orthohin '27"}`}
               </div>
             </div>
 
@@ -116,7 +118,7 @@ export function HoodieView({ config, instagramUrl, onPlaceOrder, onViewBatchmate
                   <p className={`text-xs font-bold ${activeSide === 'front' ? 'text-white' : 'text-zinc-300'}`}>
                     Front Pic
                   </p>
-                  <p className="text-[11px] text-zinc-500 truncate">RCS chest crest</p>
+                  <p className="text-[11px] text-zinc-500 truncate">{config.frontLabel || 'RCS chest crest'}</p>
                 </div>
               </button>
 
@@ -139,7 +141,7 @@ export function HoodieView({ config, instagramUrl, onPlaceOrder, onViewBatchmate
                   <p className={`text-xs font-bold ${activeSide === 'back' ? 'text-white' : 'text-zinc-300'}`}>
                     Back Pic
                   </p>
-                  <p className="text-[11px] text-zinc-500 truncate">Orthohin '27 print</p>
+                  <p className="text-[11px] text-zinc-500 truncate">{config.backLabel || "Orthohin '27 print"}</p>
                 </div>
               </button>
             </div>

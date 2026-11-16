@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { type Response } from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import * as dotenv from 'dotenv';
@@ -17,10 +17,11 @@ import {
   saveNotice,
   saveSettings,
   seedDefaultsIfEmpty,
+  SupabaseSchemaMissingError,
   syncFullPortalState,
   updateBatchmate,
   updateOrderStatus,
-} from './src/db/portalRepository.ts';
+} from './src/db/supabaseRepository.ts';
 import { requireAdmin, requireAuth, type AuthRequest } from './src/middleware/auth.ts';
 import type { Batchmate, BatchNotice, GalleryItem, HoodieOrder, OrderStatus, PortalState } from './src/types.ts';
 
@@ -29,20 +30,35 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+function sendRepoError(res: Response, error: unknown, fallbackMessage: string) {
+  if (error instanceof SupabaseSchemaMissingError) {
+    res.status(503).json({
+      error: error.message,
+      code: 'SUPABASE_SCHEMA_MISSING',
+    });
+    return;
+  }
+  const message = error instanceof Error ? error.message : fallbackMessage;
+  res.status(500).json({ error: message });
+}
+
 async function startServer() {
   const app = express();
   const port = Number(process.env.PORT || 3000);
 
   app.use(express.json({ limit: '5mb' }));
 
-  /* Public Portal API */
+  app.get('/api/health', (_req, res) => {
+    res.json({ ok: true });
+  });
+
+  /* Public Portal API (Supabase-backed) */
   app.get('/api/portal', async (_req, res) => {
     try {
       const data = await getPublicPortalData();
       res.json(data);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to load portal data';
-      res.status(500).json({ error: message });
+      sendRepoError(res, error, 'Failed to load portal data');
     }
   });
 
@@ -65,8 +81,7 @@ async function startServer() {
       });
       res.status(201).json(created);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to register batchmate';
-      res.status(500).json({ error: message });
+      sendRepoError(res, error, 'Failed to register batchmate');
     }
   });
 
@@ -90,19 +105,21 @@ async function startServer() {
       });
       res.status(201).json(created);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to place order';
-      res.status(500).json({ error: message });
+      sendRepoError(res, error, 'Failed to place order');
     }
   });
 
-  /* Admin-Protected API */
+  /* Admin-Protected API (Firebase Google ID Token + Supabase) */
+  app.get('/api/admin/verify', requireAuth, requireAdmin, (req: AuthRequest, res) => {
+    res.json({ ok: true, email: req.user?.email || null });
+  });
+
   app.get('/api/admin/data', requireAuth, requireAdmin, async (_req: AuthRequest, res) => {
     try {
       const data = await getAdminPortalData();
       res.json(data);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to load admin data';
-      res.status(500).json({ error: message });
+      sendRepoError(res, error, 'Failed to load admin data');
     }
   });
 
@@ -112,8 +129,31 @@ async function startServer() {
       await seedDefaultsIfEmpty(defaults);
       res.json({ ok: true });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to seed defaults';
-      res.status(500).json({ error: message });
+      sendRepoError(res, error, 'Failed to seed defaults');
+    }
+  });
+
+  app.post('/api/admin/orders', requireAuth, requireAdmin, async (req: AuthRequest, res) => {
+    const body = req.body as Partial<HoodieOrder>;
+    if (!body?.customerName?.trim() || !body?.roll?.trim() || !body?.contact?.trim()) {
+      res.status(400).json({ error: 'Name, roll, and contact are required.' });
+      return;
+    }
+    try {
+      const created = await createOrder({
+        id: body.id || `RCS-${Date.now().toString().slice(-5)}`,
+        customerName: body.customerName.trim(),
+        roll: body.roll.trim(),
+        size: (body.size as HoodieOrder['size']) || 'L',
+        quantity: Number(body.quantity || 1),
+        contact: body.contact.trim(),
+        notes: body.notes,
+        status: (body.status as OrderStatus) || 'Confirmed',
+        createdAt: new Date().toISOString(),
+      });
+      res.status(201).json(created);
+    } catch (error) {
+      sendRepoError(res, error, 'Failed to create manual order');
     }
   });
 
@@ -122,8 +162,7 @@ async function startServer() {
       await updateBatchmate(req.params.id, req.body as Partial<Batchmate>);
       res.json({ ok: true });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to update batchmate';
-      res.status(500).json({ error: message });
+      sendRepoError(res, error, 'Failed to update batchmate');
     }
   });
 
@@ -132,19 +171,25 @@ async function startServer() {
       await deleteBatchmate(req.params.id);
       res.json({ ok: true });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to remove batchmate';
-      res.status(500).json({ error: message });
+      sendRepoError(res, error, 'Failed to remove batchmate');
     }
   });
 
   app.patch('/api/admin/orders/:id', requireAuth, requireAdmin, async (req: AuthRequest, res) => {
     try {
-      const { status, notes } = req.body as { status: OrderStatus; notes?: string };
-      await updateOrderStatus(req.params.id, status, notes);
+      const { status, notes, customerName, roll, size, quantity, contact } = req.body as Partial<HoodieOrder> & {
+        status: OrderStatus;
+      };
+      await updateOrderStatus(req.params.id, status, notes, {
+        customerName,
+        roll,
+        size,
+        quantity,
+        contact,
+      });
       res.json({ ok: true });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to update order';
-      res.status(500).json({ error: message });
+      sendRepoError(res, error, 'Failed to update order');
     }
   });
 
@@ -153,8 +198,7 @@ async function startServer() {
       await deleteOrder(req.params.id);
       res.json({ ok: true });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to delete order';
-      res.status(500).json({ error: message });
+      sendRepoError(res, error, 'Failed to delete order');
     }
   });
 
@@ -163,8 +207,7 @@ async function startServer() {
       await saveNotice(req.body as BatchNotice);
       res.status(201).json({ ok: true });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to save notice';
-      res.status(500).json({ error: message });
+      sendRepoError(res, error, 'Failed to save notice');
     }
   });
 
@@ -174,8 +217,7 @@ async function startServer() {
       await saveNotice({ ...notice, id: req.params.id });
       res.json({ ok: true });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to update notice';
-      res.status(500).json({ error: message });
+      sendRepoError(res, error, 'Failed to update notice');
     }
   });
 
@@ -184,8 +226,7 @@ async function startServer() {
       await deleteNotice(req.params.id);
       res.json({ ok: true });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to delete notice';
-      res.status(500).json({ error: message });
+      sendRepoError(res, error, 'Failed to delete notice');
     }
   });
 
@@ -195,8 +236,7 @@ async function startServer() {
       await reorderGalleryItems(items || []);
       res.json({ ok: true });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to reorder gallery';
-      res.status(500).json({ error: message });
+      sendRepoError(res, error, 'Failed to reorder gallery');
     }
   });
 
@@ -206,8 +246,7 @@ async function startServer() {
       await saveGalleryItem({ ...item, id: req.params.id }, sortOrder ?? 0);
       res.json({ ok: true });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to save gallery item';
-      res.status(500).json({ error: message });
+      sendRepoError(res, error, 'Failed to save gallery item');
     }
   });
 
@@ -216,8 +255,7 @@ async function startServer() {
       await deleteGalleryItem(req.params.id);
       res.json({ ok: true });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to delete gallery item';
-      res.status(500).json({ error: message });
+      sendRepoError(res, error, 'Failed to delete gallery item');
     }
   });
 
@@ -230,8 +268,7 @@ async function startServer() {
       await saveSettings(profile, hoodieConfig, siteConfig);
       res.json({ ok: true });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to save settings';
-      res.status(500).json({ error: message });
+      sendRepoError(res, error, 'Failed to save settings');
     }
   });
 
@@ -241,8 +278,7 @@ async function startServer() {
       await syncFullPortalState(state, Boolean(replaceCollections));
       res.json({ ok: true });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to sync portal data';
-      res.status(500).json({ error: message });
+      sendRepoError(res, error, 'Failed to sync portal data');
     }
   });
 
@@ -252,8 +288,7 @@ async function startServer() {
       await addActivityLog(action, detail, req.user?.uid);
       res.status(201).json({ ok: true });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to write activity log';
-      res.status(500).json({ error: message });
+      sendRepoError(res, error, 'Failed to write activity log');
     }
   });
 

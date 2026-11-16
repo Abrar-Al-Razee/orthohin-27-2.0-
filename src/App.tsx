@@ -19,13 +19,21 @@ import type { Batchmate, GalleryItem, HoodieOrder, PortalState, ToastMessage, Vi
 import {
   AUTHORIZED_ADMIN_EMAIL,
   createDefaultState,
+  DEFAULT_HERO_IMAGE,
   DEFAULT_PROFILE_IMAGE,
+  mergeHoodieConfig,
+  mergeSiteConfig,
 } from './utils/storage';
 
 function isAdminPath(): boolean {
   if (typeof window === 'undefined') return false;
   const path = window.location.pathname.replace(/\/+$/, '');
-  return path === '/admin' || window.location.hash === '#/admin';
+  return (
+    path === '/admin-login' ||
+    path === '/admin' ||
+    window.location.hash === '#/admin-login' ||
+    window.location.hash === '#/admin'
+  );
 }
 
 export default function App() {
@@ -38,8 +46,6 @@ export default function App() {
   const [lightboxItem, setLightboxItem] = useState<GalleryItem | null>(null);
   const [toast, setToast] = useState<ToastMessage | null>(null);
 
-  const tapCountRef = useRef(0);
-  const tapTimerRef = useRef<number | null>(null);
   const toastTimerRef = useRef<number | null>(null);
   const settingsSeededRef = useRef(false);
 
@@ -66,7 +72,6 @@ export default function App() {
     return () => {
       window.removeEventListener('popstate', syncRoute);
       window.removeEventListener('hashchange', syncRoute);
-      if (tapTimerRef.current) window.clearTimeout(tapTimerRef.current);
       if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
     };
   }, []);
@@ -99,19 +104,8 @@ export default function App() {
         notices: payload.notices.length > 0 || hasSettings ? payload.notices : defaults.notices,
         gallery: payload.gallery.length > 0 || hasSettings ? payload.gallery : defaults.gallery,
         profile: payload.settings?.profile || defaults.profile,
-        hoodieConfig: payload.settings?.hoodieConfig
-          ? {
-              ...defaults.hoodieConfig,
-              ...payload.settings.hoodieConfig,
-              specs:
-                Array.isArray(payload.settings.hoodieConfig.specs) && payload.settings.hoodieConfig.specs.length > 0
-                  ? payload.settings.hoodieConfig.specs
-                  : defaults.hoodieConfig.specs,
-            }
-          : defaults.hoodieConfig,
-        siteConfig: payload.settings?.siteConfig
-          ? { ...defaults.siteConfig, ...payload.settings.siteConfig }
-          : defaults.siteConfig,
+        hoodieConfig: mergeHoodieConfig(payload.settings?.hoodieConfig),
+        siteConfig: mergeSiteConfig(payload.settings?.siteConfig),
       }));
     } catch {
       // Keep current/default state smoothly without exposing backend details
@@ -224,31 +218,43 @@ export default function App() {
     }
   }, [isRouteAdmin]);
 
-  const handleProfileSecretTap = () => {
-    tapCountRef.current += 1;
-    if (tapTimerRef.current) window.clearTimeout(tapTimerRef.current);
-    if (tapCountRef.current >= 5) {
-      tapCountRef.current = 0;
-      setAdminOpen(true);
-    } else {
-      tapTimerRef.current = window.setTimeout(() => {
-        tapCountRef.current = 0;
-      }, 700);
-    }
-  };
+  const sc = mergeSiteConfig(state.siteConfig);
+  const sec = sc.sections!;
+  const isMaintenanceBlocked = Boolean(sc.maintenanceMode) && !adminOpen;
+
+  if (isMaintenanceBlocked) {
+    return (
+      <div className="min-h-screen bg-[#070709] text-zinc-100 flex items-center justify-center p-6">
+        <div className="max-w-md w-full rounded-2xl bg-[#111114] border border-zinc-800 p-8 text-center space-y-4">
+          <p className="text-xs font-semibold uppercase tracking-widest text-rose-400">
+            {sc.brandName} {sc.brandAccent}
+          </p>
+          <h1 className="text-2xl font-bold text-white">Portal Temporarily Paused</h1>
+          <p className="text-sm text-zinc-400 leading-relaxed">{sc.maintenanceMessage}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#070709] text-zinc-100 flex flex-col">
       <Navbar
         activeView={activeView}
+        siteConfig={sc}
         onNavigate={handleNavigate}
-        onOpenRegister={() => setRegisterOpen(true)}
+        onOpenRegister={() => {
+          if (sc.registrationOpen !== false) {
+            setRegisterOpen(true);
+          } else {
+            showToast('Batchmate registration is currently paused by the admin.', 'info');
+          }
+        }}
       />
 
       <main className="flex-1">
-        {state.siteConfig.announcement.trim() && (
+        {sc.announcement.trim() && (
           <div className="mt-16 bg-rose-950/60 border-b border-rose-500/30 px-4 py-2.5 text-center text-xs font-medium text-rose-200">
-            {state.siteConfig.announcement}
+            {sc.announcement}
           </div>
         )}
 
@@ -257,30 +263,28 @@ export default function App() {
             {/* Split-Screen Hero */}
             <section
               className={`${
-                state.siteConfig.announcement.trim() ? 'pt-12' : 'pt-28 lg:pt-36'
+                sc.announcement.trim() ? 'pt-12' : 'pt-28 lg:pt-36'
               } pb-16 lg:pb-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8`}
             >
               <div className="grid lg:grid-cols-12 gap-10 lg:gap-12 items-stretch">
                 <div className="lg:col-span-6 flex flex-col justify-center space-y-6">
-                  <p className="text-xs sm:text-sm font-medium text-rose-400">
-                    {state.siteConfig.heroKicker}
-                  </p>
+                  <p className="text-xs sm:text-sm font-medium text-rose-400">{sc.heroKicker}</p>
                   <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white leading-[1.08] text-balance">
-                    {state.siteConfig.heroTitle} <span className="text-rose-500">{state.siteConfig.heroHighlight}</span>
+                    {sc.heroTitle} <span className="text-rose-500">{sc.heroHighlight}</span>
                   </h1>
-                  <p className="text-base sm:text-lg text-zinc-400 leading-relaxed max-w-xl">
-                    {state.siteConfig.heroDescription}
-                  </p>
+                  <p className="text-base sm:text-lg text-zinc-400 leading-relaxed max-w-xl">{sc.heroDescription}</p>
 
                   <div className="flex flex-wrap items-center gap-3 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setRegisterOpen(true)}
-                      className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-sm font-semibold whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
-                    >
-                      <UserPlus className="w-4 h-4" />
-                      Register Now
-                    </button>
+                    {sc.registrationOpen !== false && (
+                      <button
+                        type="button"
+                        onClick={() => setRegisterOpen(true)}
+                        className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-sm font-semibold whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+                      >
+                        <UserPlus className="w-4 h-4" />
+                        Register Now
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => handleNavigate('batchmates')}
@@ -289,22 +293,25 @@ export default function App() {
                       <Users className="w-4 h-4 text-zinc-400" />
                       Batchmates Directory
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => handleNavigate('hoodie')}
-                      className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-lg bg-[#111114] hover:bg-zinc-900 border border-zinc-800 text-zinc-200 text-sm font-medium whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer"
-                    >
-                      <Shirt className="w-4 h-4 text-rose-400" />
-                      Hoodie '26-'27
-                    </button>
+                    {sec.hoodieNav && (
+                      <button
+                        type="button"
+                        onClick={() => handleNavigate('hoodie')}
+                        className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-lg bg-[#111114] hover:bg-zinc-900 border border-zinc-800 text-zinc-200 text-sm font-medium whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer"
+                      >
+                        <Shirt className="w-4 h-4 text-rose-400" />
+                        Hoodie '26-'27
+                      </button>
+                    )}
                   </div>
                 </div>
 
                 <div className="lg:col-span-6">
                   <div className="rounded-2xl overflow-hidden border border-zinc-800 bg-white h-full min-h-[280px] lg:min-h-[420px]">
                     <img
-                      src="/assets/aistudio/Transform_my_image_into_a_black_and_white_sketch_style_01cc67d0.png"
-                      alt="Rajshahi Collegiate School (Est. 1828) gate architectural sketch"
+                      src={sc.heroImage || DEFAULT_HERO_IMAGE}
+                      alt="Rajshahi Collegiate School (Est. 1828) gate showcase"
+                      referrerPolicy="no-referrer"
                       className="w-full h-full object-cover object-center"
                     />
                   </div>
@@ -313,26 +320,22 @@ export default function App() {
 
               {/* Full-Width 4-Column KPI Strip */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-12 pt-10 border-t border-zinc-800/80">
-                <div className="p-5 rounded-2xl bg-[#111114] border border-zinc-800/80">
-                  <p className="text-3xl font-bold font-mono tabular-nums text-white">{state.batchmates.length}</p>
-                  <p className="text-xs text-zinc-400 mt-1">Registered Batchmates</p>
-                </div>
-                <div className="p-5 rounded-2xl bg-[#111114] border border-zinc-800/80">
-                  <p className="text-3xl font-bold font-mono tabular-nums text-white">500+</p>
-                  <p className="text-xs text-zinc-400 mt-1">Memories Captured</p>
-                </div>
-                <div className="p-5 rounded-2xl bg-[#111114] border border-zinc-800/80">
-                  <p className="text-3xl font-bold font-mono tabular-nums text-white">15+</p>
-                  <p className="text-xs text-zinc-400 mt-1">Events & Outings</p>
-                </div>
-                <div className="p-5 rounded-2xl bg-[#111114] border border-zinc-800/80">
-                  <p className="text-3xl font-bold font-mono tabular-nums text-rose-500">2027</p>
-                  <p className="text-xs text-zinc-400 mt-1">Graduation Year</p>
-                </div>
+                {(sc.kpis || []).map((kpi, idx) => (
+                  <div key={kpi.id || idx} className="p-5 rounded-2xl bg-[#111114] border border-zinc-800/80">
+                    <p
+                      className={`text-3xl font-bold font-mono tabular-nums ${
+                        idx === (sc.kpis || []).length - 1 ? 'text-rose-500' : 'text-white'
+                      }`}
+                    >
+                      {kpi.autoBatchmateCount ? state.batchmates.length : kpi.value}
+                    </p>
+                    <p className="text-xs text-zinc-400 mt-1">{kpi.label}</p>
+                  </div>
+                ))}
               </div>
 
-              {/* Official Notice Board (Published from /admin) */}
-              {(state.notices || []).some((n) => n.active) && (
+              {/* Official Notice Board */}
+              {sec.notices && (state.notices || []).some((n) => n.active) && (
                 <div className="mt-10 space-y-4">
                   <div className="flex items-center gap-2 text-xs font-medium text-rose-400">
                     <Megaphone className="w-3.5 h-3.5" />
@@ -378,229 +381,225 @@ export default function App() {
             </section>
 
             {/* About Section */}
-            <section id="about" className="py-20 bg-[#0b0b0e] border-y border-zinc-900">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid lg:grid-cols-12 gap-12 items-center">
-                <div className="lg:col-span-7 space-y-6">
-                  <p className="text-xs font-medium text-rose-400">Who We Are</p>
-                  <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white text-balance">
-                    Bound by Passion, Driven by Excellence
-                  </h2>
-                  <p className="text-sm sm:text-base text-zinc-400 leading-relaxed max-w-2xl">
-                    The name <strong className="text-zinc-200 font-semibold">Orthohin</strong> signifies unmatched spirit
-                    and endless dedication. As the Class of 2027, our journey has been defined by late-night study
-                    sessions, inter-batch sports triumphs, cultural celebrations, and lasting friendships.
-                  </p>
-                  <div className="grid sm:grid-cols-2 gap-4 pt-2">
-                    <div className="p-5 rounded-2xl bg-[#111114] border border-zinc-800/80 space-y-2">
-                      <Target className="w-5 h-5 text-rose-500" />
-                      <h3 className="text-sm font-semibold text-white">Vision & Spirit</h3>
-                      <p className="text-xs text-zinc-400 leading-relaxed">
-                        Pursuing excellence across our disciplines while staying deeply connected as one cohort.
-                      </p>
-                    </div>
-                    <div className="p-5 rounded-2xl bg-[#111114] border border-zinc-800/80 space-y-2">
-                      <Heart className="w-5 h-5 text-rose-500" />
-                      <h3 className="text-sm font-semibold text-white">Unbreakable Unity</h3>
-                      <p className="text-xs text-zinc-400 leading-relaxed">
-                        Supporting every member through every milestone, challenge, and victory along the way.
-                      </p>
+            {sec.about && (
+              <section id="about" className="py-20 bg-[#0b0b0e] border-y border-zinc-900">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid lg:grid-cols-12 gap-12 items-center">
+                  <div className="lg:col-span-7 space-y-6">
+                    <p className="text-xs font-medium text-rose-400">{sc.aboutKicker}</p>
+                    <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white text-balance">
+                      {sc.aboutTitle}
+                    </h2>
+                    <p className="text-sm sm:text-base text-zinc-400 leading-relaxed max-w-2xl">
+                      {sc.aboutDescription}
+                    </p>
+                    <div className="grid sm:grid-cols-2 gap-4 pt-2">
+                      <div className="p-5 rounded-2xl bg-[#111114] border border-zinc-800/80 space-y-2">
+                        <Target className="w-5 h-5 text-rose-500" />
+                        <h3 className="text-sm font-semibold text-white">{sc.visionTitle}</h3>
+                        <p className="text-xs text-zinc-400 leading-relaxed">{sc.visionText}</p>
+                      </div>
+                      <div className="p-5 rounded-2xl bg-[#111114] border border-zinc-800/80 space-y-2">
+                        <Heart className="w-5 h-5 text-rose-500" />
+                        <h3 className="text-sm font-semibold text-white">{sc.unityTitle}</h3>
+                        <p className="text-xs text-zinc-400 leading-relaxed">{sc.unityText}</p>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="lg:col-span-5">
-                  <div className="p-8 rounded-2xl bg-[#111114] border border-zinc-800/80 text-center space-y-5">
-                    <div className="w-14 h-14 mx-auto rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center">
-                      <Instagram className="w-7 h-7 text-rose-500" />
+                  <div className="lg:col-span-5">
+                    <div className="p-8 rounded-2xl bg-[#111114] border border-zinc-800/80 text-center space-y-5">
+                      <div className="w-14 h-14 mx-auto rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center">
+                        <Instagram className="w-7 h-7 text-rose-500" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <h3 className="text-xl font-bold text-white">{sc.instagramHandle}</h3>
+                        <p className="text-sm text-zinc-400 max-w-xs mx-auto leading-relaxed">{sc.instagramBio}</p>
+                      </div>
+                      <a
+                        href={sc.instagramUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-sm font-semibold transition-colors"
+                      >
+                        View Posts on Instagram
+                        <ArrowUpRight className="w-4 h-4" />
+                      </a>
                     </div>
-                    <div className="space-y-1.5">
-                      <h3 className="text-xl font-bold text-white">@orthohin_27</h3>
-                      <p className="text-sm text-zinc-400 max-w-xs mx-auto leading-relaxed">
-                        Follow our official Instagram page for real-time photo uploads, reels, and batch announcements.
-                      </p>
-                    </div>
-                    <a
-                      href="https://www.instagram.com/orthohin_27/"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-sm font-semibold transition-colors"
-                    >
-                      View Posts on Instagram
-                      <ArrowUpRight className="w-4 h-4" />
-                    </a>
                   </div>
                 </div>
-              </div>
-            </section>
+              </section>
+            )}
 
             {/* Gallery Section */}
-            <section id="gallery" className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-              <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
-                <div>
-                  <p className="text-xs font-medium text-rose-400 mb-1">Memory Vault</p>
-                  <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">Captured Moments</h2>
+            {sec.gallery && (
+              <section id="gallery" className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
+                  <div>
+                    <p className="text-xs font-medium text-rose-400 mb-1">Memory Vault</p>
+                    <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">Captured Moments</h2>
+                  </div>
+                  <p className="text-sm text-zinc-400">Select any frame to open the fullscreen viewer.</p>
                 </div>
-                <p className="text-sm text-zinc-400">Select any frame to open the fullscreen viewer.</p>
-              </div>
 
-              {state.gallery.length === 0 ? (
-                <div className="p-12 text-center rounded-2xl bg-[#111114] border border-zinc-800/80">
-                  <Camera className="w-8 h-8 text-zinc-600 mx-auto mb-3" />
-                  <p className="text-sm text-zinc-400">No gallery moments added yet.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {state.gallery.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => setLightboxItem(item)}
-                      className="text-left rounded-2xl overflow-hidden bg-[#111114] border border-zinc-800/80 hover:border-zinc-700 transition-colors duration-150 group cursor-pointer flex flex-col"
-                    >
-                      {item.src && (
-                        <div className="relative w-full aspect-[4/3] overflow-hidden bg-zinc-900">
-                          <img
-                            src={item.src}
-                            alt={item.title}
-                            loading="lazy"
-                            referrerPolicy="no-referrer"
-                            className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-200"
-                          />
-                          {item.isVideo && (
-                            <div className="absolute inset-0 bg-black/35 flex items-center justify-center">
-                              <span className="w-12 h-12 rounded-full bg-rose-600 text-white inline-flex items-center justify-center shadow-lg">
-                                <Play className="w-5 h-5 fill-current ml-0.5" />
-                              </span>
+                {state.gallery.length === 0 ? (
+                  <div className="p-12 text-center rounded-2xl bg-[#111114] border border-zinc-800/80">
+                    <Camera className="w-8 h-8 text-zinc-600 mx-auto mb-3" />
+                    <p className="text-sm text-zinc-400">No gallery moments added yet.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {state.gallery.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setLightboxItem(item)}
+                        className="text-left rounded-2xl overflow-hidden bg-[#111114] border border-zinc-800/80 hover:border-zinc-700 transition-colors duration-150 group cursor-pointer flex flex-col"
+                      >
+                        {item.src && (
+                          <div className="relative w-full aspect-[4/3] overflow-hidden bg-zinc-900">
+                            <img
+                              src={item.src}
+                              alt={item.title}
+                              loading="lazy"
+                              referrerPolicy="no-referrer"
+                              className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-200"
+                            />
+                            {item.isVideo && (
+                              <div className="absolute inset-0 bg-black/35 flex items-center justify-center">
+                                <span className="w-12 h-12 rounded-full bg-rose-600 text-white inline-flex items-center justify-center shadow-lg">
+                                  <Play className="w-5 h-5 fill-current ml-0.5" />
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        <div className="p-5 space-y-2 flex-1 flex flex-col justify-between">
+                          <div className="space-y-1.5">
+                            {item.date && <p className="text-xs font-mono text-zinc-500">{item.date}</p>}
+                            <h3 className="text-base font-semibold text-white group-hover:text-rose-400 transition-colors">
+                              {item.title}
+                            </h3>
+                            <p className="text-xs text-zinc-400 leading-relaxed">{item.caption}</p>
+                          </div>
+                          {!item.src && item.isVideo && (
+                            <div className="pt-2 inline-flex items-center gap-2 text-xs font-medium text-rose-400">
+                              <Play className="w-3.5 h-3.5 fill-current" />
+                              <span>Watch video memory</span>
                             </div>
                           )}
                         </div>
-                      )}
-                      <div className="p-5 space-y-2 flex-1 flex flex-col justify-between">
-                        <div className="space-y-1.5">
-                          {item.date && <p className="text-xs font-mono text-zinc-500">{item.date}</p>}
-                          <h3 className="text-base font-semibold text-white group-hover:text-rose-400 transition-colors">
-                            {item.title}
-                          </h3>
-                          <p className="text-xs text-zinc-400 leading-relaxed">{item.caption}</p>
-                        </div>
-                        {!item.src && item.isVideo && (
-                          <div className="pt-2 inline-flex items-center gap-2 text-xs font-medium text-rose-400">
-                            <Play className="w-3.5 h-3.5 fill-current" />
-                            <span>Watch video memory</span>
-                          </div>
-                        )}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </section>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
 
             {/* Directory / Leadership Section */}
-            <section id="directory" className="py-20 bg-[#0b0b0e] border-y border-zinc-900">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div className="text-center max-w-2xl mx-auto mb-12 space-y-2">
-                  <p className="text-xs font-medium text-rose-400">Leadership & Engineering</p>
-                  <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">Batch Directory Lead</h2>
-                  <p className="text-sm text-zinc-400">
-                    Head organizer and developer keeping the Orthohin '27 digital portal running.
-                  </p>
-                </div>
-
-                <div className="max-w-md mx-auto rounded-2xl bg-[#111114] border border-zinc-800/80 p-8 text-center space-y-5">
-                  <button
-                    type="button"
-                    onClick={handleProfileSecretTap}
-                    title="Click 5 times to open Admin Panel"
-                    className="w-32 h-32 mx-auto rounded-full overflow-hidden border-2 border-zinc-700 hover:border-rose-500 transition-colors block cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
-                  >
-                    <img
-                      src={
-                        state.profile &&
-                        state.profile !== '/src/assets/images/portrait_lead_abrar_1794766076468.jpg'
-                          ? state.profile
-                          : DEFAULT_PROFILE_IMAGE
-                      }
-                      alt="Abrar Al Razee Oytizzoh"
-                      referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover object-[center_22%]"
-                    />
-                  </button>
-
-                  <div className="space-y-1">
-                    <p className="text-xs font-medium text-rose-400">Lead Developer · Head Orthohin-27</p>
-                    <h3 className="text-xl font-bold text-white">Abrar Al Razee Oytizzoh</h3>
+            {sec.directory && (
+              <section id="directory" className="py-20 bg-[#0b0b0e] border-y border-zinc-900">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                  <div className="text-center max-w-2xl mx-auto mb-12 space-y-2">
+                    <p className="text-xs font-medium text-rose-400">{sc.leadSectionKicker}</p>
+                    <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">{sc.leadSectionTitle}</h2>
+                    <p className="text-sm text-zinc-400">{sc.leadSectionSubtitle}</p>
                   </div>
 
-                  <p className="text-sm text-zinc-400 leading-relaxed">"{state.siteConfig.devNote}"</p>
+                  <div className="max-w-md mx-auto rounded-2xl bg-[#111114] border border-zinc-800/80 p-8 text-center space-y-5">
+                    <div className="w-32 h-32 mx-auto rounded-full overflow-hidden border-2 border-zinc-700">
+                      <img
+                        src={
+                          state.profile &&
+                          state.profile !== '/src/assets/images/portrait_lead_abrar_1794766076468.jpg'
+                            ? state.profile
+                            : DEFAULT_PROFILE_IMAGE
+                        }
+                        alt={sc.leadName || 'Abrar Al Razee Oytizzoh'}
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-cover object-[center_22%]"
+                      />
+                    </div>
 
-                  <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
-                    <a
-                      href={state.siteConfig.instagramUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition-colors"
-                    >
-                      Connect on Instagram
-                      <ArrowUpRight className="w-3.5 h-3.5" />
-                    </a>
-                    <button
-                      type="button"
-                      onClick={() => handleNavigate('batchmates')}
-                      className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-200 text-xs font-medium transition-colors cursor-pointer"
-                    >
-                      View All Batchmates
-                    </button>
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-rose-400">{sc.leadRole}</p>
+                      <h3 className="text-xl font-bold text-white">{sc.leadName}</h3>
+                    </div>
+
+                    <p className="text-sm text-zinc-400 leading-relaxed">"{sc.devNote}"</p>
+
+                    <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
+                      <a
+                        href={sc.instagramUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition-colors"
+                      >
+                        Connect on Instagram
+                        <ArrowUpRight className="w-3.5 h-3.5" />
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => handleNavigate('batchmates')}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-200 text-xs font-medium transition-colors cursor-pointer"
+                      >
+                        View All Batchmates
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </section>
+              </section>
+            )}
 
             {/* Timeline Section */}
-            <section id="timeline" className="py-20 max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-              <div className="text-center mb-12 space-y-2">
-                <p className="text-xs font-medium text-rose-400">Cohort Milestones</p>
-                <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">Our Journey</h2>
-              </div>
+            {sec.timeline && (sc.timeline || []).length > 0 && (
+              <section id="timeline" className="py-20 max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="text-center mb-12 space-y-2">
+                  <p className="text-xs font-medium text-rose-400">Cohort Milestones</p>
+                  <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">Our Journey</h2>
+                </div>
 
-              <ol className="relative border-l border-zinc-800 space-y-8 ml-3">
-                <li className="pl-7 relative">
-                  <span className="absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full bg-rose-500" />
-                  <p className="text-xs font-mono text-rose-400">Day One</p>
-                  <h3 className="text-base font-semibold text-white mt-0.5">Batch 2027 Comes Together</h3>
-                  <p className="text-sm text-zinc-400 mt-1">
-                    Orientation, first lectures, and forming the core friendships that shaped Orthohin '27.
-                  </p>
-                </li>
-                <li className="pl-7 relative">
-                  <span className="absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full bg-rose-500" />
-                  <p className="text-xs font-mono text-rose-400">Along the Way</p>
-                  <h3 className="text-base font-semibold text-white mt-0.5">Events, Outings & Sports</h3>
-                  <p className="text-sm text-zinc-400 mt-1">
-                    Cultural evenings, inter-batch championships, and the signature '26–'27 hoodie drop.
-                  </p>
-                </li>
-                <li className="pl-7 relative">
-                  <span className="absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full bg-zinc-600" />
-                  <p className="text-xs font-mono text-zinc-400">2027</p>
-                  <h3 className="text-base font-semibold text-white mt-0.5">Graduation & Next Chapter</h3>
-                  <p className="text-sm text-zinc-400 mt-1">
-                    Stepping forward into university, careers, and lifelong alumni reunions.
-                  </p>
-                </li>
-              </ol>
-            </section>
+                <ol className="relative border-l border-zinc-800 space-y-8 ml-3">
+                  {(sc.timeline || []).map((item, idx) => (
+                    <li key={item.id || idx} className="pl-7 relative">
+                      <span
+                        className={`absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full ${
+                          idx === (sc.timeline || []).length - 1 ? 'bg-zinc-600' : 'bg-rose-500'
+                        }`}
+                      />
+                      <p
+                        className={`text-xs font-mono ${
+                          idx === (sc.timeline || []).length - 1 ? 'text-zinc-400' : 'text-rose-400'
+                        }`}
+                      >
+                        {item.tag}
+                      </p>
+                      <h3 className="text-base font-semibold text-white mt-0.5">{item.title}</h3>
+                      <p className="text-sm text-zinc-400 mt-1">{item.description}</p>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            )}
           </>
         )}
 
         {activeView === 'batchmates' && (
-          <BatchmatesView batchmates={state.batchmates} onOpenRegister={() => setRegisterOpen(true)} />
+          <BatchmatesView
+            batchmates={state.batchmates}
+            onOpenRegister={() => {
+              if (sc.registrationOpen !== false) {
+                setRegisterOpen(true);
+              } else {
+                showToast('Batchmate registration is currently paused by the admin.', 'info');
+              }
+            }}
+          />
         )}
 
         {activeView === 'hoodie' && (
           <HoodieView
             config={state.hoodieConfig}
-            instagramUrl={state.siteConfig.instagramUrl}
+            instagramUrl={sc.instagramUrl}
             onPlaceOrder={handlePlaceOrder}
             onViewBatchmates={() => handleNavigate('batchmates')}
           />
@@ -610,15 +609,17 @@ export default function App() {
       {/* Footer */}
       <footer className="py-8 border-t border-zinc-900 text-center px-4">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-zinc-500">
-          <p>© 2026 ORTHOHIN '27 — Official Batch Web Portal. Developed by Abrar Al Razee Oytizzoh.</p>
+          <p>{sc.footerText}</p>
           <div className="flex items-center gap-5">
-            <button
-              type="button"
-              onClick={() => setRegisterOpen(true)}
-              className="hover:text-zinc-200 transition-colors cursor-pointer"
-            >
-              Register
-            </button>
+            {sc.registrationOpen !== false && (
+              <button
+                type="button"
+                onClick={() => setRegisterOpen(true)}
+                className="hover:text-zinc-200 transition-colors cursor-pointer"
+              >
+                Register
+              </button>
+            )}
             <button
               type="button"
               onClick={() => handleNavigate('batchmates')}
@@ -626,20 +627,22 @@ export default function App() {
             >
               Batchmates
             </button>
-            <button
-              type="button"
-              onClick={() => handleNavigate('hoodie')}
-              className="hover:text-zinc-200 transition-colors cursor-pointer"
-            >
-              Hoodie '26-'27
-            </button>
+            {sec.hoodieNav && (
+              <button
+                type="button"
+                onClick={() => handleNavigate('hoodie')}
+                className="hover:text-zinc-200 transition-colors cursor-pointer"
+              >
+                Hoodie '26-'27
+              </button>
+            )}
           </div>
         </div>
       </footer>
 
       {/* Modals */}
       <RegisterModal
-        isOpen={registerOpen}
+        isOpen={registerOpen && sc.registrationOpen !== false}
         onClose={() => setRegisterOpen(false)}
         onRegister={handleRegisterSubmit}
       />
@@ -649,7 +652,7 @@ export default function App() {
       <AdminModal
         isOpen={adminOpen}
         isRouteAdmin={isRouteAdmin}
-        state={state}
+        state={{ ...state, siteConfig: sc, hoodieConfig: mergeHoodieConfig(state.hoodieConfig) }}
         authUser={authUser}
         isFirebaseAdmin={isFirebaseAdmin}
         onClose={handleCloseAdmin}

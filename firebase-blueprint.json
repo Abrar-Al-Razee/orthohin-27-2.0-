@@ -204,16 +204,16 @@
       "properties": {
         "profile": {
           "type": "string",
-          "maxLength": 300000,
+          "maxLength": 350000,
           "description": "Lead developer profile image."
         },
         "hoodieConfig": {
           "type": "object",
-          "description": "RCS Hoodie title, subtitle, front/back images, specs, and directOrderOpen flag."
+          "description": "RCS Hoodie kicker, title, subtitle, front/back images and labels, specs, and directOrderOpen flag."
         },
         "siteConfig": {
           "type": "object",
-          "description": "Hero copy, announcement, Instagram URL, and developer note."
+          "description": "Full portal configuration including brand, hero, KPIs, About/Vision/Unity, Instagram hub, leadership lead, timeline milestones, section visibility, maintenance lock, and footer."
         },
         "updatedAt": {
           "type": "string",

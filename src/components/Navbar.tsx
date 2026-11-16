@@ -1,15 +1,22 @@
 import { useState } from 'react';
 import { Menu, X } from 'lucide-react';
-import type { ViewMode } from '../types';
+import type { SiteConfig, ViewMode } from '../types';
 
 interface NavbarProps {
   activeView: ViewMode;
+  siteConfig?: SiteConfig;
   onNavigate: (view: ViewMode, sectionId?: string) => void;
   onOpenRegister: () => void;
 }
 
-export function Navbar({ activeView, onNavigate, onOpenRegister }: NavbarProps) {
+export function Navbar({ activeView, siteConfig, onNavigate, onOpenRegister }: NavbarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const brandName = siteConfig?.brandName || 'ORTHOHIN';
+  const brandAccent = siteConfig?.brandAccent ?? "'27";
+  const showGallery = siteConfig?.sections?.gallery ?? true;
+  const showDirectory = siteConfig?.sections?.directory ?? true;
+  const showHoodieNav = siteConfig?.sections?.hoodieNav ?? true;
+  const registrationOpen = siteConfig?.registrationOpen ?? true;
 
   const handleNav = (view: ViewMode, sectionId?: string) => {
     setMobileOpen(false);
@@ -30,7 +37,7 @@ export function Navbar({ activeView, onNavigate, onOpenRegister }: NavbarProps) 
           onClick={() => handleNav('home')}
           className="text-lg font-bold tracking-tight text-white whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 rounded"
         >
-          ORTHOHIN <span className="text-rose-500">'27</span>
+          {brandName} <span className="text-rose-500">{brandAccent}</span>
         </button>
 
         {/* Zone 2: Concise single-line nav links */}
@@ -44,13 +51,15 @@ export function Navbar({ activeView, onNavigate, onOpenRegister }: NavbarProps) 
           >
             Home
           </button>
-          <button
-            type="button"
-            onClick={() => handleNav('home', 'gallery')}
-            className="whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 rounded"
-          >
-            Gallery
-          </button>
+          {showGallery && (
+            <button
+              type="button"
+              onClick={() => handleNav('home', 'gallery')}
+              className="whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 rounded"
+            >
+              Gallery
+            </button>
+          )}
           <button
             type="button"
             onClick={() => handleNav('batchmates')}
@@ -60,33 +69,39 @@ export function Navbar({ activeView, onNavigate, onOpenRegister }: NavbarProps) 
           >
             Batchmates
           </button>
-          <button
-            type="button"
-            onClick={() => handleNav('hoodie')}
-            className={`whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 rounded ${
-              activeView === 'hoodie' ? 'text-white' : ''
-            }`}
-          >
-            Hoodie '26-'27
-          </button>
-          <button
-            type="button"
-            onClick={() => handleNav('home', 'directory')}
-            className="whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 rounded"
-          >
-            Directory
-          </button>
+          {showHoodieNav && (
+            <button
+              type="button"
+              onClick={() => handleNav('hoodie')}
+              className={`whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 rounded ${
+                activeView === 'hoodie' ? 'text-white' : ''
+              }`}
+            >
+              Hoodie '26-'27
+            </button>
+          )}
+          {showDirectory && (
+            <button
+              type="button"
+              onClick={() => handleNav('home', 'directory')}
+              className="whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 rounded"
+            >
+              Directory
+            </button>
+          )}
         </nav>
 
         {/* Zone 3: Primary action */}
         <div className="flex items-center gap-3 shrink-0">
-          <button
-            type="button"
-            onClick={handleRegisterClick}
-            className="hidden sm:inline-flex items-center justify-center px-5 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-sm font-semibold whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#070709]"
-          >
-            Register
-          </button>
+          {registrationOpen && (
+            <button
+              type="button"
+              onClick={handleRegisterClick}
+              className="hidden sm:inline-flex items-center justify-center px-5 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-sm font-semibold whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#070709]"
+            >
+              Register
+            </button>
+          )}
 
           <button
             type="button"
@@ -110,13 +125,15 @@ export function Navbar({ activeView, onNavigate, onOpenRegister }: NavbarProps) 
           >
             Home
           </button>
-          <button
-            type="button"
-            onClick={() => handleNav('home', 'gallery')}
-            className="w-full text-left px-3 py-3 rounded-lg text-sm font-medium text-zinc-200 hover:bg-zinc-900"
-          >
-            Gallery
-          </button>
+          {showGallery && (
+            <button
+              type="button"
+              onClick={() => handleNav('home', 'gallery')}
+              className="w-full text-left px-3 py-3 rounded-lg text-sm font-medium text-zinc-200 hover:bg-zinc-900"
+            >
+              Gallery
+            </button>
+          )}
           <button
             type="button"
             onClick={() => handleNav('batchmates')}
@@ -124,29 +141,35 @@ export function Navbar({ activeView, onNavigate, onOpenRegister }: NavbarProps) 
           >
             Batchmates Directory
           </button>
-          <button
-            type="button"
-            onClick={() => handleNav('hoodie')}
-            className="w-full text-left px-3 py-3 rounded-lg text-sm font-medium text-zinc-200 hover:bg-zinc-900"
-          >
-            Hoodie '26-'27
-          </button>
-          <button
-            type="button"
-            onClick={() => handleNav('home', 'directory')}
-            className="w-full text-left px-3 py-3 rounded-lg text-sm font-medium text-zinc-200 hover:bg-zinc-900"
-          >
-            Leadership Directory
-          </button>
-          <div className="pt-2">
+          {showHoodieNav && (
             <button
               type="button"
-              onClick={handleRegisterClick}
-              className="w-full py-3 px-4 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-sm font-semibold transition-colors"
+              onClick={() => handleNav('hoodie')}
+              className="w-full text-left px-3 py-3 rounded-lg text-sm font-medium text-zinc-200 hover:bg-zinc-900"
             >
-              Register Now
+              Hoodie '26-'27
             </button>
-          </div>
+          )}
+          {showDirectory && (
+            <button
+              type="button"
+              onClick={() => handleNav('home', 'directory')}
+              className="w-full text-left px-3 py-3 rounded-lg text-sm font-medium text-zinc-200 hover:bg-zinc-900"
+            >
+              Leadership Directory
+            </button>
+          )}
+          {registrationOpen && (
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={handleRegisterClick}
+                className="w-full py-3 px-4 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-sm font-semibold transition-colors"
+              >
+                Register Now
+              </button>
+            </div>
+          )}
         </div>
       )}
     </header>

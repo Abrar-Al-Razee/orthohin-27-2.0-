@@ -105,12 +105,18 @@ export const DEFAULT_GALLERY: GalleryItem[] = [
   },
 ];
 
+export const DEFAULT_HERO_IMAGE =
+  '/assets/aistudio/Transform_my_image_into_a_black_and_white_sketch_style_01cc67d0.png';
+
 export const DEFAULT_HOODIE_CONFIG: HoodieConfig = {
+  kicker: 'Official Merchandise · Rajshahi Collegiate School',
   title: "RCS HOODIE '26-'27",
   subtitle:
     "The official Orthohin '27 RCS batch hoodie is here! Premium heavyweight fleece fabric, custom embroidery, and sleek winter styling.",
   frontImage: RCS_HOODIE_FRONT,
   backImage: RCS_HOODIE_BACK,
+  frontLabel: 'RCS chest crest',
+  backLabel: "Orthohin '27 print",
   specs: [
     '350 GSM Heavyweight Cotton Fleece',
     'High-Density Batch Embroidery on Chest (Front)',
@@ -121,16 +127,110 @@ export const DEFAULT_HOODIE_CONFIG: HoodieConfig = {
 };
 
 export const DEFAULT_SITE_CONFIG: SiteConfig = {
+  brandName: 'ORTHOHIN',
+  brandAccent: "'27",
   heroKicker: 'Official Batch Archive · Class of 2027',
   heroTitle: 'The Unstoppable',
   heroHighlight: "Orthohin '27",
   heroDescription:
     'Resilient, united, and timeless. Welcome to the official digital hub of Batch 2027 — preserving our memories, celebrating our cohort, and stepping into the future together.',
+  heroImage: DEFAULT_HERO_IMAGE,
   announcement: '',
   instagramUrl: 'https://www.instagram.com/orthohin_27/',
+  instagramHandle: '@orthohin_27',
+  instagramBio: 'Follow our official Instagram page for real-time photo uploads, reels, and batch announcements.',
   devNote:
     'Designed and built this official portal as Head Orthohin-27 to preserve our batch memories and milestones. Forever united as one batch.',
+  aboutKicker: 'Who We Are',
+  aboutTitle: 'Bound by Passion, Driven by Excellence',
+  aboutDescription:
+    'The name Orthohin signifies unmatched spirit and endless dedication. As the Class of 2027, our journey has been defined by late-night study sessions, inter-batch sports triumphs, cultural celebrations, and lasting friendships.',
+  visionTitle: 'Vision & Spirit',
+  visionText: 'Pursuing excellence across our disciplines while staying deeply connected as one cohort.',
+  unityTitle: 'Unbreakable Unity',
+  unityText: 'Supporting every member through every milestone, challenge, and victory along the way.',
+  leadSectionKicker: 'Leadership & Engineering',
+  leadSectionTitle: 'Batch Directory Lead',
+  leadSectionSubtitle: "Head organizer and developer keeping the Orthohin '27 digital portal running.",
+  leadRole: 'Lead Developer · Head Orthohin-27',
+  leadName: 'Abrar Al Razee Oytizzoh',
+  footerText: "© 2026 ORTHOHIN '27 — Official Batch Web Portal. Developed by Abrar Al Razee Oytizzoh.",
+  registrationOpen: true,
+  maintenanceMode: false,
+  maintenanceMessage: "Orthohin '27 portal is temporarily undergoing scheduled updates. Please check back shortly.",
+  sections: {
+    notices: true,
+    about: true,
+    gallery: true,
+    directory: true,
+    timeline: true,
+    hoodieNav: true,
+  },
+  kpis: [
+    { id: 'kpi-1', value: '6', label: 'Registered Batchmates', autoBatchmateCount: true },
+    { id: 'kpi-2', value: '500+', label: 'Memories Captured', autoBatchmateCount: false },
+    { id: 'kpi-3', value: '15+', label: 'Events & Outings', autoBatchmateCount: false },
+    { id: 'kpi-4', value: '2027', label: 'Graduation Year', autoBatchmateCount: false },
+  ],
+  timeline: [
+    {
+      id: 'tl-1',
+      tag: 'Day One',
+      title: 'Batch 2027 Comes Together',
+      description: "Orientation, first lectures, and forming the core friendships that shaped Orthohin '27.",
+    },
+    {
+      id: 'tl-2',
+      tag: 'Along the Way',
+      title: 'Events, Outings & Sports',
+      description: "Cultural evenings, inter-batch championships, and the signature '26–'27 hoodie drop.",
+    },
+    {
+      id: 'tl-3',
+      tag: '2027',
+      title: 'Graduation & Next Chapter',
+      description: 'Stepping forward into university, careers, and lifelong alumni reunions.',
+    },
+  ],
 };
+
+export function mergeHoodieConfig(partial?: Partial<HoodieConfig> | null): HoodieConfig {
+  const base = DEFAULT_HOODIE_CONFIG;
+  if (!partial) return { ...base, specs: [...base.specs] };
+  return {
+    ...base,
+    ...partial,
+    specs: Array.isArray(partial.specs) && partial.specs.length > 0 ? partial.specs : [...base.specs],
+  };
+}
+
+export function mergeSiteConfig(partial?: Partial<SiteConfig> | null): SiteConfig {
+  const base = DEFAULT_SITE_CONFIG;
+  if (!partial) {
+    return {
+      ...base,
+      sections: { ...base.sections! },
+      kpis: base.kpis!.map((k) => ({ ...k })),
+      timeline: base.timeline!.map((t) => ({ ...t })),
+    };
+  }
+  return {
+    ...base,
+    ...partial,
+    sections: {
+      ...base.sections!,
+      ...(partial.sections || {}),
+    },
+    kpis:
+      Array.isArray(partial.kpis) && partial.kpis.length > 0
+        ? partial.kpis
+        : base.kpis!.map((k) => ({ ...k })),
+    timeline:
+      Array.isArray(partial.timeline) && partial.timeline.length > 0
+        ? partial.timeline
+        : base.timeline!.map((t) => ({ ...t })),
+  };
+}
 
 export const SAMPLE_ORDERS: HoodieOrder[] = [];
 
@@ -163,11 +263,8 @@ export function createDefaultState(): PortalState {
     batchmates: SAMPLE_BATCHMATES.map((item) => ({ ...item })),
     orders: [],
     notices: DEFAULT_NOTICES.map((item) => ({ ...item })),
-    hoodieConfig: {
-      ...DEFAULT_HOODIE_CONFIG,
-      specs: [...DEFAULT_HOODIE_CONFIG.specs],
-    },
-    siteConfig: { ...DEFAULT_SITE_CONFIG },
+    hoodieConfig: mergeHoodieConfig(),
+    siteConfig: mergeSiteConfig(),
     activityLog: [...INITIAL_ACTIVITY_LOG],
   };
 }
@@ -198,16 +295,8 @@ export function loadPortalState(): PortalState {
         Array.isArray(parsed.batchmates) && parsed.batchmates.length > 0 ? parsed.batchmates : defaults.batchmates,
       orders: Array.isArray(parsed.orders) ? parsed.orders : defaults.orders,
       notices: Array.isArray(parsed.notices) ? parsed.notices : defaults.notices,
-      hoodieConfig: parsed.hoodieConfig
-        ? {
-            ...defaults.hoodieConfig,
-            ...parsed.hoodieConfig,
-            specs: Array.isArray(parsed.hoodieConfig.specs)
-              ? parsed.hoodieConfig.specs
-              : defaults.hoodieConfig.specs,
-          }
-        : defaults.hoodieConfig,
-      siteConfig: parsed.siteConfig ? { ...defaults.siteConfig, ...parsed.siteConfig } : defaults.siteConfig,
+      hoodieConfig: mergeHoodieConfig(parsed.hoodieConfig),
+      siteConfig: mergeSiteConfig(parsed.siteConfig),
       activityLog: Array.isArray(parsed.activityLog) ? parsed.activityLog : defaults.activityLog,
     };
   } catch {
@@ -276,7 +365,7 @@ export function downloadCsv(filename: string, headers: string[], rows: (string |
   URL.revokeObjectURL(url);
 }
 
-export function compressImage(file: File, maxDimension = 900, maxLength = 270000): Promise<string> {
+export function compressImage(file: File, maxDimension = 900, maxLength = 200000): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(new Error('Could not read file'));

@@ -1,7 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
 import type { DecodedIdToken } from 'firebase-admin/auth';
 import { adminAuth } from '../lib/firebase-admin.ts';
-import { getOrCreateUser } from '../db/users.ts';
 
 export const AUTHORIZED_ADMIN_EMAIL = 'abraralraze@gmail.com';
 
@@ -20,9 +19,6 @@ export const requireAuth = async (req: AuthRequest, res: Response, next: NextFun
   try {
     const decodedToken = await adminAuth.verifyIdToken(token);
     req.user = decodedToken;
-    if (decodedToken.email) {
-      await getOrCreateUser(decodedToken.uid, decodedToken.email);
-    }
     next();
   } catch (error) {
     console.error('Error verifying Firebase ID token:', error);

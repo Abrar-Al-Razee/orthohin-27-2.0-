@@ -10,6 +10,31 @@ import type {
   PortalState,
   SiteConfig,
 } from '../types';
+import {
+  addActivityLogInFirestore,
+  createBatchmateInFirestore,
+  createNoticeInFirestore,
+  createOrderInFirestore,
+  deleteBatchmateInFirestore,
+  deleteGalleryItemInFirestore,
+  deleteNoticeInFirestore,
+  deleteOrderInFirestore,
+  fetchAdminDataFromFirestore,
+  fetchPublicPortalFromFirestore,
+  saveGalleryItemInFirestore,
+  saveSettingsInFirestore,
+  seedDefaultsIfEmptyInFirestore,
+  syncPortalStateInFirestore,
+  updateBatchmateInFirestore,
+  updateNoticeInFirestore,
+  updateOrderStatusInFirestore,
+} from './firestoreFallback';
+
+class SchemaNotReadyError extends Error {
+  constructor() {
+    super('SUPABASE_SCHEMA_MISSING');
+  }
+}
 
 async function getAuthHeaders(): Promise<HeadersInit> {
   const user = auth.currentUser;
@@ -23,18 +48,31 @@ async function getAuthHeaders(): Promise<HeadersInit> {
   };
 }
 
-async function handleJsonResponse<T>(res: Response): Promise<T> {
+async function handleApiResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
-    let message = 'Request failed';
+    let payload: { error?: string; code?: string } = {};
     try {
-      const data = (await res.json()) as { error?: string };
-      if (data?.error) message = data.error;
+      payload = (await res.json()) as { error?: string; code?: string };
     } catch {
       // Ignore parse error
     }
-    throw new Error(message);
+    if (res.status === 503 && payload.code === 'SUPABASE_SCHEMA_MISSING') {
+      throw new SchemaNotReadyError();
+    }
+    throw new Error(payload.error || 'Request failed');
   }
   return (await res.json()) as T;
+}
+
+async function withSupabaseOrFallback<T>(supabaseCall: () => Promise<T>, fallbackCall: () => Promise<T>): Promise<T> {
+  try {
+    return await supabaseCall();
+  } catch (err) {
+    if (err instanceof SchemaNotReadyError) {
+      return fallbackCall();
+    }
+    throw err;
+  }
 }
 
 export interface PublicPortalPayload {
@@ -54,128 +92,208 @@ export interface AdminPortalPayload {
 }
 
 export async function fetchPublicPortal(): Promise<PublicPortalPayload> {
-  const res = await fetch('/api/portal');
-  return handleJsonResponse<PublicPortalPayload>(res);
+  return withSupabaseOrFallback(
+    async () => {
+      const res = await fetch('/api/portal');
+      return handleApiResponse<PublicPortalPayload>(res);
+    },
+    () => fetchPublicPortalFromFirestore()
+  );
 }
 
 export async function fetchAdminData(): Promise<AdminPortalPayload> {
-  const headers = await getAuthHeaders();
-  const res = await fetch('/api/admin/data', { headers });
-  return handleJsonResponse<AdminPortalPayload>(res);
+  return withSupabaseOrFallback(
+    async () => {
+      const headers = await getAuthHeaders();
+      const res = await fetch('/api/admin/data', { headers });
+      return handleApiResponse<AdminPortalPayload>(res);
+    },
+    () => fetchAdminDataFromFirestore()
+  );
 }
 
 export async function createBatchmateInDb(bm: Batchmate): Promise<Batchmate> {
-  const res = await fetch('/api/batchmates', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(bm),
-  });
-  return handleJsonResponse<Batchmate>(res);
+  return withSupabaseOrFallback(
+    async () => {
+      const res = await fetch('/api/batchmates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bm),
+      });
+      return handleApiResponse<Batchmate>(res);
+    },
+    () => createBatchmateInFirestore(bm)
+  );
 }
 
 export async function updateBatchmateInDb(bm: Batchmate): Promise<void> {
-  const headers = await getAuthHeaders();
-  const res = await fetch(`/api/admin/batchmates/${encodeURIComponent(bm.id)}`, {
-    method: 'PUT',
-    headers,
-    body: JSON.stringify(bm),
-  });
-  await handleJsonResponse(res);
+  return withSupabaseOrFallback(
+    async () => {
+      const headers = await getAuthHeaders();
+      const res = await fetch(`/api/admin/batchmates/${encodeURIComponent(bm.id)}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify(bm),
+      });
+      await handleApiResponse(res);
+    },
+    () => updateBatchmateInFirestore(bm)
+  );
 }
 
 export async function deleteBatchmateInDb(id: string): Promise<void> {
-  const headers = await getAuthHeaders();
-  const res = await fetch(`/api/admin/batchmates/${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-    headers,
-  });
-  await handleJsonResponse(res);
+  return withSupabaseOrFallback(
+    async () => {
+      const headers = await getAuthHeaders();
+      const res = await fetch(`/api/admin/batchmates/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers,
+      });
+      await handleApiResponse(res);
+    },
+    () => deleteBatchmateInFirestore(id)
+  );
 }
 
 export async function createOrderInDb(order: HoodieOrder): Promise<HoodieOrder> {
-  const res = await fetch('/api/orders', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(order),
-  });
-  return handleJsonResponse<HoodieOrder>(res);
+  return withSupabaseOrFallback(
+    async () => {
+      const useAdminEndpoint = Boolean(auth.currentUser && order.status !== 'Pending');
+      const endpoint = useAdminEndpoint ? '/api/admin/orders' : '/api/orders';
+      const headers = useAdminEndpoint ? await getAuthHeaders() : { 'Content-Type': 'application/json' };
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(order),
+      });
+      return handleApiResponse<HoodieOrder>(res);
+    },
+    () => createOrderInFirestore(order)
+  );
 }
 
-export async function updateOrderStatusInDb(id: string, status: OrderStatus, notes?: string): Promise<void> {
-  const headers = await getAuthHeaders();
-  const res = await fetch(`/api/admin/orders/${encodeURIComponent(id)}`, {
-    method: 'PATCH',
-    headers,
-    body: JSON.stringify({ status, notes }),
-  });
-  await handleJsonResponse(res);
+export async function updateOrderStatusInDb(
+  id: string,
+  status: OrderStatus,
+  notes?: string,
+  extra?: Partial<Pick<HoodieOrder, 'customerName' | 'roll' | 'size' | 'quantity' | 'contact'>>
+): Promise<void> {
+  return withSupabaseOrFallback(
+    async () => {
+      const headers = await getAuthHeaders();
+      const res = await fetch(`/api/admin/orders/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ status, notes, ...(extra || {}) }),
+      });
+      await handleApiResponse(res);
+    },
+    () => updateOrderStatusInFirestore(id, status, notes, extra)
+  );
 }
 
 export async function deleteOrderInDb(id: string): Promise<void> {
-  const headers = await getAuthHeaders();
-  const res = await fetch(`/api/admin/orders/${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-    headers,
-  });
-  await handleJsonResponse(res);
+  return withSupabaseOrFallback(
+    async () => {
+      const headers = await getAuthHeaders();
+      const res = await fetch(`/api/admin/orders/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers,
+      });
+      await handleApiResponse(res);
+    },
+    () => deleteOrderInFirestore(id)
+  );
 }
 
 export async function createNoticeInDb(notice: BatchNotice): Promise<void> {
-  const headers = await getAuthHeaders();
-  const res = await fetch('/api/admin/notices', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(notice),
-  });
-  await handleJsonResponse(res);
+  return withSupabaseOrFallback(
+    async () => {
+      const headers = await getAuthHeaders();
+      const res = await fetch('/api/admin/notices', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(notice),
+      });
+      await handleApiResponse(res);
+    },
+    () => createNoticeInFirestore(notice)
+  );
 }
 
 export async function updateNoticeInDb(notice: BatchNotice): Promise<void> {
-  const headers = await getAuthHeaders();
-  const res = await fetch(`/api/admin/notices/${encodeURIComponent(notice.id)}`, {
-    method: 'PUT',
-    headers,
-    body: JSON.stringify(notice),
-  });
-  await handleJsonResponse(res);
+  return withSupabaseOrFallback(
+    async () => {
+      const headers = await getAuthHeaders();
+      const res = await fetch(`/api/admin/notices/${encodeURIComponent(notice.id)}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify(notice),
+      });
+      await handleApiResponse(res);
+    },
+    () => updateNoticeInFirestore(notice)
+  );
 }
 
 export async function deleteNoticeInDb(id: string): Promise<void> {
-  const headers = await getAuthHeaders();
-  const res = await fetch(`/api/admin/notices/${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-    headers,
-  });
-  await handleJsonResponse(res);
+  return withSupabaseOrFallback(
+    async () => {
+      const headers = await getAuthHeaders();
+      const res = await fetch(`/api/admin/notices/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers,
+      });
+      await handleApiResponse(res);
+    },
+    () => deleteNoticeInFirestore(id)
+  );
 }
 
 export async function saveGalleryItemInDb(item: GalleryItem, sortOrder: number): Promise<void> {
-  const headers = await getAuthHeaders();
-  const res = await fetch(`/api/admin/gallery/${encodeURIComponent(item.id)}`, {
-    method: 'PUT',
-    headers,
-    body: JSON.stringify({ item, sortOrder }),
-  });
-  await handleJsonResponse(res);
+  return withSupabaseOrFallback(
+    async () => {
+      const headers = await getAuthHeaders();
+      const res = await fetch(`/api/admin/gallery/${encodeURIComponent(item.id)}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ item, sortOrder }),
+      });
+      await handleApiResponse(res);
+    },
+    () => saveGalleryItemInFirestore(item, sortOrder)
+  );
 }
 
 export async function reorderGalleryInDb(items: GalleryItem[]): Promise<void> {
-  const headers = await getAuthHeaders();
-  const res = await fetch('/api/admin/gallery/reorder', {
-    method: 'PUT',
-    headers,
-    body: JSON.stringify({ items }),
-  });
-  await handleJsonResponse(res);
+  return withSupabaseOrFallback(
+    async () => {
+      const headers = await getAuthHeaders();
+      const res = await fetch('/api/admin/gallery/reorder', {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ items }),
+      });
+      await handleApiResponse(res);
+    },
+    async () => {
+      await Promise.all(items.map((item, idx) => saveGalleryItemInFirestore(item, idx)));
+    }
+  );
 }
 
 export async function deleteGalleryItemInDb(id: string): Promise<void> {
-  const headers = await getAuthHeaders();
-  const res = await fetch(`/api/admin/gallery/${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-    headers,
-  });
-  await handleJsonResponse(res);
+  return withSupabaseOrFallback(
+    async () => {
+      const headers = await getAuthHeaders();
+      const res = await fetch(`/api/admin/gallery/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers,
+      });
+      await handleApiResponse(res);
+    },
+    () => deleteGalleryItemInFirestore(id)
+  );
 }
 
 export async function saveSettingsInDb(
@@ -183,41 +301,61 @@ export async function saveSettingsInDb(
   hoodieConfig: HoodieConfig,
   siteConfig: SiteConfig
 ): Promise<void> {
-  const headers = await getAuthHeaders();
-  const res = await fetch('/api/admin/settings', {
-    method: 'PUT',
-    headers,
-    body: JSON.stringify({ profile, hoodieConfig, siteConfig }),
-  });
-  await handleJsonResponse(res);
+  return withSupabaseOrFallback(
+    async () => {
+      const headers = await getAuthHeaders();
+      const res = await fetch('/api/admin/settings', {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ profile, hoodieConfig, siteConfig }),
+      });
+      await handleApiResponse(res);
+    },
+    () => saveSettingsInFirestore(profile, hoodieConfig, siteConfig)
+  );
 }
 
 export async function addActivityLogInDb(action: string, detail: string): Promise<void> {
-  const headers = await getAuthHeaders();
-  const res = await fetch('/api/admin/logs', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ action, detail }),
-  });
-  await handleJsonResponse(res);
+  return withSupabaseOrFallback(
+    async () => {
+      const headers = await getAuthHeaders();
+      const res = await fetch('/api/admin/logs', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ action, detail }),
+      });
+      await handleApiResponse(res);
+    },
+    () => addActivityLogInFirestore(action, detail)
+  );
 }
 
 export async function seedDefaultsIfEmptyInDb(defaults: PortalState): Promise<void> {
-  const headers = await getAuthHeaders();
-  const res = await fetch('/api/admin/seed', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(defaults),
-  });
-  await handleJsonResponse(res);
+  return withSupabaseOrFallback(
+    async () => {
+      const headers = await getAuthHeaders();
+      const res = await fetch('/api/admin/seed', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(defaults),
+      });
+      await handleApiResponse(res);
+    },
+    () => seedDefaultsIfEmptyInFirestore(defaults)
+  );
 }
 
 export async function syncPortalStateInDb(state: PortalState, replaceCollections: boolean): Promise<void> {
-  const headers = await getAuthHeaders();
-  const res = await fetch('/api/admin/sync', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ state, replaceCollections }),
-  });
-  await handleJsonResponse(res);
+  return withSupabaseOrFallback(
+    async () => {
+      const headers = await getAuthHeaders();
+      const res = await fetch('/api/admin/sync', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ state, replaceCollections }),
+      });
+      await handleApiResponse(res);
+    },
+    () => syncPortalStateInFirestore(state, replaceCollections)
+  );
 }

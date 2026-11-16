@@ -45,7 +45,7 @@ service cloud.firestore {
         data.group is string && data.group.size() >= 1 && data.group.size() <= 60 &&
         (!('social' in data) || (data.social is string && data.social.size() <= 100)) &&
         (!('quote' in data) || (data.quote is string && data.quote.size() <= 400)) &&
-        (!('photo' in data) || (data.photo is string && data.photo.size() <= 300000)) &&
+        (!('photo' in data) || (data.photo is string && data.photo.size() <= 350000)) &&
         (!('registeredAt' in data) || (data.registeredAt is string && data.registeredAt.size() <= 32)) &&
         data.createdAt is timestamp;
     }
@@ -65,7 +65,7 @@ service cloud.firestore {
     function isValidGalleryItem(data) {
       return data.keys().hasAll(['src', 'title', 'caption', 'sortOrder', 'updatedAt']) &&
         data.keys().hasOnly(['src', 'title', 'caption', 'date', 'isVideo', 'videoUrl', 'sortOrder', 'updatedAt']) &&
-        data.src is string && data.src.size() <= 300000 &&
+        data.src is string && data.src.size() <= 350000 &&
         data.title is string && data.title.size() >= 1 && data.title.size() <= 140 &&
         data.caption is string && data.caption.size() <= 400 &&
         (!('date' in data) || (data.date is string && data.date.size() <= 40)) &&
@@ -90,34 +90,101 @@ service cloud.firestore {
     }
 
     function isValidHoodieMap(h) {
-      return h is map &&
+      return (h is map &&
         h.keys().hasAll(['title', 'subtitle', 'frontImage', 'backImage', 'specs', 'directOrderOpen']) &&
-        h.keys().hasOnly(['title', 'subtitle', 'frontImage', 'backImage', 'specs', 'directOrderOpen']) &&
+        h.keys().hasOnly(['kicker', 'title', 'subtitle', 'frontImage', 'backImage', 'frontLabel', 'backLabel', 'specs', 'directOrderOpen'])) &&
+        ((!('kicker' in h) || (h.kicker is string && h.kicker.size() <= 140)) &&
         h.title is string && h.title.size() >= 1 && h.title.size() <= 120 &&
-        h.subtitle is string && h.subtitle.size() <= 500 &&
-        h.frontImage is string && h.frontImage.size() <= 300000 &&
-        h.backImage is string && h.backImage.size() <= 300000 &&
-        h.specs is list && h.specs.size() > 0 && h.specs.size() <= 10 && h.specs[0] is string &&
-        h.directOrderOpen is bool;
+        h.subtitle is string && h.subtitle.size() <= 500) &&
+        (h.frontImage is string && h.frontImage.size() <= 350000 &&
+        h.backImage is string && h.backImage.size() <= 350000 &&
+        (!('frontLabel' in h) || (h.frontLabel is string && h.frontLabel.size() <= 80)) &&
+        (!('backLabel' in h) || (h.backLabel is string && h.backLabel.size() <= 80))) &&
+        (h.specs is list && h.specs.size() > 0 && h.specs.size() <= 12 &&
+        h.specs[0] is string && h.specs[0].size() <= 140 &&
+        h.directOrderOpen is bool);
+    }
+
+    function isValidSectionsMap(sec) {
+      return sec is map &&
+        sec.keys().hasAll(['notices', 'about', 'gallery', 'directory', 'timeline', 'hoodieNav']) &&
+        sec.keys().hasOnly(['notices', 'about', 'gallery', 'directory', 'timeline', 'hoodieNav']) &&
+        (sec.notices is bool && sec.about is bool && sec.gallery is bool) &&
+        (sec.directory is bool && sec.timeline is bool && sec.hoodieNav is bool);
+    }
+
+    function isValidSiteCore(s) {
+      return (s is map &&
+        s.keys().hasAll(['heroKicker', 'heroTitle', 'heroHighlight', 'heroDescription', 'announcement', 'instagramUrl', 'devNote']) &&
+        s.keys().hasOnly([
+          'brandName', 'brandAccent', 'heroKicker', 'heroTitle', 'heroHighlight', 'heroDescription',
+          'heroImage', 'announcement', 'instagramUrl', 'instagramHandle', 'instagramBio', 'devNote',
+          'aboutKicker', 'aboutTitle', 'aboutDescription', 'visionTitle', 'visionText',
+          'unityTitle', 'unityText', 'leadSectionKicker', 'leadSectionTitle', 'leadSectionSubtitle',
+          'leadRole', 'leadName', 'footerText', 'registrationOpen', 'maintenanceMode',
+          'maintenanceMessage', 'sections', 'kpis', 'timeline'
+        ])) &&
+        ((!('brandName' in s) || (s.brandName is string && s.brandName.size() <= 40)) &&
+        (!('brandAccent' in s) || (s.brandAccent is string && s.brandAccent.size() <= 20)) &&
+        (s.heroKicker is string && s.heroKicker.size() <= 120) &&
+        (s.heroTitle is string && s.heroTitle.size() <= 120)) &&
+        ((s.heroHighlight is string && s.heroHighlight.size() <= 120) &&
+        (s.heroDescription is string && s.heroDescription.size() <= 600) &&
+        (!('heroImage' in s) || (s.heroImage is string && s.heroImage.size() <= 350000)) &&
+        (s.announcement is string && s.announcement.size() <= 300));
+    }
+
+    function isValidSiteEditorial(s) {
+      return ((s.instagramUrl is string && s.instagramUrl.size() <= 300) &&
+        (!('instagramHandle' in s) || (s.instagramHandle is string && s.instagramHandle.size() <= 80)) &&
+        (!('instagramBio' in s) || (s.instagramBio is string && s.instagramBio.size() <= 300)) &&
+        (s.devNote is string && s.devNote.size() <= 600)) &&
+        ((!('aboutKicker' in s) || (s.aboutKicker is string && s.aboutKicker.size() <= 80)) &&
+        (!('aboutTitle' in s) || (s.aboutTitle is string && s.aboutTitle.size() <= 160)) &&
+        (!('aboutDescription' in s) || (s.aboutDescription is string && s.aboutDescription.size() <= 800)) &&
+        (!('visionTitle' in s) || (s.visionTitle is string && s.visionTitle.size() <= 100))) &&
+        ((!('visionText' in s) || (s.visionText is string && s.visionText.size() <= 300)) &&
+        (!('unityTitle' in s) || (s.unityTitle is string && s.unityTitle.size() <= 100)) &&
+        (!('unityText' in s) || (s.unityText is string && s.unityText.size() <= 300)) &&
+        (!('leadSectionKicker' in s) || (s.leadSectionKicker is string && s.leadSectionKicker.size() <= 80))) &&
+        ((!('leadSectionTitle' in s) || (s.leadSectionTitle is string && s.leadSectionTitle.size() <= 120)) &&
+        (!('leadSectionSubtitle' in s) || (s.leadSectionSubtitle is string && s.leadSectionSubtitle.size() <= 240)) &&
+        (!('leadRole' in s) || (s.leadRole is string && s.leadRole.size() <= 120)) &&
+        (!('leadName' in s) || (s.leadName is string && s.leadName.size() <= 120)));
+    }
+
+    function isValidSiteControls(s) {
+      return ((!('footerText' in s) || (s.footerText is string && s.footerText.size() <= 240)) &&
+        (!('registrationOpen' in s) || s.registrationOpen is bool) &&
+        (!('maintenanceMode' in s) || s.maintenanceMode is bool) &&
+        (!('maintenanceMessage' in s) || (s.maintenanceMessage is string && s.maintenanceMessage.size() <= 400))) &&
+        ((!('sections' in s) || isValidSectionsMap(s.sections)) &&
+        (!('kpis' in s) || (
+          s.kpis is list && s.kpis.size() <= 4 &&
+          (s.kpis.size() == 0 || (
+            s.kpis[0] is map &&
+            s.kpis[0].value is string && s.kpis[0].value.size() <= 40 &&
+            s.kpis[0].label is string && s.kpis[0].label.size() <= 80
+          ))
+        )) &&
+        (!('timeline' in s) || (
+          s.timeline is list && s.timeline.size() <= 20 &&
+          (s.timeline.size() == 0 || (
+            s.timeline[0] is map &&
+            s.timeline[0].title is string && s.timeline[0].title.size() <= 120 &&
+            s.timeline[0].tag is string && s.timeline[0].tag.size() <= 60
+          ))
+        )));
     }
 
     function isValidSiteMap(s) {
-      return s is map &&
-        s.keys().hasAll(['heroKicker', 'heroTitle', 'heroHighlight', 'heroDescription', 'announcement', 'instagramUrl', 'devNote']) &&
-        s.keys().hasOnly(['heroKicker', 'heroTitle', 'heroHighlight', 'heroDescription', 'announcement', 'instagramUrl', 'devNote']) &&
-        s.heroKicker is string && s.heroKicker.size() <= 120 &&
-        s.heroTitle is string && s.heroTitle.size() <= 120 &&
-        s.heroHighlight is string && s.heroHighlight.size() <= 120 &&
-        s.heroDescription is string && s.heroDescription.size() <= 600 &&
-        s.announcement is string && s.announcement.size() <= 300 &&
-        s.instagramUrl is string && s.instagramUrl.size() <= 300 &&
-        s.devNote is string && s.devNote.size() <= 600;
+      return isValidSiteCore(s) && isValidSiteEditorial(s) && isValidSiteControls(s);
     }
 
     function isValidSettings(data) {
       return data.keys().hasAll(['profile', 'hoodieConfig', 'siteConfig', 'updatedAt']) &&
         data.keys().hasOnly(['profile', 'hoodieConfig', 'siteConfig', 'updatedAt']) &&
-        data.profile is string && data.profile.size() <= 300000 &&
+        data.profile is string && data.profile.size() <= 350000 &&
         isValidHoodieMap(data.hoodieConfig) &&
         isValidSiteMap(data.siteConfig) &&
         data.updatedAt is timestamp;
@@ -179,20 +246,20 @@ service cloud.firestore {
       allow delete: if isValidId(galleryId) && isAdmin();
     }
 
-    // Direct Hoodie orders: public create (Pending only), PII read/manage strictly Admin-only
+    // Direct Hoodie orders: public create (Pending only), admin can create/update/read/delete
     match /orders/{orderId} {
       allow get: if isValidId(orderId) && isAdmin();
       allow list: if isAdmin();
       allow create: if isValidId(orderId) &&
         isValidOrder(incoming()) &&
-        incoming().status == 'Pending' &&
-        incoming().createdAt == request.time;
+        incoming().createdAt == request.time &&
+        (incoming().status == 'Pending' || isAdmin());
       allow update: if isValidId(orderId) &&
         isAdmin() &&
         isValidOrder(incoming()) &&
         incoming().orderCode == existing().orderCode &&
         incoming().createdAt == existing().createdAt &&
-        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'notes']);
+        incoming().diff(existing()).affectedKeys().hasOnly(['customerName', 'roll', 'size', 'quantity', 'contact', 'notes', 'status']);
       allow delete: if isValidId(orderId) && isAdmin();
     }
 
