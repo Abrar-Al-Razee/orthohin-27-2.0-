@@ -71,14 +71,15 @@ const ROUTE_TITLES: Record<ViewMode, string> = {
 
 function resolveViewFromLocation(): ViewMode {
   if (typeof window === 'undefined') return 'home';
-  const rawHash = window.location.hash.replace(/^#/, '').replace(/\/+$/, '');
-  const rawPath = window.location.pathname.replace(/\/+$/, '') || '/';
+  const rawHash = window.location.hash.replace(/^#/, '').toLowerCase().replace(/\/+$/, '');
+  const rawPath = window.location.pathname.toLowerCase().replace(/\/+$/, '') || '/';
   const candidate = rawHash.startsWith('/') ? rawHash : rawPath;
 
+  if (candidate === '/admin' || candidate === '/admin-login' || candidate.startsWith('/admin/')) {
+    return 'admin';
+  }
+
   switch (candidate) {
-    case '/admin':
-    case '/admin-login':
-      return 'admin';
     case '/gallery':
       return 'gallery';
     case '/batchmates':
@@ -295,12 +296,12 @@ export default function App() {
 
   const handleCloseAdmin = useCallback(() => {
     setAdminOpen(false);
-    if (isRouteAdmin) {
-      setIsRouteAdmin(false);
-      setActiveView('home');
+    setIsRouteAdmin(false);
+    setActiveView('home');
+    if (typeof window !== 'undefined' && window.location.pathname !== '/') {
       window.history.pushState({}, '', '/');
     }
-  }, [isRouteAdmin]);
+  }, []);
 
   const sc = mergeSiteConfig(state.siteConfig);
   const sec = sc.sections!;
@@ -316,6 +317,41 @@ export default function App() {
           <h1 className="text-2xl font-bold text-white">Portal Temporarily Paused</h1>
           <p className="text-sm text-zinc-400 leading-relaxed">{sc.maintenanceMessage}</p>
         </div>
+      </div>
+    );
+  }
+
+  if (activeView === 'admin') {
+    return (
+      <div className="min-h-screen bg-[#070709] text-zinc-100">
+        <AdminModal
+          isOpen={true}
+          isRouteAdmin={true}
+          state={{ ...state, siteConfig: sc, hoodieConfig: mergeHoodieConfig(state.hoodieConfig) }}
+          authUser={authUser}
+          isFirebaseAdmin={isFirebaseAdmin}
+          onClose={handleCloseAdmin}
+          onUpdateState={updateState}
+          onRefreshData={refreshAllData}
+          onOpenRegister={() => handleNavigate('register')}
+          onToast={showToast}
+        />
+
+        {toast && (
+          <div
+            role="status"
+            aria-live="polite"
+            className={`fixed bottom-5 right-5 z-[60] px-4 py-3 rounded-xl border text-xs font-medium shadow-xl backdrop-blur-md ${
+              toast.tone === 'error'
+                ? 'bg-rose-950/90 border-rose-500/40 text-rose-200'
+                : toast.tone === 'info'
+                  ? 'bg-zinc-900/95 border-zinc-700 text-zinc-200'
+                  : 'bg-emerald-950/90 border-emerald-500/40 text-emerald-200'
+            }`}
+          >
+            {toast.text}
+          </div>
+        )}
       </div>
     );
   }
@@ -901,19 +937,6 @@ export default function App() {
       />
 
       <LightboxModal item={lightboxItem} onClose={() => setLightboxItem(null)} />
-
-      <AdminModal
-        isOpen={adminOpen}
-        isRouteAdmin={isRouteAdmin}
-        state={{ ...state, siteConfig: sc, hoodieConfig: mergeHoodieConfig(state.hoodieConfig) }}
-        authUser={authUser}
-        isFirebaseAdmin={isFirebaseAdmin}
-        onClose={handleCloseAdmin}
-        onUpdateState={updateState}
-        onRefreshData={refreshAllData}
-        onOpenRegister={() => handleNavigate('register')}
-        onToast={showToast}
-      />
 
       {/* Toast Notification */}
       {toast && (

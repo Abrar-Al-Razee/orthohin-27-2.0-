@@ -22,6 +22,7 @@ import {
   updateBatchmate,
   updateOrderStatus,
 } from './src/db/supabaseRepository.ts';
+import { ensureSupabaseSchema } from './src/lib/supabaseDbInit.ts';
 import { requireAdmin, requireAuth, type AuthRequest } from './src/middleware/auth.ts';
 import type { Batchmate, BatchNotice, GalleryItem, HoodieOrder, OrderStatus, PortalState } from './src/types.ts';
 
@@ -41,6 +42,7 @@ function sendRepoError(res: Response, error: unknown, fallbackMessage: string) {
 }
 
 async function startServer() {
+  await ensureSupabaseSchema();
   const app = express();
   const port = Number(process.env.PORT || 3000);
 

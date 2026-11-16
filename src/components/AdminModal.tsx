@@ -1110,7 +1110,9 @@ export function AdminModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-[#070709] text-zinc-100 flex flex-col overflow-hidden"
+      className={`${
+        isRouteAdmin ? 'h-screen' : 'fixed inset-0 z-50'
+      } bg-[#070709] text-zinc-100 flex flex-col overflow-hidden`}
       role={isRouteAdmin ? 'main' : 'dialog'}
       aria-modal={isRouteAdmin ? undefined : true}
       aria-label="ORTHOHIN '27 Smart Admin Panel"
