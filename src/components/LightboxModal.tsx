@@ -21,7 +21,7 @@ export function LightboxModal({ item, onClose }: LightboxModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 sm:p-8"
+      className="fixed inset-0 z-50 bg-black/92 backdrop-blur-sm flex items-center justify-center p-4 sm:p-8"
       role="dialog"
       aria-modal="true"
       aria-label={item.title}
@@ -32,7 +32,7 @@ export function LightboxModal({ item, onClose }: LightboxModalProps) {
       <button
         type="button"
         onClick={onClose}
-        className="fixed top-4 right-4 w-11 h-11 rounded-lg bg-zinc-900/90 border border-zinc-800 text-white inline-flex items-center justify-center hover:bg-zinc-800 transition-colors cursor-pointer"
+        className="fixed top-4 right-4 w-11 h-11 rounded-lg bg-zinc-900/95 border border-zinc-700 text-white inline-flex items-center justify-center hover:bg-zinc-800 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
         aria-label="Close lightbox"
       >
         <X className="w-5 h-5" />
@@ -49,8 +49,8 @@ export function LightboxModal({ item, onClose }: LightboxModalProps) {
             />
           ) : (
             <div className="py-20 px-6 text-center space-y-3 bg-[#111114]">
-              <p className="text-sm font-medium text-zinc-300">{item.title}</p>
-              <p className="text-xs text-zinc-500 max-w-md mx-auto">
+              <p className="text-sm font-medium text-zinc-100">{item.title}</p>
+              <p className="text-xs text-zinc-300 max-w-md mx-auto">
                 {item.isVideo ? 'Open the Facebook video link below to watch this memory.' : item.caption}
               </p>
             </div>
@@ -85,9 +85,9 @@ export function LightboxModal({ item, onClose }: LightboxModalProps) {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1">
           <div>
             <h3 className="text-base font-semibold text-white">{item.title}</h3>
-            {item.caption && <p className="text-sm text-zinc-400">{item.caption}</p>}
+            {item.caption && <p className="text-sm text-zinc-300">{item.caption}</p>}
           </div>
-          {item.date && <p className="text-xs font-mono text-zinc-500 shrink-0">{item.date}</p>}
+          {item.date && <p className="text-xs font-mono text-zinc-400 shrink-0">{item.date}</p>}
         </div>
       </div>
     </div>

@@ -34,9 +34,22 @@ export const SUPABASE_KEY = isValidSupabaseKey(envServiceKey, true)
     ? envPublishableKey.trim()
     : DEFAULT_SUPABASE_PUBLISHABLE_KEY;
 
+const fetchWithTimeout: typeof fetch = (input, init) => {
+  if (init?.signal) {
+    return fetch(input, init);
+  }
+  return fetch(input, {
+    ...init,
+    signal: AbortSignal.timeout(4000),
+  });
+};
+
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
     persistSession: false,
     autoRefreshToken: false,
+  },
+  global: {
+    fetch: fetchWithTimeout,
   },
 });

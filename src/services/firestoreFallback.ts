@@ -5,12 +5,14 @@ import {
   getDoc,
   getDocs,
   limit,
+  onSnapshot,
   orderBy,
   query,
   serverTimestamp,
   setDoc,
   Timestamp,
   updateDoc,
+  type QueryDocumentSnapshot,
 } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import type {
@@ -90,6 +92,160 @@ function toIsoString(val: unknown): string {
   return new Date().toISOString();
 }
 
+function mapBatchmateDoc(d: QueryDocumentSnapshot): Batchmate {
+  const data = d.data();
+  return {
+    id: d.id,
+    name: String(data.name || ''),
+    roll: String(data.roll || ''),
+    group: String(data.group || 'Batchmate'),
+    social: data.social ? String(data.social) : undefined,
+    quote: data.quote ? String(data.quote) : undefined,
+    photo: data.photo ? String(data.photo) : undefined,
+    registeredAt: data.registeredAt ? String(data.registeredAt) : undefined,
+  };
+}
+
+function mapNoticeDoc(d: QueryDocumentSnapshot): BatchNotice {
+  const data = d.data();
+  return {
+    id: d.id,
+    title: String(data.title || ''),
+    message: String(data.message || ''),
+    category: (data.category as BatchNotice['category']) || 'General',
+    pinned: Boolean(data.pinned),
+    active: Boolean(data.active),
+    createdAt: String(data.createdAt || ''),
+  };
+}
+
+function mapGalleryDoc(d: QueryDocumentSnapshot): GalleryItem {
+  const data = d.data();
+  return {
+    id: d.id,
+    src: String(data.src || ''),
+    title: String(data.title || ''),
+    caption: String(data.caption || ''),
+    date: data.date ? String(data.date) : undefined,
+    isVideo: Boolean(data.isVideo),
+    videoUrl: data.videoUrl ? String(data.videoUrl) : undefined,
+  };
+}
+
+function mapOrderDoc(d: QueryDocumentSnapshot): HoodieOrder {
+  const data = d.data();
+  return {
+    id: String(data.orderCode || d.id),
+    customerName: String(data.customerName || ''),
+    roll: String(data.roll || ''),
+    size: (data.size as HoodieOrder['size']) || 'L',
+    quantity: Number(data.quantity || 1),
+    contact: String(data.contact || ''),
+    notes: data.notes ? String(data.notes) : undefined,
+    status: (data.status as OrderStatus) || 'Pending',
+    createdAt: toIsoString(data.createdAt),
+  };
+}
+
+function mapActivityLogDoc(d: QueryDocumentSnapshot): ActivityLogEntry {
+  const data = d.data();
+  return {
+    id: d.id,
+    action: String(data.action || ''),
+    detail: String(data.detail || ''),
+    timestamp: toIsoString(data.createdAt),
+  };
+}
+
+export interface PublicFirestoreCallbacks {
+  onBatchmates: (batchmates: Batchmate[]) => void;
+  onNotices: (notices: BatchNotice[]) => void;
+  onGallery: (gallery: GalleryItem[]) => void;
+  onSettings: (
+    settings: {
+      profile: string;
+      hoodieConfig: HoodieConfig;
+      siteConfig: SiteConfig;
+    } | null
+  ) => void;
+}
+
+export interface AdminFirestoreCallbacks {
+  onOrders: (orders: HoodieOrder[]) => void;
+  onActivityLogs: (logs: ActivityLogEntry[]) => void;
+}
+
+function reportListenerError(err: unknown, operationType: OperationType, path: string): void {
+  try {
+    handleFirestoreError(err, operationType, path);
+  } catch {
+    // Error details logged by handleFirestoreError; keep listener resilient
+  }
+}
+
+export function subscribePublicPortalFromFirestore(callbacks: PublicFirestoreCallbacks): () => void {
+  const unsubBatchmates = onSnapshot(
+    query(collection(db, 'batchmates'), orderBy('createdAt', 'desc')),
+    (snap) => callbacks.onBatchmates(snap.docs.map(mapBatchmateDoc)),
+    (err) => reportListenerError(err, OperationType.LIST, 'batchmates')
+  );
+
+  const unsubNotices = onSnapshot(
+    query(collection(db, 'notices'), orderBy('updatedAt', 'desc')),
+    (snap) => callbacks.onNotices(snap.docs.map(mapNoticeDoc)),
+    (err) => reportListenerError(err, OperationType.LIST, 'notices')
+  );
+
+  const unsubGallery = onSnapshot(
+    query(collection(db, 'gallery'), orderBy('sortOrder', 'asc')),
+    (snap) => callbacks.onGallery(snap.docs.map(mapGalleryDoc)),
+    (err) => reportListenerError(err, OperationType.LIST, 'gallery')
+  );
+
+  const unsubSettings = onSnapshot(
+    doc(db, 'settings', 'main'),
+    (snap) => {
+      const data = snap.exists() ? snap.data() : null;
+      callbacks.onSettings(
+        data
+          ? {
+              profile: String(data.profile || ''),
+              hoodieConfig: data.hoodieConfig as HoodieConfig,
+              siteConfig: data.siteConfig as SiteConfig,
+            }
+          : null
+      );
+    },
+    (err) => reportListenerError(err, OperationType.GET, 'settings/main')
+  );
+
+  return () => {
+    unsubBatchmates();
+    unsubNotices();
+    unsubGallery();
+    unsubSettings();
+  };
+}
+
+export function subscribeAdminDataFromFirestore(callbacks: AdminFirestoreCallbacks): () => void {
+  const unsubOrders = onSnapshot(
+    query(collection(db, 'orders'), orderBy('createdAt', 'desc')),
+    (snap) => callbacks.onOrders(snap.docs.map(mapOrderDoc)),
+    (err) => reportListenerError(err, OperationType.LIST, 'orders')
+  );
+
+  const unsubLogs = onSnapshot(
+    query(collection(db, 'activityLogs'), orderBy('createdAt', 'desc'), limit(50)),
+    (snap) => callbacks.onActivityLogs(snap.docs.map(mapActivityLogDoc)),
+    (err) => reportListenerError(err, OperationType.LIST, 'activityLogs')
+  );
+
+  return () => {
+    unsubOrders();
+    unsubLogs();
+  };
+}
+
 export async function fetchPublicPortalFromFirestore() {
   const [bmSnap, noticeSnap, gallerySnap, settingsSnap] = await Promise.all([
     getDocs(query(collection(db, 'batchmates'), orderBy('createdAt', 'desc'))).catch((err) =>
@@ -106,46 +262,9 @@ export async function fetchPublicPortalFromFirestore() {
     ),
   ]);
 
-  const batchmates: Batchmate[] = bmSnap.docs.map((d) => {
-    const data = d.data();
-    return {
-      id: d.id,
-      name: String(data.name || ''),
-      roll: String(data.roll || ''),
-      group: String(data.group || 'Batchmate'),
-      social: data.social ? String(data.social) : undefined,
-      quote: data.quote ? String(data.quote) : undefined,
-      photo: data.photo ? String(data.photo) : undefined,
-      registeredAt: data.registeredAt ? String(data.registeredAt) : undefined,
-    };
-  });
-
-  const notices: BatchNotice[] = noticeSnap.docs.map((d) => {
-    const data = d.data();
-    return {
-      id: d.id,
-      title: String(data.title || ''),
-      message: String(data.message || ''),
-      category: (data.category as BatchNotice['category']) || 'General',
-      pinned: Boolean(data.pinned),
-      active: Boolean(data.active),
-      createdAt: String(data.createdAt || ''),
-    };
-  });
-
-  const gallery: GalleryItem[] = gallerySnap.docs.map((d) => {
-    const data = d.data();
-    return {
-      id: d.id,
-      src: String(data.src || ''),
-      title: String(data.title || ''),
-      caption: String(data.caption || ''),
-      date: data.date ? String(data.date) : undefined,
-      isVideo: Boolean(data.isVideo),
-      videoUrl: data.videoUrl ? String(data.videoUrl) : undefined,
-    };
-  });
-
+  const batchmates: Batchmate[] = bmSnap.docs.map(mapBatchmateDoc);
+  const notices: BatchNotice[] = noticeSnap.docs.map(mapNoticeDoc);
+  const gallery: GalleryItem[] = gallerySnap.docs.map(mapGalleryDoc);
   const settingsData = settingsSnap.exists() ? settingsSnap.data() : null;
 
   return {
@@ -172,30 +291,8 @@ export async function fetchAdminDataFromFirestore() {
     ),
   ]);
 
-  const orders: HoodieOrder[] = orderSnap.docs.map((d) => {
-    const data = d.data();
-    return {
-      id: String(data.orderCode || d.id),
-      customerName: String(data.customerName || ''),
-      roll: String(data.roll || ''),
-      size: (data.size as HoodieOrder['size']) || 'L',
-      quantity: Number(data.quantity || 1),
-      contact: String(data.contact || ''),
-      notes: data.notes ? String(data.notes) : undefined,
-      status: (data.status as OrderStatus) || 'Pending',
-      createdAt: toIsoString(data.createdAt),
-    };
-  });
-
-  const activityLog: ActivityLogEntry[] = logSnap.docs.map((d) => {
-    const data = d.data();
-    return {
-      id: d.id,
-      action: String(data.action || ''),
-      detail: String(data.detail || ''),
-      timestamp: toIsoString(data.createdAt),
-    };
-  });
+  const orders: HoodieOrder[] = orderSnap.docs.map(mapOrderDoc);
+  const activityLog: ActivityLogEntry[] = logSnap.docs.map(mapActivityLogDoc);
 
   return { orders, activityLog };
 }

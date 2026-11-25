@@ -105,6 +105,9 @@ export const DEFAULT_GALLERY: GalleryItem[] = [
   },
 ];
 
+export const SITE_LOGO_SRC =
+  '/assets/aistudio/WhatsApp_Image_2026-09-19_at_12.58.48_AM_861c7295.jpeg';
+
 export const DEFAULT_HERO_IMAGE =
   '/assets/aistudio/Transform_my_image_into_a_black_and_white_sketch_style_01cc67d0.png';
 

@@ -20,6 +20,7 @@ import {
   Lock,
   Megaphone,
   Menu,
+  Moon,
   Pin,
   Plus,
   RefreshCw,
@@ -29,6 +30,7 @@ import {
   Shield,
   Shirt,
   Sliders,
+  Sun,
   Trash2,
   Upload,
   Users,
@@ -80,12 +82,16 @@ import {
   mergeSiteConfig,
   resetAdminPassword,
   setAdminPassword,
+  SITE_LOGO_SRC,
 } from '../utils/storage';
 import { downloadOrderInvoicePng } from '../utils/invoice';
+import type { ThemeMode } from '../utils/theme';
 
 interface AdminModalProps {
   isOpen: boolean;
   isRouteAdmin: boolean;
+  theme: ThemeMode;
+  onToggleTheme: () => void;
   state: PortalState;
   authUser: User | null;
   isFirebaseAdmin: boolean;
@@ -104,6 +110,8 @@ const HOODIE_SIZES: HoodieOrder['size'][] = ['S', 'M', 'L', 'XL', 'XXL', 'XXXL']
 export function AdminModal({
   isOpen,
   isRouteAdmin,
+  theme,
+  onToggleTheme,
   state,
   authUser,
   isFirebaseAdmin,
@@ -1108,36 +1116,40 @@ export function AdminModal({
     setMobileNavOpen(false);
   };
 
+  const isDark = theme === 'dark';
+
   return (
     <div
       className={`${
         isRouteAdmin ? 'h-screen' : 'fixed inset-0 z-50'
-      } bg-[#070709] text-zinc-100 flex flex-col overflow-hidden`}
+      } bg-zinc-50 dark:bg-[#070709] text-zinc-950 dark:text-zinc-100 flex flex-col overflow-hidden`}
       role={isRouteAdmin ? 'main' : 'dialog'}
       aria-modal={isRouteAdmin ? undefined : true}
       aria-label="ORTHOHIN '27 Smart Admin Panel"
     >
       {/* Dedicated Top Bar */}
-      <header className="h-16 px-4 sm:px-6 border-b border-zinc-800/90 bg-[#0c0c10] flex items-center justify-between gap-4 shrink-0">
+      <header className="h-16 px-4 sm:px-6 border-b border-zinc-300 dark:border-zinc-800/90 bg-white dark:bg-[#0c0c10] flex items-center justify-between gap-4 shrink-0">
         <div className="flex items-center gap-3 min-w-0">
           {unlocked && (
             <button
               type="button"
               onClick={() => setMobileNavOpen((prev) => !prev)}
-              className="lg:hidden p-2 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white cursor-pointer"
+              className="lg:hidden p-2 rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 text-zinc-800 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white cursor-pointer"
               aria-label="Toggle admin navigation"
             >
               <Menu className="w-4 h-4" />
             </button>
           )}
-          <div className="w-9 h-9 rounded-lg bg-rose-600/15 border border-rose-500/30 flex items-center justify-center shrink-0">
-            <Shield className="w-4 h-4 text-rose-500" />
-          </div>
+          <img
+            src={SITE_LOGO_SRC}
+            alt="ORTHOHIN '27 logo"
+            className="w-9 h-9 rounded-lg object-cover border border-zinc-300 dark:border-zinc-700/80 shadow-xs shrink-0 bg-black"
+          />
           <div className="min-w-0">
-            <h2 className="text-sm sm:text-base font-bold text-white truncate">
+            <h2 className="text-sm sm:text-base font-bold text-zinc-950 dark:text-white truncate">
               ORTHOHIN '27 · Smart Admin Control
             </h2>
-            <p className="text-[11px] text-zinc-400 truncate">
+            <p className="text-[11px] text-zinc-600 dark:text-zinc-400 truncate">
               {unlocked ? `Authorized: ${authorizedAdmin}` : `Protected /admin Page · ${AUTHORIZED_ADMIN_EMAIL}`}
             </p>
           </div>
@@ -1151,13 +1163,13 @@ export function AdminModal({
               value={globalQuery}
               onChange={(e) => setGlobalQuery(e.target.value)}
               placeholder="Quick find order, batchmate, or notice..."
-              className="w-full pl-8 pr-8 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-rose-500"
+              className="w-full pl-8 pr-8 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500 focus:outline-none focus:border-rose-600 dark:focus:border-rose-500"
             />
             {globalQuery && (
               <button
                 type="button"
                 onClick={() => setGlobalQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white cursor-pointer"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-950 dark:hover:text-white cursor-pointer"
                 aria-label="Clear quick search"
               >
                 <X className="w-3.5 h-3.5" />
@@ -1165,16 +1177,16 @@ export function AdminModal({
             )}
 
             {quickSearchResults && (
-              <div className="absolute left-0 right-0 top-full mt-1.5 rounded-xl bg-[#111116] border border-zinc-800 shadow-2xl p-2 z-50 space-y-2">
+              <div className="absolute left-0 right-0 top-full mt-1.5 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-2xl p-2 z-50 space-y-2">
                 {quickSearchResults.matchedOrders.length === 0 &&
                 quickSearchResults.matchedMembers.length === 0 &&
                 quickSearchResults.matchedNotices.length === 0 ? (
-                  <p className="text-xs text-zinc-500 px-2 py-2">No matching records across portal.</p>
+                  <p className="text-xs text-zinc-600 dark:text-zinc-500 px-2 py-2">No matching records across portal.</p>
                 ) : (
                   <>
                     {quickSearchResults.matchedOrders.length > 0 && (
                       <div>
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 px-2 py-1">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600 dark:text-zinc-500 px-2 py-1">
                           Orders
                         </p>
                         {quickSearchResults.matchedOrders.map((o) => (
@@ -1186,19 +1198,19 @@ export function AdminModal({
                               setActiveTab('orders');
                               setGlobalQuery('');
                             }}
-                            className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-zinc-800/80 text-xs flex items-center justify-between gap-2 cursor-pointer"
+                            className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800/80 text-xs flex items-center justify-between gap-2 cursor-pointer"
                           >
-                            <span className="text-zinc-200 truncate">
-                              <span className="font-mono text-rose-400">{o.id}</span> · {o.customerName}
+                            <span className="text-zinc-900 dark:text-zinc-200 truncate">
+                              <span className="font-mono text-rose-700 dark:text-rose-400">{o.id}</span> · {o.customerName}
                             </span>
-                            <span className="font-mono text-zinc-400 shrink-0">{o.size}</span>
+                            <span className="font-mono text-zinc-600 dark:text-zinc-400 shrink-0">{o.size}</span>
                           </button>
                         ))}
                       </div>
                     )}
                     {quickSearchResults.matchedMembers.length > 0 && (
                       <div>
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 px-2 py-1">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600 dark:text-zinc-500 px-2 py-1">
                           Batchmates
                         </p>
                         {quickSearchResults.matchedMembers.map((b) => (
@@ -1210,17 +1222,17 @@ export function AdminModal({
                               setActiveTab('batchmates');
                               setGlobalQuery('');
                             }}
-                            className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-zinc-800/80 text-xs flex items-center justify-between gap-2 cursor-pointer"
+                            className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800/80 text-xs flex items-center justify-between gap-2 cursor-pointer"
                           >
-                            <span className="text-zinc-200 truncate">{b.name}</span>
-                            <span className="font-mono text-zinc-400 shrink-0">Roll {b.roll}</span>
+                            <span className="text-zinc-900 dark:text-zinc-200 truncate">{b.name}</span>
+                            <span className="font-mono text-zinc-600 dark:text-zinc-400 shrink-0">Roll {b.roll}</span>
                           </button>
                         ))}
                       </div>
                     )}
                     {quickSearchResults.matchedNotices.length > 0 && (
                       <div>
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 px-2 py-1">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600 dark:text-zinc-500 px-2 py-1">
                           Notices
                         </p>
                         {quickSearchResults.matchedNotices.map((n) => (
@@ -1231,10 +1243,10 @@ export function AdminModal({
                               setActiveTab('notices');
                               setGlobalQuery('');
                             }}
-                            className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-zinc-800/80 text-xs flex items-center justify-between gap-2 cursor-pointer"
+                            className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800/80 text-xs flex items-center justify-between gap-2 cursor-pointer"
                           >
-                            <span className="text-zinc-200 truncate">{n.title}</span>
-                            <span className="text-zinc-400 shrink-0">{n.category}</span>
+                            <span className="text-zinc-900 dark:text-zinc-200 truncate">{n.title}</span>
+                            <span className="text-zinc-600 dark:text-zinc-400 shrink-0">{n.category}</span>
                           </button>
                         ))}
                       </div>
@@ -1247,13 +1259,24 @@ export function AdminModal({
         )}
 
         <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={onToggleTheme}
+            aria-label={isDark ? 'Switch to high-contrast light mode' : 'Switch to dark mode'}
+            aria-pressed={!isDark}
+            title={isDark ? 'Switch to High-Contrast Light Mode' : 'Switch to Dark Mode'}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-zinc-300 dark:border-zinc-800 text-xs font-semibold text-zinc-900 dark:text-zinc-200 transition-colors cursor-pointer"
+          >
+            {isDark ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-zinc-900" />}
+            <span className="hidden sm:inline">{isDark ? 'Light' : 'Dark'}</span>
+          </button>
           {unlocked && (
             <>
               <button
                 type="button"
                 disabled={isSyncing}
                 onClick={() => void handleManualRefresh()}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs font-medium text-zinc-200 transition-colors cursor-pointer disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-zinc-300 dark:border-zinc-800 text-xs font-medium text-zinc-900 dark:text-zinc-200 transition-colors cursor-pointer disabled:opacity-50"
                 title="Refresh portal data"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
@@ -1266,7 +1289,7 @@ export function AdminModal({
                   setAuthorizedAdmin('');
                   void signOut(auth);
                 }}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs font-medium text-zinc-300 hover:text-white transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-zinc-300 dark:border-zinc-800 text-xs font-medium text-zinc-900 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white transition-colors cursor-pointer"
               >
                 <Lock className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Lock</span>
@@ -1276,7 +1299,7 @@ export function AdminModal({
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs font-medium text-zinc-300 hover:text-white transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-zinc-300 dark:border-zinc-800 text-xs font-medium text-zinc-900 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white transition-colors cursor-pointer"
             aria-label="Exit admin panel"
           >
             <X className="w-4 h-4" />
@@ -1287,42 +1310,49 @@ export function AdminModal({
 
       {!unlocked ? (
         /* Dedicated /admin-login Auth View */
-        <div className="flex-1 overflow-y-auto flex items-center justify-center p-4 sm:p-8 bg-[#070709]">
+        <div className="flex-1 overflow-y-auto flex items-center justify-center p-4 sm:p-8 bg-zinc-100 dark:bg-[#070709]">
           <form
             onSubmit={handleLogin}
-            className="w-full max-w-md rounded-2xl bg-[#0e0e12] border border-zinc-800/90 p-7 sm:p-8 space-y-5 shadow-2xl"
+            className="w-full max-w-md rounded-2xl bg-white dark:bg-[#0e0e12] border border-zinc-300 dark:border-zinc-800/90 p-7 sm:p-8 space-y-5 shadow-xl dark:shadow-2xl"
           >
             <div className="space-y-2">
-              <div className="inline-flex items-center gap-2 text-xs font-medium text-rose-400">
-                <Lock className="w-3.5 h-3.5" />
-                <span>Restricted Admin Gateway</span>
+              <div className="flex items-center gap-3">
+                <img
+                  src={SITE_LOGO_SRC}
+                  alt="ORTHOHIN '27 logo"
+                  className="w-11 h-11 rounded-xl object-cover border border-zinc-300 dark:border-zinc-700/80 shadow-xs shrink-0 bg-black"
+                />
+                <div className="inline-flex items-center gap-2 text-xs font-semibold text-rose-700 dark:text-rose-400">
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>Restricted Admin Gateway</span>
+                </div>
               </div>
-              <h3 className="text-2xl font-bold tracking-tight text-white">Sign in to Admin Control</h3>
-              <p className="text-xs text-zinc-400 leading-relaxed">
-                Access is strictly restricted to <span className="font-mono text-zinc-200">{AUTHORIZED_ADMIN_EMAIL}</span>{' '}
+              <h3 className="text-2xl font-bold tracking-tight text-zinc-950 dark:text-white">Sign in to Admin Control</h3>
+              <p className="text-xs text-zinc-700 dark:text-zinc-400 leading-relaxed">
+                Access is strictly restricted to <span className="font-mono text-zinc-950 dark:text-zinc-200">{AUTHORIZED_ADMIN_EMAIL}</span>{' '}
                 with verified account credentials and admin passcode.
               </p>
             </div>
 
-            <div className="p-3.5 rounded-xl bg-zinc-900/90 border border-zinc-800 space-y-2.5">
+            <div className="p-3.5 rounded-xl bg-zinc-50 dark:bg-zinc-900/90 border border-zinc-300 dark:border-zinc-800 space-y-2.5">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-medium text-zinc-300">Account Verification</span>
+                <span className="text-xs font-medium text-zinc-800 dark:text-zinc-300">Account Verification</span>
                 {isFirebaseAdmin ? (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
                     <Check className="w-3.5 h-3.5" /> Verified
                   </span>
                 ) : (
-                  <span className="text-[11px] text-amber-400 font-medium">Required on sign in</span>
+                  <span className="text-[11px] text-amber-700 dark:text-amber-400 font-semibold">Required on sign in</span>
                 )}
               </div>
 
               {isFirebaseAdmin ? (
                 <div className="flex items-center justify-between gap-2 text-xs">
-                  <span className="font-mono text-zinc-200 truncate">{authUser?.email}</span>
+                  <span className="font-mono text-zinc-950 dark:text-zinc-200 truncate">{authUser?.email}</span>
                   <button
                     type="button"
                     onClick={() => void signOut(auth)}
-                    className="text-[11px] text-zinc-400 hover:text-white underline cursor-pointer shrink-0"
+                    className="text-[11px] text-zinc-700 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white underline cursor-pointer shrink-0"
                   >
                     Switch account
                   </button>
@@ -1332,7 +1362,7 @@ export function AdminModal({
                   type="button"
                   disabled={isAuthenticating}
                   onClick={() => void handleGoogleSignIn()}
-                  className="w-full py-2 px-3 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-semibold text-white transition-colors cursor-pointer disabled:opacity-50"
+                  className="w-full py-2 px-3 rounded-lg bg-white hover:bg-zinc-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-zinc-700 text-xs font-semibold text-zinc-950 dark:text-white transition-colors cursor-pointer disabled:opacity-50"
                 >
                   {isAuthenticating ? 'Verifying Google account...' : `Sign in with Google (${AUTHORIZED_ADMIN_EMAIL})`}
                 </button>
@@ -1341,7 +1371,7 @@ export function AdminModal({
 
             <div className="space-y-3.5">
               <div>
-                <label htmlFor="admin-email-input" className="block text-xs font-medium text-zinc-300 mb-1.5">
+                <label htmlFor="admin-email-input" className="block text-xs font-medium text-zinc-800 dark:text-zinc-300 mb-1.5">
                   Authorized Email
                 </label>
                 <input
@@ -1352,12 +1382,12 @@ export function AdminModal({
                   onChange={(e) => setEmailInput(e.target.value)}
                   placeholder="abraralraze@gmail.com"
                   autoComplete="email"
-                  className="w-full px-3.5 py-2.5 rounded-lg bg-zinc-900 border border-zinc-800 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-rose-500"
+                  className="w-full px-3.5 py-2.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 text-sm text-zinc-950 dark:text-white placeholder:text-zinc-500 focus:outline-none focus:border-rose-600 dark:focus:border-rose-500"
                 />
               </div>
 
               <div>
-                <label htmlFor="admin-pass-input" className="block text-xs font-medium text-zinc-300 mb-1.5">
+                <label htmlFor="admin-pass-input" className="block text-xs font-medium text-zinc-800 dark:text-zinc-300 mb-1.5">
                   Admin Passcode
                 </label>
                 <div className="relative">
@@ -1369,13 +1399,13 @@ export function AdminModal({
                     onChange={(e) => setPasswordInput(e.target.value)}
                     placeholder="Enter admin passcode"
                     autoComplete="current-password"
-                    className="w-full pl-3.5 pr-10 py-2.5 rounded-lg bg-zinc-900 border border-zinc-800 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-rose-500"
+                    className="w-full pl-3.5 pr-10 py-2.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 text-sm text-zinc-950 dark:text-white placeholder:text-zinc-500 focus:outline-none focus:border-rose-600 dark:focus:border-rose-500"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword((prev) => !prev)}
                     aria-label={showPassword ? 'Hide passcode' : 'Show passcode'}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-white cursor-pointer"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-zinc-600 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white cursor-pointer"
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -1384,7 +1414,7 @@ export function AdminModal({
             </div>
 
             {loginError && (
-              <div role="alert" className="p-3 rounded-lg bg-rose-950/60 border border-rose-500/40 text-xs text-rose-300">
+              <div role="alert" className="p-3 rounded-lg bg-rose-50 dark:bg-rose-950/60 border border-rose-300 dark:border-rose-500/40 text-xs font-medium text-rose-800 dark:text-rose-300">
                 {loginError}
               </div>
             )}
@@ -1392,7 +1422,7 @@ export function AdminModal({
             <button
               type="submit"
               disabled={isAuthenticating || lockSecondsLeft > 0}
-              className="w-full py-2.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-sm font-semibold transition-colors cursor-pointer disabled:opacity-50"
+              className="w-full py-2.5 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-white text-sm font-semibold transition-colors cursor-pointer disabled:opacity-50"
             >
               {lockSecondsLeft > 0
                 ? `Locked (${lockSecondsLeft}s)`
@@ -1409,7 +1439,7 @@ export function AdminModal({
           <aside
             className={`${
               mobileNavOpen ? 'fixed inset-y-16 left-0 z-40 flex' : 'hidden lg:flex'
-            } w-64 flex-col border-r border-zinc-800/80 bg-[#0b0b0f] p-4 justify-between shrink-0 overflow-y-auto`}
+            } w-64 flex-col border-r border-zinc-300 dark:border-zinc-800/80 bg-white dark:bg-[#0b0b0f] p-4 justify-between shrink-0 overflow-y-auto`}
           >
             <nav className="space-y-1">
               {navItems.map((item) => (
@@ -1420,7 +1450,7 @@ export function AdminModal({
                   className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                     activeTab === item.key
                       ? 'bg-rose-600 text-white'
-                      : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+                      : 'text-zinc-700 hover:text-zinc-950 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-900'
                   }`}
                 >
                   <span className="flex items-center gap-2.5 truncate">
@@ -1430,7 +1460,7 @@ export function AdminModal({
                   {item.count !== undefined && (
                     <span
                       className={`font-mono tabular-nums text-[11px] ${
-                        activeTab === item.key ? 'text-rose-100' : 'text-zinc-500'
+                        activeTab === item.key ? 'text-rose-100' : 'text-zinc-600 dark:text-zinc-500'
                       }`}
                     >
                       {item.count}
@@ -1440,25 +1470,25 @@ export function AdminModal({
               ))}
             </nav>
 
-            <div className="pt-4 mt-4 border-t border-zinc-800/80 space-y-2.5">
-              <div className="p-3 rounded-xl bg-zinc-900/70 border border-zinc-800/80 space-y-2">
-                <p className="text-[11px] font-semibold text-zinc-200">Live Portal Switches</p>
+            <div className="pt-4 mt-4 border-t border-zinc-200 dark:border-zinc-800/80 space-y-2.5">
+              <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-900/70 border border-zinc-300 dark:border-zinc-800/80 space-y-2">
+                <p className="text-[11px] font-semibold text-zinc-900 dark:text-zinc-200">Live Portal Switches</p>
                 <div className="space-y-1.5 text-[11px]">
-                  <div className="flex items-center justify-between text-zinc-400">
+                  <div className="flex items-center justify-between text-zinc-700 dark:text-zinc-400">
                     <span>Hoodie Orders</span>
-                    <span className={hc.directOrderOpen ? 'text-emerald-400 font-medium' : 'text-zinc-500'}>
+                    <span className={hc.directOrderOpen ? 'text-emerald-700 dark:text-emerald-400 font-semibold' : 'text-zinc-600 dark:text-zinc-500'}>
                       {hc.directOrderOpen ? 'Open' : 'Paused'}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between text-zinc-400">
+                  <div className="flex items-center justify-between text-zinc-700 dark:text-zinc-400">
                     <span>Registration</span>
-                    <span className={sc.registrationOpen !== false ? 'text-emerald-400 font-medium' : 'text-zinc-500'}>
+                    <span className={sc.registrationOpen !== false ? 'text-emerald-700 dark:text-emerald-400 font-semibold' : 'text-zinc-600 dark:text-zinc-500'}>
                       {sc.registrationOpen !== false ? 'Open' : 'Paused'}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between text-zinc-400">
+                  <div className="flex items-center justify-between text-zinc-700 dark:text-zinc-400">
                     <span>Maintenance</span>
-                    <span className={sc.maintenanceMode ? 'text-amber-400 font-medium' : 'text-zinc-500'}>
+                    <span className={sc.maintenanceMode ? 'text-amber-700 dark:text-amber-400 font-semibold' : 'text-zinc-600 dark:text-zinc-500'}>
                       {sc.maintenanceMode ? 'Active' : 'Off'}
                     </span>
                   </div>
@@ -1488,17 +1518,19 @@ export function AdminModal({
                           nextHoodie.directOrderOpen ? 'Direct hoodie orders opened.' : 'Direct hoodie orders paused.'
                         );
                       }}
-                      className="p-4 rounded-xl bg-[#111116] border border-zinc-800 hover:border-zinc-700 text-left flex items-center justify-between gap-3 cursor-pointer"
+                      className="p-4 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 hover:border-zinc-500 dark:hover:border-zinc-700 shadow-xs dark:shadow-none text-left flex items-center justify-between gap-3 cursor-pointer"
                     >
                       <div>
-                        <p className="text-xs font-bold text-white">Hoodie Direct Orders</p>
-                        <p className="text-[11px] text-zinc-400 mt-0.5">
+                        <p className="text-xs font-bold text-zinc-950 dark:text-white">Hoodie Direct Orders</p>
+                        <p className="text-[11px] text-zinc-600 dark:text-zinc-400 mt-0.5">
                           {hc.directOrderOpen ? 'Accepting new orders' : 'Temporarily paused'}
                         </p>
                       </div>
                       <span
                         className={`px-2.5 py-1 rounded-md text-[11px] font-semibold ${
-                          hc.directOrderOpen ? 'bg-emerald-600/20 text-emerald-400' : 'bg-zinc-800 text-zinc-400'
+                          hc.directOrderOpen
+                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-600/20 dark:text-emerald-400'
+                            : 'bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400'
                         }`}
                       >
                         {hc.directOrderOpen ? 'ON' : 'OFF'}
@@ -1518,19 +1550,19 @@ export function AdminModal({
                           nextSite.registrationOpen ? 'Public registration opened.' : 'Public registration paused.'
                         );
                       }}
-                      className="p-4 rounded-xl bg-[#111116] border border-zinc-800 hover:border-zinc-700 text-left flex items-center justify-between gap-3 cursor-pointer"
+                      className="p-4 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 hover:border-zinc-500 dark:hover:border-zinc-700 shadow-xs dark:shadow-none text-left flex items-center justify-between gap-3 cursor-pointer"
                     >
                       <div>
-                        <p className="text-xs font-bold text-white">Member Registration</p>
-                        <p className="text-[11px] text-zinc-400 mt-0.5">
+                        <p className="text-xs font-bold text-zinc-950 dark:text-white">Member Registration</p>
+                        <p className="text-[11px] text-zinc-600 dark:text-zinc-400 mt-0.5">
                           {sc.registrationOpen !== false ? 'Visitors can register' : 'Self-registration paused'}
                         </p>
                       </div>
                       <span
                         className={`px-2.5 py-1 rounded-md text-[11px] font-semibold ${
                           sc.registrationOpen !== false
-                            ? 'bg-emerald-600/20 text-emerald-400'
-                            : 'bg-zinc-800 text-zinc-400'
+                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-600/20 dark:text-emerald-400'
+                            : 'bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400'
                         }`}
                       >
                         {sc.registrationOpen !== false ? 'ON' : 'OFF'}
@@ -1550,17 +1582,19 @@ export function AdminModal({
                           nextSite.maintenanceMode ? 'Maintenance mode enabled for visitors.' : 'Portal is live for visitors.'
                         );
                       }}
-                      className="p-4 rounded-xl bg-[#111116] border border-zinc-800 hover:border-zinc-700 text-left flex items-center justify-between gap-3 cursor-pointer"
+                      className="p-4 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 hover:border-zinc-500 dark:hover:border-zinc-700 shadow-xs dark:shadow-none text-left flex items-center justify-between gap-3 cursor-pointer"
                     >
                       <div>
-                        <p className="text-xs font-bold text-white">Maintenance Lock</p>
-                        <p className="text-[11px] text-zinc-400 mt-0.5">
+                        <p className="text-xs font-bold text-zinc-950 dark:text-white">Maintenance Lock</p>
+                        <p className="text-[11px] text-zinc-600 dark:text-zinc-400 mt-0.5">
                           {sc.maintenanceMode ? 'Public visitors paused' : 'Public site live'}
                         </p>
                       </div>
                       <span
                         className={`px-2.5 py-1 rounded-md text-[11px] font-semibold ${
-                          sc.maintenanceMode ? 'bg-amber-500/20 text-amber-300' : 'bg-zinc-800 text-zinc-400'
+                          sc.maintenanceMode
+                            ? 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300'
+                            : 'bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400'
                         }`}
                       >
                         {sc.maintenanceMode ? 'LOCKED' : 'LIVE'}
@@ -1569,12 +1603,12 @@ export function AdminModal({
                   </div>
 
                   {/* Top Action Queue Banner */}
-                  <div className="p-4 rounded-xl bg-[#111116] border border-zinc-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="p-4 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="flex items-start gap-3">
-                      <Megaphone className="w-4 h-4 text-rose-400 mt-0.5 shrink-0" />
+                      <Megaphone className="w-4 h-4 text-rose-600 dark:text-rose-400 mt-0.5 shrink-0" />
                       <div className="space-y-1">
-                        <p className="text-xs font-bold text-white">Smart Action Summary</p>
-                        <p className="text-xs text-zinc-400 leading-relaxed">
+                        <p className="text-xs font-bold text-zinc-950 dark:text-white">Smart Action Summary</p>
+                        <p className="text-xs text-zinc-700 dark:text-zinc-400 leading-relaxed">
                           {analytics.pendingOrders > 0
                             ? `${analytics.pendingOrders} pending hoodie order(s) awaiting confirmation · `
                             : 'All hoodie orders processed · '}
@@ -1590,7 +1624,7 @@ export function AdminModal({
                             setOrderStatusFilter('Pending');
                             selectTab('orders');
                           }}
-                          className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold cursor-pointer"
+                          className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-white text-xs font-semibold cursor-pointer"
                         >
                           Review Pending ({analytics.pendingOrders})
                         </button>
@@ -1598,7 +1632,7 @@ export function AdminModal({
                       <button
                         type="button"
                         onClick={() => selectTab('site')}
-                        className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium cursor-pointer"
+                        className="px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-zinc-900 dark:text-zinc-200 text-xs font-medium cursor-pointer"
                       >
                         Edit Website Sections
                       </button>
@@ -1606,9 +1640,9 @@ export function AdminModal({
                   </div>
 
                   {analytics.duplicateRolls.length > 0 && (
-                    <div className="p-4 rounded-xl bg-amber-950/30 border border-amber-500/30 flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2.5 text-xs text-amber-200">
-                        <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                    <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-500/30 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5 text-xs text-amber-900 dark:text-amber-200">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
                         <span>
                           Duplicate roll number(s) detected in Batchmates:{' '}
                           <span className="font-mono font-semibold">{analytics.duplicateRolls.join(', ')}</span>
@@ -1620,7 +1654,7 @@ export function AdminModal({
                           setBmSearch(analytics.duplicateRolls[0]);
                           selectTab('batchmates');
                         }}
-                        className="px-3 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-xs font-medium cursor-pointer shrink-0"
+                        className="px-3 py-1 rounded-lg bg-amber-200 hover:bg-amber-300 dark:bg-amber-500/20 dark:hover:bg-amber-500/30 text-amber-950 dark:text-amber-200 text-xs font-medium cursor-pointer shrink-0"
                       >
                         Inspect
                       </button>
@@ -1629,42 +1663,42 @@ export function AdminModal({
 
                   {/* 4 KPI Cards */}
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="p-5 rounded-xl bg-[#111116] border border-zinc-800">
-                      <p className="text-2xl font-bold font-mono tabular-nums text-white">{analytics.totalBatchmates}</p>
-                      <p className="text-xs text-zinc-400 mt-1">Registered Batchmates</p>
+                    <div className="p-5 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none">
+                      <p className="text-2xl font-bold font-mono tabular-nums text-zinc-950 dark:text-white">{analytics.totalBatchmates}</p>
+                      <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-1">Registered Batchmates</p>
                     </div>
-                    <div className="p-5 rounded-xl bg-[#111116] border border-zinc-800">
-                      <p className="text-2xl font-bold font-mono tabular-nums text-rose-400">{analytics.totalOrders}</p>
-                      <p className="text-xs text-zinc-400 mt-1">
+                    <div className="p-5 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none">
+                      <p className="text-2xl font-bold font-mono tabular-nums text-rose-700 dark:text-rose-400">{analytics.totalOrders}</p>
+                      <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-1">
                         Direct Orders ({analytics.totalHoodiesOrdered} hoodies)
                       </p>
                     </div>
-                    <div className="p-5 rounded-xl bg-[#111116] border border-zinc-800">
-                      <p className="text-2xl font-bold font-mono tabular-nums text-amber-400">
+                    <div className="p-5 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none">
+                      <p className="text-2xl font-bold font-mono tabular-nums text-amber-700 dark:text-amber-400">
                         {analytics.pendingOrders}
                       </p>
-                      <p className="text-xs text-zinc-400 mt-1">Pending Fulfillment</p>
+                      <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-1">Pending Fulfillment</p>
                     </div>
-                    <div className="p-5 rounded-xl bg-[#111116] border border-zinc-800">
-                      <p className="text-2xl font-bold font-mono tabular-nums text-emerald-400">
+                    <div className="p-5 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none">
+                      <p className="text-2xl font-bold font-mono tabular-nums text-emerald-700 dark:text-emerald-400">
                         {analytics.confirmedOrders + analytics.deliveredOrders}
                       </p>
-                      <p className="text-xs text-zinc-400 mt-1">Confirmed & Delivered</p>
+                      <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-1">Confirmed & Delivered</p>
                     </div>
                   </div>
 
                   <div className="grid lg:grid-cols-2 gap-6">
                     {/* RCS Hoodie Size Matrix */}
-                    <div className="p-5 rounded-xl bg-[#111116] border border-zinc-800 space-y-4">
+                    <div className="p-5 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none space-y-4">
                       <div className="flex items-center justify-between gap-2">
                         <div>
-                          <h3 className="text-sm font-bold text-white">Hoodie Size Breakdown (S–XXXL)</h3>
-                          <p className="text-[11px] text-zinc-400">Total pieces requested per size</p>
+                          <h3 className="text-sm font-bold text-zinc-950 dark:text-white">Hoodie Size Breakdown (S–XXXL)</h3>
+                          <p className="text-[11px] text-zinc-600 dark:text-zinc-400">Total pieces requested per size</p>
                         </div>
                         <button
                           type="button"
                           onClick={() => void handleCopySizeSummary()}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-200 cursor-pointer"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-xs font-medium text-zinc-900 dark:text-zinc-200 cursor-pointer"
                         >
                           <Copy className="w-3.5 h-3.5" /> Copy Summary
                         </button>
@@ -1677,13 +1711,13 @@ export function AdminModal({
                           return (
                             <div key={sz} className="space-y-1">
                               <div className="flex justify-between text-xs">
-                                <span className="font-mono font-semibold text-zinc-200">{sz}</span>
-                                <span className="font-mono tabular-nums text-zinc-400">
+                                <span className="font-mono font-semibold text-zinc-900 dark:text-zinc-200">{sz}</span>
+                                <span className="font-mono tabular-nums text-zinc-600 dark:text-zinc-400">
                                   {qty} pcs ({pct}%)
                                 </span>
                               </div>
-                              <div className="h-2 rounded-full bg-zinc-800 overflow-hidden">
-                                <div className="h-full bg-rose-500 rounded-full" style={{ width: `${pct}%` }} />
+                              <div className="h-2 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
+                                <div className="h-full bg-rose-600 dark:bg-rose-500 rounded-full" style={{ width: `${pct}%` }} />
                               </div>
                             </div>
                           );
@@ -1693,20 +1727,20 @@ export function AdminModal({
 
                     {/* Group Distribution + Quick Actions */}
                     <div className="space-y-6">
-                      <div className="p-5 rounded-xl bg-[#111116] border border-zinc-800 space-y-4">
-                        <h3 className="text-sm font-bold text-white">Batchmates by Group</h3>
+                      <div className="p-5 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none space-y-4">
+                        <h3 className="text-sm font-bold text-zinc-950 dark:text-white">Batchmates by Group</h3>
                         <div className="space-y-3">
                           {analytics.groupCounts.map(([grp, count]) => {
                             const pct = Math.round((count / Math.max(1, analytics.totalBatchmates)) * 100);
                             return (
                               <div key={grp} className="space-y-1">
                                 <div className="flex justify-between text-xs">
-                                  <span className="text-zinc-300">{grp}</span>
-                                  <span className="font-mono tabular-nums text-zinc-400">
+                                  <span className="text-zinc-800 dark:text-zinc-300">{grp}</span>
+                                  <span className="font-mono tabular-nums text-zinc-600 dark:text-zinc-400">
                                     {count} ({pct}%)
                                   </span>
                                 </div>
-                                <div className="h-2 rounded-full bg-zinc-800 overflow-hidden">
+                                <div className="h-2 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
                                   <div className="h-full bg-rose-600 rounded-full" style={{ width: `${pct}%` }} />
                                 </div>
                               </div>
@@ -1715,27 +1749,27 @@ export function AdminModal({
                         </div>
                       </div>
 
-                      <div className="p-5 rounded-xl bg-[#111116] border border-zinc-800 space-y-4">
-                        <h3 className="text-sm font-bold text-white">Quick Admin Actions</h3>
+                      <div className="p-5 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none space-y-4">
+                        <h3 className="text-sm font-bold text-zinc-950 dark:text-white">Quick Admin Actions</h3>
                         <div className="grid grid-cols-2 gap-2.5">
                           <button
                             type="button"
                             onClick={() => handleExportOrdersCsv(false)}
-                            className="inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-white cursor-pointer"
+                            className="inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-xs font-medium text-zinc-900 dark:text-white cursor-pointer"
                           >
-                            <FileSpreadsheet className="w-3.5 h-3.5 text-rose-400" /> Orders CSV
+                            <FileSpreadsheet className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" /> Orders CSV
                           </button>
                           <button
                             type="button"
                             onClick={handleExportBatchmatesCsv}
-                            className="inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-white cursor-pointer"
+                            className="inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-xs font-medium text-zinc-900 dark:text-white cursor-pointer"
                           >
-                            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" /> Batchmates CSV
+                            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" /> Batchmates CSV
                           </button>
                           <button
                             type="button"
                             onClick={handleExportJson}
-                            className="inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-white cursor-pointer"
+                            className="inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-xs font-medium text-zinc-900 dark:text-white cursor-pointer"
                           >
                             <Download className="w-3.5 h-3.5" /> Backup JSON
                           </button>
@@ -1745,7 +1779,7 @@ export function AdminModal({
                               selectTab('batchmates');
                               setShowAddBm(true);
                             }}
-                            className="inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-xs font-semibold text-white cursor-pointer"
+                            className="inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-xs font-semibold text-white cursor-pointer"
                           >
                             <Plus className="w-3.5 h-3.5" /> Add Batchmate
                           </button>
@@ -1761,11 +1795,11 @@ export function AdminModal({
                 <div className="space-y-6">
                   <form
                     onSubmit={handleAddNotice}
-                    className="p-5 rounded-xl bg-[#111116] border border-zinc-800 space-y-4"
+                    className="p-5 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none space-y-4"
                   >
                     <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                        <Megaphone className="w-4 h-4 text-rose-500" />
+                      <h3 className="text-sm font-bold text-zinc-950 dark:text-white flex items-center gap-2">
+                        <Megaphone className="w-4 h-4 text-rose-600 dark:text-rose-500" />
                         Publish New Batch Notice
                       </h3>
                     </div>
@@ -1777,13 +1811,13 @@ export function AdminModal({
                         value={noticeTitle}
                         onChange={(e) => setNoticeTitle(e.target.value)}
                         placeholder="Notice headline *"
-                        className="sm:col-span-2 px-3.5 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-rose-500"
+                        className="sm:col-span-2 px-3.5 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500 focus:outline-none focus:border-rose-500"
                       />
                       <select
                         value={noticeCategory}
                         onChange={(e) => setNoticeCategory(e.target.value as NoticeCategory)}
                         aria-label="Notice category"
-                        className="px-3.5 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white focus:outline-none focus:border-rose-500"
+                        className="px-3.5 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white focus:outline-none focus:border-rose-500"
                       >
                         <option value="General">General</option>
                         <option value="Urgent">Urgent</option>
@@ -1797,11 +1831,11 @@ export function AdminModal({
                       value={noticeMessage}
                       onChange={(e) => setNoticeMessage(e.target.value)}
                       placeholder="Write the official notice message for Orthohin '27 batchmates *"
-                      className="w-full px-3.5 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-rose-500 resize-none"
+                      className="w-full px-3.5 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500 focus:outline-none focus:border-rose-500 resize-none"
                     />
 
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <label className="inline-flex items-center gap-2 text-xs text-zinc-300 cursor-pointer select-none">
+                      <label className="inline-flex items-center gap-2 text-xs text-zinc-800 dark:text-zinc-300 cursor-pointer select-none">
                         <input
                           type="checkbox"
                           checked={noticePinned}
@@ -1812,7 +1846,7 @@ export function AdminModal({
                       </label>
                       <button
                         type="submit"
-                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold cursor-pointer"
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-white text-xs font-semibold cursor-pointer"
                       >
                         <Plus className="w-3.5 h-3.5" /> Publish Notice
                       </button>
@@ -1821,7 +1855,7 @@ export function AdminModal({
 
                   <div className="space-y-3">
                     {(state.notices || []).length === 0 ? (
-                      <div className="p-8 text-center rounded-xl bg-[#111116] border border-zinc-800 text-xs text-zinc-400">
+                      <div className="p-8 text-center rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-600 dark:text-zinc-400">
                         No batch notices published yet.
                       </div>
                     ) : (
@@ -1830,7 +1864,7 @@ export function AdminModal({
                         return (
                           <div
                             key={notice.id}
-                            className="p-4 rounded-xl bg-[#111116] border border-zinc-800 space-y-3"
+                            className="p-4 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none space-y-3"
                           >
                             {isEditing ? (
                               <div className="space-y-3">
@@ -1841,7 +1875,7 @@ export function AdminModal({
                                     onChange={(e) =>
                                       setNoticeDraft({ ...noticeDraft, title: e.target.value })
                                     }
-                                    className="sm:col-span-2 px-3 py-1.5 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                                    className="sm:col-span-2 px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
                                   />
                                   <select
                                     value={noticeDraft.category}
@@ -1851,7 +1885,7 @@ export function AdminModal({
                                         category: e.target.value as NoticeCategory,
                                       })
                                     }
-                                    className="px-3 py-1.5 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                                    className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
                                   >
                                     <option value="General">General</option>
                                     <option value="Urgent">Urgent</option>
@@ -1864,7 +1898,7 @@ export function AdminModal({
                                   onChange={(e) =>
                                     setNoticeDraft({ ...noticeDraft, message: e.target.value })
                                   }
-                                  className="w-full px-3 py-1.5 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white resize-none"
+                                  className="w-full px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white resize-none"
                                 />
                                 <div className="flex justify-end gap-2">
                                   <button
@@ -1873,14 +1907,14 @@ export function AdminModal({
                                       setEditingNoticeId(null);
                                       setNoticeDraft(null);
                                     }}
-                                    className="px-3 py-1.5 rounded-lg bg-zinc-800 text-zinc-300 text-xs cursor-pointer"
+                                    className="px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-zinc-900 dark:text-zinc-300 text-xs cursor-pointer"
                                   >
                                     Cancel
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() => void handleSaveEditedNotice()}
-                                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold cursor-pointer"
+                                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 dark:hover:bg-emerald-500 text-white text-xs font-semibold cursor-pointer"
                                   >
                                     <Save className="w-3.5 h-3.5" /> Save Changes
                                   </button>
@@ -1893,31 +1927,31 @@ export function AdminModal({
                                     <span
                                       className={`font-semibold ${
                                         notice.category === 'Urgent'
-                                          ? 'text-rose-400'
+                                          ? 'text-rose-700 dark:text-rose-400'
                                           : notice.category === 'Event'
-                                            ? 'text-amber-400'
-                                            : 'text-emerald-400'
+                                            ? 'text-amber-700 dark:text-amber-400'
+                                            : 'text-emerald-700 dark:text-emerald-400'
                                       }`}
                                     >
                                       {notice.category}
                                     </span>
-                                    <span className="text-zinc-600">·</span>
-                                    <span className="font-mono text-zinc-400">{notice.createdAt}</span>
+                                    <span className="text-zinc-400 dark:text-zinc-600">·</span>
+                                    <span className="font-mono text-zinc-600 dark:text-zinc-400">{notice.createdAt}</span>
                                     {notice.pinned && (
                                       <>
-                                        <span className="text-zinc-600">·</span>
-                                        <span className="text-rose-400 font-medium">Pinned</span>
+                                        <span className="text-zinc-400 dark:text-zinc-600">·</span>
+                                        <span className="text-rose-700 dark:text-rose-400 font-medium">Pinned</span>
                                       </>
                                     )}
                                     {!notice.active && (
                                       <>
-                                        <span className="text-zinc-600">·</span>
-                                        <span className="text-zinc-500">Hidden</span>
+                                        <span className="text-zinc-400 dark:text-zinc-600">·</span>
+                                        <span className="text-zinc-600 dark:text-zinc-500">Hidden</span>
                                       </>
                                     )}
                                   </div>
-                                  <p className="text-sm font-bold text-white">{notice.title}</p>
-                                  <p className="text-xs text-zinc-400 leading-relaxed">{notice.message}</p>
+                                  <p className="text-sm font-bold text-zinc-950 dark:text-white">{notice.title}</p>
+                                  <p className="text-xs text-zinc-700 dark:text-zinc-400 leading-relaxed">{notice.message}</p>
                                 </div>
 
                                 <div className="flex items-center gap-1.5 shrink-0">
@@ -1928,7 +1962,7 @@ export function AdminModal({
                                       setNoticeDraft({ ...notice });
                                     }}
                                     title="Edit notice"
-                                    className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 cursor-pointer"
+                                    className="p-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-zinc-800 dark:text-zinc-300 cursor-pointer"
                                   >
                                     <Edit3 className="w-3.5 h-3.5" />
                                   </button>
@@ -1938,8 +1972,8 @@ export function AdminModal({
                                     title={notice.pinned ? 'Unpin notice' : 'Pin notice'}
                                     className={`p-2 rounded-lg text-xs cursor-pointer ${
                                       notice.pinned
-                                        ? 'bg-rose-600/20 text-rose-400 border border-rose-500/40'
-                                        : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                                        ? 'bg-rose-100 text-rose-700 border border-rose-300 dark:bg-rose-600/20 dark:text-rose-400 dark:border-rose-500/40'
+                                        : 'bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-zinc-800 dark:text-zinc-300'
                                     }`}
                                   >
                                     <Pin className="w-3.5 h-3.5" />
@@ -1947,7 +1981,7 @@ export function AdminModal({
                                   <button
                                     type="button"
                                     onClick={() => void handleToggleNoticeActive(notice)}
-                                    className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-200 cursor-pointer"
+                                    className="px-2.5 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-xs text-zinc-900 dark:text-zinc-200 cursor-pointer"
                                   >
                                     {notice.active ? 'Hide' : 'Show'}
                                   </button>
@@ -1957,14 +1991,14 @@ export function AdminModal({
                                       <button
                                         type="button"
                                         onClick={() => handleDeleteNotice(notice.id)}
-                                        className="px-2.5 py-1.5 rounded-lg bg-rose-600 text-white text-xs font-medium cursor-pointer"
+                                        className="px-2.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-medium cursor-pointer"
                                       >
                                         Delete
                                       </button>
                                       <button
                                         type="button"
                                         onClick={() => setConfirmDeleteNoticeId(null)}
-                                        className="px-2 py-1.5 rounded-lg bg-zinc-800 text-zinc-300 text-xs cursor-pointer"
+                                        className="px-2 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-transparent text-zinc-900 dark:text-zinc-300 text-xs cursor-pointer"
                                       >
                                         Cancel
                                       </button>
@@ -1974,7 +2008,7 @@ export function AdminModal({
                                       type="button"
                                       onClick={() => setConfirmDeleteNoticeId(notice.id)}
                                       title="Delete notice"
-                                      className="p-2 rounded-lg bg-zinc-800 hover:bg-rose-600 text-zinc-300 hover:text-white cursor-pointer"
+                                      className="p-2 rounded-lg bg-zinc-100 hover:bg-rose-600 dark:bg-zinc-800 border border-zinc-300 dark:border-transparent text-zinc-800 dark:text-zinc-300 hover:text-white hover:border-rose-600 cursor-pointer"
                                     >
                                       <Trash2 className="w-3.5 h-3.5" />
                                     </button>
@@ -1995,7 +2029,7 @@ export function AdminModal({
                 <div className="space-y-4">
                   <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
                     <div className="flex flex-wrap items-center gap-2">
-                      <div className="flex flex-wrap gap-1 p-1 rounded-lg bg-zinc-900 border border-zinc-800 w-fit">
+                      <div className="flex flex-wrap gap-1 p-1 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 w-fit">
                         {(['All', 'Pending', 'Confirmed', 'Delivered'] as const).map((status) => (
                           <button
                             key={status}
@@ -2003,8 +2037,8 @@ export function AdminModal({
                             onClick={() => setOrderStatusFilter(status)}
                             className={`px-3 py-1 rounded-md text-xs font-medium cursor-pointer ${
                               orderStatusFilter === status
-                                ? 'bg-zinc-800 text-white'
-                                : 'text-zinc-400 hover:text-white'
+                                ? 'bg-zinc-900 text-white dark:bg-zinc-800'
+                                : 'text-zinc-700 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'
                             }`}
                           >
                             {status}
@@ -2016,7 +2050,7 @@ export function AdminModal({
                         value={orderSizeFilter}
                         onChange={(e) => setOrderSizeFilter(e.target.value as 'All' | HoodieOrder['size'])}
                         aria-label="Filter by hoodie size"
-                        className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-white focus:outline-none focus:border-rose-500"
+                        className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white focus:outline-none focus:border-rose-500"
                       >
                         <option value="All">All Sizes</option>
                         {HOODIE_SIZES.map((sz) => (
@@ -2035,13 +2069,13 @@ export function AdminModal({
                           value={orderSearch}
                           onChange={(e) => setOrderSearch(e.target.value)}
                           placeholder="Search name, roll, contact..."
-                          className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-white focus:outline-none focus:border-rose-500"
+                          className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500 focus:outline-none focus:border-rose-500"
                         />
                       </div>
                       <button
                         type="button"
                         onClick={() => handleExportOrdersCsv(selectedOrderIds.length > 0)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-white cursor-pointer shrink-0"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-zinc-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-xs font-medium text-zinc-900 dark:text-white cursor-pointer shrink-0"
                       >
                         <Download className="w-3.5 h-3.5" />
                         {selectedOrderIds.length > 0 ? `CSV (${selectedOrderIds.length})` : 'CSV'}
@@ -2049,7 +2083,7 @@ export function AdminModal({
                       <button
                         type="button"
                         onClick={() => setShowAddOrder((v) => !v)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-xs font-semibold text-white cursor-pointer shrink-0"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-xs font-semibold text-white cursor-pointer shrink-0"
                       >
                         <Plus className="w-3.5 h-3.5" /> Add Manual Order
                       </button>
@@ -2059,9 +2093,9 @@ export function AdminModal({
                   {showAddOrder && (
                     <form
                       onSubmit={handleAddManualOrder}
-                      className="p-4 rounded-xl bg-[#111116] border border-zinc-800 space-y-3"
+                      className="p-4 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none space-y-3"
                     >
-                      <p className="text-xs font-bold text-white">Add Offline / Direct Order</p>
+                      <p className="text-xs font-bold text-zinc-950 dark:text-white">Add Offline / Direct Order</p>
                       <div className="grid sm:grid-cols-3 gap-2.5">
                         <input
                           type="text"
@@ -2069,7 +2103,7 @@ export function AdminModal({
                           value={newOrderName}
                           onChange={(e) => setNewOrderName(e.target.value)}
                           placeholder="Student Name *"
-                          className="px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                          className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500"
                         />
                         <input
                           type="text"
@@ -2077,7 +2111,7 @@ export function AdminModal({
                           value={newOrderRoll}
                           onChange={(e) => setNewOrderRoll(e.target.value)}
                           placeholder="Roll / Batch ID *"
-                          className="px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 font-mono text-xs text-white"
+                          className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 font-mono text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500"
                         />
                         <input
                           type="text"
@@ -2085,14 +2119,14 @@ export function AdminModal({
                           value={newOrderContact}
                           onChange={(e) => setNewOrderContact(e.target.value)}
                           placeholder="Phone or @instagram *"
-                          className="px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                          className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500"
                         />
                       </div>
                       <div className="grid sm:grid-cols-3 gap-2.5">
                         <select
                           value={newOrderSize}
                           onChange={(e) => setNewOrderSize(e.target.value as HoodieOrder['size'])}
-                          className="px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 font-mono text-xs text-white"
+                          className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 font-mono text-xs text-zinc-950 dark:text-white"
                         >
                           {HOODIE_SIZES.map((sz) => (
                             <option key={sz} value={sz}>
@@ -2103,7 +2137,7 @@ export function AdminModal({
                         <select
                           value={newOrderQty}
                           onChange={(e) => setNewOrderQty(Number(e.target.value))}
-                          className="px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 font-mono text-xs text-white"
+                          className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 font-mono text-xs text-zinc-950 dark:text-white"
                         >
                           {[1, 2, 3, 4, 5].map((q) => (
                             <option key={q} value={q}>
@@ -2116,20 +2150,20 @@ export function AdminModal({
                           value={newOrderNotes}
                           onChange={(e) => setNewOrderNotes(e.target.value)}
                           placeholder="Section / note (optional)"
-                          className="px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                          className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500"
                         />
                       </div>
                       <div className="flex justify-end gap-2">
                         <button
                           type="button"
                           onClick={() => setShowAddOrder(false)}
-                          className="px-3 py-1.5 rounded-lg bg-zinc-800 text-xs text-zinc-300 cursor-pointer"
+                          className="px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-transparent text-xs text-zinc-900 dark:text-zinc-300 cursor-pointer"
                         >
                           Cancel
                         </button>
                         <button
                           type="submit"
-                          className="px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold cursor-pointer"
+                          className="px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-white text-xs font-semibold cursor-pointer"
                         >
                           Create Confirmed Order
                         </button>
@@ -2139,7 +2173,7 @@ export function AdminModal({
 
                   {/* Bulk Toolbar */}
                   {filteredOrders.length > 0 && (
-                    <div className="p-3 rounded-xl bg-zinc-900/70 border border-zinc-800 flex flex-wrap items-center justify-between gap-2">
+                    <div className="p-3 rounded-xl bg-white dark:bg-zinc-900/70 border border-zinc-300 dark:border-zinc-800 flex flex-wrap items-center justify-between gap-2">
                       <button
                         type="button"
                         onClick={() => {
@@ -2147,9 +2181,9 @@ export function AdminModal({
                           const allSelected = allVisibleIds.every((id) => selectedOrderIds.includes(id));
                           setSelectedOrderIds(allSelected ? [] : allVisibleIds);
                         }}
-                        className="inline-flex items-center gap-1.5 text-xs text-zinc-300 hover:text-white cursor-pointer"
+                        className="inline-flex items-center gap-1.5 text-xs text-zinc-800 hover:text-zinc-950 dark:text-zinc-300 dark:hover:text-white cursor-pointer"
                       >
-                        <CheckSquare className="w-3.5 h-3.5 text-rose-400" />
+                        <CheckSquare className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
                         <span>
                           {selectedOrderIds.length > 0
                             ? `${selectedOrderIds.length} selected`
@@ -2163,7 +2197,7 @@ export function AdminModal({
                             type="button"
                             disabled={isSyncing}
                             onClick={() => void handleBulkOrderStatus('Confirmed')}
-                            className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium cursor-pointer"
+                            className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 dark:hover:bg-emerald-500 text-white text-xs font-medium cursor-pointer"
                           >
                             Confirm Selected
                           </button>
@@ -2171,7 +2205,7 @@ export function AdminModal({
                             type="button"
                             disabled={isSyncing}
                             onClick={() => void handleBulkOrderStatus('Delivered')}
-                            className="px-2.5 py-1 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-medium cursor-pointer"
+                            className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-900 dark:bg-zinc-700 dark:hover:bg-zinc-600 text-white text-xs font-medium cursor-pointer"
                           >
                             Mark Delivered
                           </button>
@@ -2179,14 +2213,14 @@ export function AdminModal({
                             type="button"
                             disabled={isSyncing}
                             onClick={() => void handleBulkDeleteOrders()}
-                            className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-medium cursor-pointer"
+                            className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-white text-xs font-medium cursor-pointer"
                           >
                             Delete Selected
                           </button>
                           <button
                             type="button"
                             onClick={() => setSelectedOrderIds([])}
-                            className="px-2.5 py-1 rounded-lg bg-zinc-800 text-zinc-300 text-xs cursor-pointer"
+                            className="px-2.5 py-1 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-transparent text-zinc-900 dark:text-zinc-300 text-xs cursor-pointer"
                           >
                             Clear
                           </button>
@@ -2196,7 +2230,7 @@ export function AdminModal({
                   )}
 
                   {filteredOrders.length === 0 ? (
-                    <div className="p-10 text-center rounded-xl bg-[#111116] border border-zinc-800 text-sm text-zinc-400">
+                    <div className="p-10 text-center rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 text-sm text-zinc-600 dark:text-zinc-400">
                       No direct hoodie orders match this filter yet.
                     </div>
                   ) : (
@@ -2207,8 +2241,8 @@ export function AdminModal({
                         return (
                           <div
                             key={order.id}
-                            className={`p-4 rounded-xl bg-[#111116] border transition-colors space-y-3 ${
-                              isSelected ? 'border-rose-500/50' : 'border-zinc-800'
+                            className={`p-4 rounded-xl bg-white dark:bg-[#111116] border shadow-xs dark:shadow-none transition-colors space-y-3 ${
+                              isSelected ? 'border-rose-500/70 dark:border-rose-500/50' : 'border-zinc-300 dark:border-zinc-800'
                             }`}
                           >
                             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -2221,16 +2255,16 @@ export function AdminModal({
                                   className="mt-1 accent-rose-600 cursor-pointer"
                                 />
                                 <div className="space-y-1">
-                                  <div className="flex flex-wrap items-center gap-2 text-sm font-bold text-white">
-                                    <span className="font-mono text-rose-400">{order.id}</span>
+                                  <div className="flex flex-wrap items-center gap-2 text-sm font-bold text-zinc-950 dark:text-white">
+                                    <span className="font-mono text-rose-700 dark:text-rose-400">{order.id}</span>
                                     <span>·</span>
                                     <span>{order.customerName}</span>
-                                    <span className="text-xs font-mono text-zinc-400">
+                                    <span className="text-xs font-mono text-zinc-600 dark:text-zinc-400">
                                       (Roll {order.roll} · Size {order.size} × {order.quantity})
                                     </span>
                                   </div>
-                                  <p className="text-xs text-zinc-400">
-                                    Contact: <span className="text-zinc-200">{order.contact}</span>
+                                  <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                                    Contact: <span className="text-zinc-900 dark:text-zinc-200">{order.contact}</span>
                                     {order.notes ? ` · Note: ${order.notes}` : ''}
                                   </p>
                                 </div>
@@ -2241,7 +2275,7 @@ export function AdminModal({
                                   type="button"
                                   onClick={() => void downloadOrderInvoicePng(order, hc)}
                                   title="Download official order invoice"
-                                  className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-200 inline-flex items-center gap-1 cursor-pointer"
+                                  className="px-2.5 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-xs text-zinc-900 dark:text-zinc-200 inline-flex items-center gap-1 cursor-pointer"
                                 >
                                   <Download className="w-3 h-3" />
                                   Invoice
@@ -2257,7 +2291,7 @@ export function AdminModal({
                                       setOrderDraft({ ...order });
                                     }
                                   }}
-                                  className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-200 cursor-pointer"
+                                  className="px-2.5 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-xs text-zinc-900 dark:text-zinc-200 cursor-pointer"
                                 >
                                   {isEditing ? 'Close' : 'Edit'}
                                 </button>
@@ -2268,7 +2302,7 @@ export function AdminModal({
                                     void handleOrderStatus(order.id, e.target.value as OrderStatus)
                                   }
                                   aria-label={`Order status for ${order.id}`}
-                                  className="px-2.5 py-1.5 rounded-lg bg-zinc-950 border border-zinc-800 text-xs font-medium text-white focus:outline-none focus:border-rose-500"
+                                  className="px-2.5 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs font-medium text-zinc-950 dark:text-white focus:outline-none focus:border-rose-500"
                                 >
                                   <option value="Pending">Pending</option>
                                   <option value="Confirmed">Confirmed</option>
@@ -2280,14 +2314,14 @@ export function AdminModal({
                                     <button
                                       type="button"
                                       onClick={() => handleDeleteOrder(order.id)}
-                                      className="px-2.5 py-1.5 rounded-lg bg-rose-600 text-white text-xs font-medium cursor-pointer"
+                                      className="px-2.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-medium cursor-pointer"
                                     >
                                       Delete
                                     </button>
                                     <button
                                       type="button"
                                       onClick={() => setConfirmDeleteOrderId(null)}
-                                      className="px-2 py-1.5 rounded-lg bg-zinc-800 text-zinc-300 text-xs cursor-pointer"
+                                      className="px-2 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-transparent text-zinc-900 dark:text-zinc-300 text-xs cursor-pointer"
                                     >
                                       Cancel
                                     </button>
@@ -2297,7 +2331,7 @@ export function AdminModal({
                                     type="button"
                                     onClick={() => setConfirmDeleteOrderId(order.id)}
                                     title="Delete order"
-                                    className="p-2 rounded-lg bg-zinc-800 hover:bg-rose-600 text-zinc-300 hover:text-white transition-colors cursor-pointer"
+                                    className="p-2 rounded-lg bg-zinc-100 hover:bg-rose-600 dark:bg-zinc-800 border border-zinc-300 dark:border-transparent text-zinc-800 dark:text-zinc-300 hover:text-white hover:border-rose-600 transition-colors cursor-pointer"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>
@@ -2306,7 +2340,7 @@ export function AdminModal({
                             </div>
 
                             {isEditing && (
-                              <div className="grid sm:grid-cols-3 gap-2.5 pt-3 border-t border-zinc-800">
+                              <div className="grid sm:grid-cols-3 gap-2.5 pt-3 border-t border-zinc-200 dark:border-zinc-800">
                                 <input
                                   type="text"
                                   value={orderDraft.customerName}
@@ -2314,14 +2348,14 @@ export function AdminModal({
                                     setOrderDraft({ ...orderDraft, customerName: e.target.value })
                                   }
                                   placeholder="Customer Name"
-                                  className="px-3 py-1.5 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                                  className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
                                 />
                                 <input
                                   type="text"
                                   value={orderDraft.roll}
                                   onChange={(e) => setOrderDraft({ ...orderDraft, roll: e.target.value })}
                                   placeholder="Roll"
-                                  className="px-3 py-1.5 rounded-lg bg-zinc-950 border border-zinc-800 font-mono text-xs text-white"
+                                  className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 font-mono text-xs text-zinc-950 dark:text-white"
                                 />
                                 <input
                                   type="text"
@@ -2330,7 +2364,7 @@ export function AdminModal({
                                     setOrderDraft({ ...orderDraft, contact: e.target.value })
                                   }
                                   placeholder="Contact"
-                                  className="px-3 py-1.5 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                                  className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
                                 />
                                 <select
                                   value={orderDraft.size}
@@ -2340,7 +2374,7 @@ export function AdminModal({
                                       size: e.target.value as HoodieOrder['size'],
                                     })
                                   }
-                                  className="px-3 py-1.5 rounded-lg bg-zinc-950 border border-zinc-800 font-mono text-xs text-white"
+                                  className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 font-mono text-xs text-zinc-950 dark:text-white"
                                 >
                                   {HOODIE_SIZES.map((sz) => (
                                     <option key={sz} value={sz}>
@@ -2353,7 +2387,7 @@ export function AdminModal({
                                   onChange={(e) =>
                                     setOrderDraft({ ...orderDraft, quantity: Number(e.target.value) })
                                   }
-                                  className="px-3 py-1.5 rounded-lg bg-zinc-950 border border-zinc-800 font-mono text-xs text-white"
+                                  className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 font-mono text-xs text-zinc-950 dark:text-white"
                                 >
                                   {[1, 2, 3, 4, 5].map((q) => (
                                     <option key={q} value={q}>
@@ -2366,7 +2400,7 @@ export function AdminModal({
                                   value={orderDraft.notes || ''}
                                   onChange={(e) => setOrderDraft({ ...orderDraft, notes: e.target.value })}
                                   placeholder="Internal / Delivery Note"
-                                  className="px-3 py-1.5 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                                  className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
                                 />
                                 <div className="sm:col-span-3 flex justify-end gap-2">
                                   <button
@@ -2375,14 +2409,14 @@ export function AdminModal({
                                       setEditingOrderId(null);
                                       setOrderDraft(null);
                                     }}
-                                    className="px-3 py-1.5 rounded-lg bg-zinc-800 text-zinc-300 text-xs cursor-pointer"
+                                    className="px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-transparent text-zinc-900 dark:text-zinc-300 text-xs cursor-pointer"
                                   >
                                     Cancel
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() => void handleSaveEditedOrder()}
-                                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold cursor-pointer"
+                                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 dark:hover:bg-emerald-500 text-white text-xs font-semibold cursor-pointer"
                                   >
                                     <Save className="w-3.5 h-3.5" /> Save Order Changes
                                   </button>
@@ -2409,14 +2443,14 @@ export function AdminModal({
                           value={bmSearch}
                           onChange={(e) => setBmSearch(e.target.value)}
                           placeholder="Search name, roll, or group..."
-                          className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-white focus:outline-none focus:border-rose-500"
+                          className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500 focus:outline-none focus:border-rose-500"
                         />
                       </div>
                       <select
                         value={bmGroupFilter}
                         onChange={(e) => setBmGroupFilter(e.target.value)}
                         aria-label="Filter by group"
-                        className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-white focus:outline-none focus:border-rose-500"
+                        className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white focus:outline-none focus:border-rose-500"
                       >
                         <option value="All">All Groups</option>
                         {analytics.groupNames.map((grp) => (
@@ -2431,14 +2465,14 @@ export function AdminModal({
                       <button
                         type="button"
                         onClick={handleExportBatchmatesCsv}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-white cursor-pointer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-zinc-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-xs font-medium text-zinc-900 dark:text-white cursor-pointer"
                       >
                         <Download className="w-3.5 h-3.5" /> CSV
                       </button>
                       <button
                         type="button"
                         onClick={() => setShowAddBm((v) => !v)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-xs font-semibold text-white cursor-pointer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-xs font-semibold text-white cursor-pointer"
                       >
                         <Plus className="w-3.5 h-3.5" /> Add Batchmate
                       </button>
@@ -2448,17 +2482,17 @@ export function AdminModal({
                   {showAddBm && (
                     <form
                       onSubmit={handleAddBatchmateInsideAdmin}
-                      className="p-4 rounded-xl bg-[#111116] border border-zinc-800 space-y-3"
+                      className="p-4 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none space-y-3"
                     >
                       <div className="flex items-center justify-between">
-                        <p className="text-xs font-bold text-white">Add New Batchmate Directly</p>
+                        <p className="text-xs font-bold text-zinc-950 dark:text-white">Add New Batchmate Directly</p>
                         <button
                           type="button"
                           onClick={() => {
                             onClose();
                             onOpenRegister();
                           }}
-                          className="text-[11px] text-rose-400 hover:text-rose-300 cursor-pointer"
+                          className="text-[11px] text-rose-700 hover:text-rose-800 dark:text-rose-400 dark:hover:text-rose-300 font-medium cursor-pointer"
                         >
                           Or open public form
                         </button>
@@ -2470,7 +2504,7 @@ export function AdminModal({
                           value={newBmName}
                           onChange={(e) => setNewBmName(e.target.value)}
                           placeholder="Full Name *"
-                          className="px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                          className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500"
                         />
                         <input
                           type="text"
@@ -2478,21 +2512,21 @@ export function AdminModal({
                           value={newBmRoll}
                           onChange={(e) => setNewBmRoll(e.target.value)}
                           placeholder="Roll Number *"
-                          className="px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 font-mono text-xs text-white"
+                          className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 font-mono text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500"
                         />
                         <input
                           type="text"
                           value={newBmGroup}
                           onChange={(e) => setNewBmGroup(e.target.value)}
                           placeholder="Group (e.g. Science)"
-                          className="px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                          className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500"
                         />
                         <input
                           type="text"
                           value={newBmSocial}
                           onChange={(e) => setNewBmSocial(e.target.value)}
                           placeholder="@instagram (optional)"
-                          className="px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                          className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500"
                         />
                       </div>
                       <div className="flex flex-col sm:flex-row gap-2.5 items-center">
@@ -2501,14 +2535,14 @@ export function AdminModal({
                           value={newBmQuote}
                           onChange={(e) => setNewBmQuote(e.target.value)}
                           placeholder="Batch note or quote (optional)"
-                          className="flex-1 w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                          className="flex-1 w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500"
                         />
                         <button
                           type="button"
                           onClick={() => newBmPhotoInputRef.current?.click()}
-                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-200 cursor-pointer shrink-0"
+                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-xs text-zinc-900 dark:text-zinc-200 cursor-pointer shrink-0"
                         >
-                          <Camera className="w-3.5 h-3.5 text-rose-400" />
+                          <Camera className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
                           {newBmPhoto ? 'Photo Ready' : 'Upload Portrait'}
                         </button>
                       </div>
@@ -2516,13 +2550,13 @@ export function AdminModal({
                         <button
                           type="button"
                           onClick={() => setShowAddBm(false)}
-                          className="px-3 py-1.5 rounded-lg bg-zinc-800 text-xs text-zinc-300 cursor-pointer"
+                          className="px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-transparent text-xs text-zinc-900 dark:text-zinc-300 cursor-pointer"
                         >
                           Cancel
                         </button>
                         <button
                           type="submit"
-                          className="px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold cursor-pointer"
+                          className="px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-white text-xs font-semibold cursor-pointer"
                         >
                           Save Member
                         </button>
@@ -2536,7 +2570,7 @@ export function AdminModal({
                       return (
                         <div
                           key={bm.id}
-                          className="p-3.5 rounded-xl bg-[#111116] border border-zinc-800 space-y-3"
+                          className="p-3.5 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none space-y-3"
                         >
                           <div className="flex items-center gap-3">
                             <button
@@ -2546,18 +2580,18 @@ export function AdminModal({
                                 bmPhotoInputRef.current?.click();
                               }}
                               title="Click to upload or replace portrait"
-                              className="w-11 h-11 rounded-full overflow-hidden bg-zinc-950 border border-zinc-700 hover:border-rose-500 shrink-0 flex items-center justify-center cursor-pointer"
+                              className="w-11 h-11 rounded-full overflow-hidden bg-zinc-100 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 hover:border-rose-500 shrink-0 flex items-center justify-center cursor-pointer"
                             >
                               {bm.photo ? (
                                 <img src={bm.photo} alt={bm.name} className="w-full h-full object-cover object-top" />
                               ) : (
-                                <span className="text-xs font-bold text-zinc-400">{getInitials(bm.name)}</span>
+                                <span className="text-xs font-bold text-zinc-700 dark:text-zinc-400">{getInitials(bm.name)}</span>
                               )}
                             </button>
                             <div className="min-w-0 flex-1">
-                              <p className="text-sm font-semibold text-white truncate">{bm.name}</p>
-                              <p className="text-xs text-zinc-400">
-                                <span className={`font-mono tabular-nums ${isDupRoll ? 'text-amber-400' : ''}`}>
+                              <p className="text-sm font-semibold text-zinc-950 dark:text-white truncate">{bm.name}</p>
+                              <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                                <span className={`font-mono tabular-nums ${isDupRoll ? 'text-amber-700 dark:text-amber-400 font-semibold' : ''}`}>
                                   Roll {bm.roll || 'N/A'}
                                 </span>{' '}
                                 · {bm.group}
@@ -2573,7 +2607,7 @@ export function AdminModal({
                                   bmPhotoInputRef.current?.click();
                                 }}
                                 title="Upload / change portrait"
-                                className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 cursor-pointer"
+                                className="p-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-zinc-800 dark:text-zinc-300 cursor-pointer"
                               >
                                 <Camera className="w-3.5 h-3.5" />
                               </button>
@@ -2588,8 +2622,8 @@ export function AdminModal({
                                 }}
                                 className={`px-2.5 py-1.5 rounded-lg text-xs cursor-pointer ${
                                   editingBmId === bm.id
-                                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white font-semibold'
-                                    : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200'
+                                    ? 'bg-emerald-600 hover:bg-emerald-700 dark:hover:bg-emerald-500 text-white font-semibold'
+                                    : 'bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-zinc-900 dark:text-zinc-200'
                                 }`}
                               >
                                 {editingBmId === bm.id ? 'Save' : 'Edit'}
@@ -2600,14 +2634,14 @@ export function AdminModal({
                                   <button
                                     type="button"
                                     onClick={() => handleDeleteBatchmate(bm.id)}
-                                    className="px-2.5 py-1.5 rounded-lg bg-rose-600 text-white text-xs font-medium cursor-pointer"
+                                    className="px-2.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-medium cursor-pointer"
                                   >
                                     Remove
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() => setConfirmDeleteBmId(null)}
-                                    className="px-2 py-1.5 rounded-lg bg-zinc-800 text-zinc-300 text-xs cursor-pointer"
+                                    className="px-2 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-transparent text-zinc-900 dark:text-zinc-300 text-xs cursor-pointer"
                                   >
                                     Cancel
                                   </button>
@@ -2617,7 +2651,7 @@ export function AdminModal({
                                   type="button"
                                   onClick={() => setConfirmDeleteBmId(bm.id)}
                                   title="Remove batchmate"
-                                  className="p-2 rounded-lg bg-zinc-800 hover:bg-rose-600 text-zinc-300 hover:text-white transition-colors cursor-pointer"
+                                  className="p-2 rounded-lg bg-zinc-100 hover:bg-rose-600 dark:bg-zinc-800 border border-zinc-300 dark:border-transparent text-zinc-800 dark:text-zinc-300 hover:text-white hover:border-rose-600 transition-colors cursor-pointer"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
@@ -2626,41 +2660,41 @@ export function AdminModal({
                           </div>
 
                           {editingBmId === bm.id && (
-                            <div className="grid sm:grid-cols-2 gap-2.5 pt-2 border-t border-zinc-800">
+                            <div className="grid sm:grid-cols-2 gap-2.5 pt-2 border-t border-zinc-200 dark:border-zinc-800">
                               <input
                                 type="text"
                                 value={bm.name}
                                 onChange={(e) => handleUpdateBatchmateField(bm.id, 'name', e.target.value)}
                                 placeholder="Name"
-                                className="px-3 py-1.5 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                                className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
                               />
                               <input
                                 type="text"
                                 value={bm.roll}
                                 onChange={(e) => handleUpdateBatchmateField(bm.id, 'roll', e.target.value)}
                                 placeholder="Roll"
-                                className="px-3 py-1.5 rounded-lg bg-zinc-950 border border-zinc-800 font-mono text-xs text-white"
+                                className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 font-mono text-xs text-zinc-950 dark:text-white"
                               />
                               <input
                                 type="text"
                                 value={bm.group}
                                 onChange={(e) => handleUpdateBatchmateField(bm.id, 'group', e.target.value)}
                                 placeholder="Group"
-                                className="px-3 py-1.5 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                                className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
                               />
                               <input
                                 type="text"
                                 value={bm.social || ''}
                                 onChange={(e) => handleUpdateBatchmateField(bm.id, 'social', e.target.value)}
                                 placeholder="Social handle"
-                                className="px-3 py-1.5 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                                className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
                               />
                               <input
                                 type="text"
                                 value={bm.quote || ''}
                                 onChange={(e) => handleUpdateBatchmateField(bm.id, 'quote', e.target.value)}
                                 placeholder="Bio / Quote"
-                                className="sm:col-span-2 px-3 py-1.5 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                                className="sm:col-span-2 px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
                               />
                             </div>
                           )}
@@ -2675,22 +2709,22 @@ export function AdminModal({
               {activeTab === 'gallery' && (
                 <div className="space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-xs text-zinc-400">
-                      <span className="font-mono text-white">{state.gallery.length}</span> gallery items · reorder,
+                    <p className="text-xs text-zinc-700 dark:text-zinc-400">
+                      <span className="font-mono font-semibold text-zinc-950 dark:text-white">{state.gallery.length}</span> gallery items · reorder,
                       add photos, or link videos
                     </p>
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
                         onClick={() => setShowAddVideo((v) => !v)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-medium cursor-pointer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-zinc-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-zinc-900 dark:text-white text-xs font-medium cursor-pointer"
                       >
-                        <Video className="w-3.5 h-3.5 text-rose-400" /> Add Video Memory
+                        <Video className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" /> Add Video Memory
                       </button>
                       <button
                         type="button"
                         onClick={() => addPhotosInputRef.current?.click()}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold cursor-pointer"
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-white text-xs font-semibold cursor-pointer"
                       >
                         <Plus className="w-3.5 h-3.5" /> Upload Photos
                       </button>
@@ -2700,9 +2734,9 @@ export function AdminModal({
                   {showAddVideo && (
                     <form
                       onSubmit={handleAddVideoMemory}
-                      className="p-4 rounded-xl bg-[#111116] border border-zinc-800 space-y-3"
+                      className="p-4 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none space-y-3"
                     >
-                      <p className="text-xs font-bold text-white">New Facebook / External Video Memory</p>
+                      <p className="text-xs font-bold text-zinc-950 dark:text-white">New Facebook / External Video Memory</p>
                       <div className="grid sm:grid-cols-2 gap-2.5">
                         <input
                           type="text"
@@ -2710,14 +2744,14 @@ export function AdminModal({
                           value={videoTitle}
                           onChange={(e) => setVideoTitle(e.target.value)}
                           placeholder="Video title *"
-                          className="px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                          className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500"
                         />
                         <input
                           type="text"
                           value={videoDate}
                           onChange={(e) => setVideoDate(e.target.value)}
                           placeholder="Date (e.g. November 2026)"
-                          className="px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                          className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500"
                         />
                       </div>
                       <input
@@ -2726,26 +2760,26 @@ export function AdminModal({
                         value={videoUrl}
                         onChange={(e) => setVideoUrl(e.target.value)}
                         placeholder="https://www.facebook.com/share/v/..."
-                        className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                        className="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500"
                       />
                       <input
                         type="text"
                         value={videoCaption}
                         onChange={(e) => setVideoCaption(e.target.value)}
                         placeholder="Caption"
-                        className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                        className="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500"
                       />
                       <div className="flex justify-end gap-2">
                         <button
                           type="button"
                           onClick={() => setShowAddVideo(false)}
-                          className="px-3 py-1.5 rounded-lg bg-zinc-800 text-xs text-zinc-300 cursor-pointer"
+                          className="px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-transparent text-xs text-zinc-900 dark:text-zinc-300 cursor-pointer"
                         >
                           Cancel
                         </button>
                         <button
                           type="submit"
-                          className="px-4 py-1.5 rounded-lg bg-rose-600 text-white text-xs font-semibold cursor-pointer"
+                          className="px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold cursor-pointer"
                         >
                           Add Video
                         </button>
@@ -2757,18 +2791,18 @@ export function AdminModal({
                     {state.gallery.map((item, idx) => (
                       <div
                         key={item.id}
-                        className="p-3 rounded-xl bg-[#111116] border border-zinc-800 flex flex-col sm:flex-row gap-3 items-start sm:items-center"
+                        className="p-3 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none flex flex-col sm:flex-row gap-3 items-start sm:items-center"
                       >
                         {item.src ? (
                           <img
                             src={item.src}
                             alt={item.title}
                             referrerPolicy="no-referrer"
-                            className="w-20 h-16 rounded-lg object-cover shrink-0 bg-zinc-950"
+                            className="w-20 h-16 rounded-lg object-cover shrink-0 bg-zinc-100 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800"
                           />
                         ) : (
-                          <div className="w-20 h-16 rounded-lg shrink-0 bg-zinc-950 border border-zinc-800 flex items-center justify-center text-zinc-500">
-                            {item.isVideo ? <Video className="w-5 h-5 text-rose-400" /> : <ImageIcon className="w-5 h-5" />}
+                          <div className="w-20 h-16 rounded-lg shrink-0 bg-zinc-100 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 flex items-center justify-center text-zinc-500">
+                            {item.isVideo ? <Video className="w-5 h-5 text-rose-600 dark:text-rose-400" /> : <ImageIcon className="w-5 h-5" />}
                           </div>
                         )}
 
@@ -2787,7 +2821,7 @@ export function AdminModal({
                               }
                               onBlur={() => void handleSaveGalleryItem(item, idx)}
                               placeholder="Title"
-                              className="sm:col-span-2 px-3 py-1.5 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                              className="sm:col-span-2 px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
                             />
                             <input
                               type="text"
@@ -2802,7 +2836,7 @@ export function AdminModal({
                               }
                               onBlur={() => void handleSaveGalleryItem(item, idx)}
                               placeholder="Date"
-                              className="px-3 py-1.5 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-zinc-300"
+                              className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-800 dark:text-zinc-300"
                             />
                           </div>
                           <input
@@ -2818,7 +2852,7 @@ export function AdminModal({
                             }
                             onBlur={() => void handleSaveGalleryItem(item, idx)}
                             placeholder="Caption"
-                            className="w-full px-3 py-1.5 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-zinc-300"
+                            className="w-full px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-800 dark:text-zinc-300"
                           />
                         </div>
 
@@ -2827,7 +2861,7 @@ export function AdminModal({
                             type="button"
                             onClick={() => void handleSaveGalleryItem(item, idx)}
                             title="Save changes"
-                            className="p-2 rounded-lg bg-zinc-800 hover:bg-emerald-600 text-zinc-200 hover:text-white cursor-pointer"
+                            className="p-2 rounded-lg bg-zinc-100 hover:bg-emerald-600 dark:bg-zinc-800 border border-zinc-300 dark:border-transparent text-zinc-800 dark:text-zinc-200 hover:text-white hover:border-emerald-600 cursor-pointer"
                           >
                             <Save className="w-3.5 h-3.5" />
                           </button>
@@ -2836,7 +2870,7 @@ export function AdminModal({
                             onClick={() => void handleMoveGallery(idx, -1)}
                             disabled={idx === 0}
                             title="Move up"
-                            className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 disabled:opacity-30 cursor-pointer"
+                            className="p-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-zinc-800 dark:text-zinc-300 disabled:opacity-30 cursor-pointer"
                           >
                             <ArrowUp className="w-3.5 h-3.5" />
                           </button>
@@ -2845,7 +2879,7 @@ export function AdminModal({
                             onClick={() => void handleMoveGallery(idx, 1)}
                             disabled={idx === state.gallery.length - 1}
                             title="Move down"
-                            className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 disabled:opacity-30 cursor-pointer"
+                            className="p-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-zinc-800 dark:text-zinc-300 disabled:opacity-30 cursor-pointer"
                           >
                             <ArrowDown className="w-3.5 h-3.5" />
                           </button>
@@ -2856,7 +2890,7 @@ export function AdminModal({
                               replacePhotoInputRef.current?.click();
                             }}
                             title="Upload / Replace photo"
-                            className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 cursor-pointer"
+                            className="p-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-zinc-800 dark:text-zinc-200 cursor-pointer"
                           >
                             <ImageIcon className="w-3.5 h-3.5" />
                           </button>
@@ -2866,14 +2900,14 @@ export function AdminModal({
                               <button
                                 type="button"
                                 onClick={() => handleDeleteGallery(item.id)}
-                                className="px-2.5 py-1.5 rounded-lg bg-rose-600 text-white text-xs font-medium cursor-pointer"
+                                className="px-2.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-medium cursor-pointer"
                               >
                                 Confirm
                               </button>
                               <button
                                 type="button"
                                 onClick={() => setConfirmDeleteGalleryId(null)}
-                                className="px-2 py-1.5 rounded-lg bg-zinc-800 text-zinc-300 text-xs cursor-pointer"
+                                className="px-2 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-transparent text-zinc-900 dark:text-zinc-300 text-xs cursor-pointer"
                               >
                                 Cancel
                               </button>
@@ -2883,7 +2917,7 @@ export function AdminModal({
                               type="button"
                               onClick={() => setConfirmDeleteGalleryId(item.id)}
                               title="Delete"
-                              className="p-2 rounded-lg bg-zinc-800 hover:bg-rose-600 text-zinc-300 hover:text-white cursor-pointer"
+                              className="p-2 rounded-lg bg-zinc-100 hover:bg-rose-600 dark:bg-zinc-800 border border-zinc-300 dark:border-transparent text-zinc-800 dark:text-zinc-300 hover:text-white hover:border-rose-600 cursor-pointer"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -2898,10 +2932,10 @@ export function AdminModal({
               {/* TAB 6: HOODIE PAGE FULL CONTROL */}
               {activeTab === 'hoodie' && (
                 <div className="space-y-6">
-                  <div className="flex items-center justify-between p-4 rounded-xl bg-[#111116] border border-zinc-800">
+                  <div className="flex items-center justify-between p-4 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none">
                     <div>
-                      <p className="text-sm font-bold text-white">Direct Ordering Status</p>
-                      <p className="text-xs text-zinc-400">
+                      <p className="text-sm font-bold text-zinc-950 dark:text-white">Direct Ordering Status</p>
+                      <p className="text-xs text-zinc-600 dark:text-zinc-400">
                         Control whether batchmates can submit direct orders on the Hoodie page.
                       </p>
                     </div>
@@ -2918,7 +2952,9 @@ export function AdminModal({
                         );
                       }}
                       className={`px-4 py-2 rounded-lg text-xs font-bold cursor-pointer ${
-                        hc.directOrderOpen ? 'bg-emerald-600 text-white' : 'bg-zinc-800 text-zinc-300'
+                        hc.directOrderOpen
+                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                          : 'bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-transparent text-zinc-900 dark:text-zinc-300'
                       }`}
                     >
                       {hc.directOrderOpen ? 'Direct Orders Open' : 'Direct Orders Paused'}
@@ -2927,12 +2963,12 @@ export function AdminModal({
 
                   {/* Front & Back RCS Hoodie Image Controls */}
                   <div className="grid sm:grid-cols-2 gap-4">
-                    <div className="p-4 rounded-xl bg-[#111116] border border-zinc-800 space-y-3">
-                      <p className="text-xs font-bold text-white">RCS Hoodie — Front Pic</p>
+                    <div className="p-4 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none space-y-3">
+                      <p className="text-xs font-bold text-zinc-950 dark:text-white">RCS Hoodie — Front Pic</p>
                       <img
                         src={hc.frontImage}
                         alt="Hoodie front"
-                        className="w-full aspect-[4/3] object-cover rounded-lg border border-zinc-800"
+                        className="w-full aspect-[4/3] object-cover rounded-lg border border-zinc-300 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-950"
                       />
                       <input
                         type="text"
@@ -2941,7 +2977,7 @@ export function AdminModal({
                           onUpdateState({ ...state, hoodieConfig: { ...hc, frontLabel: e.target.value } })
                         }
                         placeholder="Front view subtitle (e.g. RCS chest crest)"
-                        className="w-full px-3 py-1.5 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                        className="w-full px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500"
                       />
                       <button
                         type="button"
@@ -2949,18 +2985,18 @@ export function AdminModal({
                           setHoodieSideTarget('frontImage');
                           hoodiePhotoInputRef.current?.click();
                         }}
-                        className="w-full py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-white inline-flex items-center justify-center gap-1.5 cursor-pointer"
+                        className="w-full py-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-xs font-medium text-zinc-900 dark:text-white inline-flex items-center justify-center gap-1.5 cursor-pointer"
                       >
                         <Upload className="w-3.5 h-3.5" /> Change Front Pic
                       </button>
                     </div>
 
-                    <div className="p-4 rounded-xl bg-[#111116] border border-zinc-800 space-y-3">
-                      <p className="text-xs font-bold text-white">RCS Hoodie — Back Pic</p>
+                    <div className="p-4 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none space-y-3">
+                      <p className="text-xs font-bold text-zinc-950 dark:text-white">RCS Hoodie — Back Pic</p>
                       <img
                         src={hc.backImage}
                         alt="Hoodie back"
-                        className="w-full aspect-[4/3] object-cover rounded-lg border border-zinc-800"
+                        className="w-full aspect-[4/3] object-cover rounded-lg border border-zinc-300 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-950"
                       />
                       <input
                         type="text"
@@ -2969,7 +3005,7 @@ export function AdminModal({
                           onUpdateState({ ...state, hoodieConfig: { ...hc, backLabel: e.target.value } })
                         }
                         placeholder="Back view subtitle (e.g. Orthohin '27 print)"
-                        className="w-full px-3 py-1.5 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                        className="w-full px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500"
                       />
                       <button
                         type="button"
@@ -2977,50 +3013,50 @@ export function AdminModal({
                           setHoodieSideTarget('backImage');
                           hoodiePhotoInputRef.current?.click();
                         }}
-                        className="w-full py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-white inline-flex items-center justify-center gap-1.5 cursor-pointer"
+                        className="w-full py-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-xs font-medium text-zinc-900 dark:text-white inline-flex items-center justify-center gap-1.5 cursor-pointer"
                       >
                         <Upload className="w-3.5 h-3.5" /> Change Back Pic
                       </button>
                     </div>
                   </div>
 
-                  <div className="space-y-3 p-4 rounded-xl bg-[#111116] border border-zinc-800">
+                  <div className="space-y-3 p-4 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none">
                     <div>
-                      <label className="block text-xs font-medium text-zinc-400 mb-1">Merchandise Kicker</label>
+                      <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-400 mb-1">Merchandise Kicker</label>
                       <input
                         type="text"
                         value={hc.kicker || ''}
                         onChange={(e) =>
                           onUpdateState({ ...state, hoodieConfig: { ...hc, kicker: e.target.value } })
                         }
-                        className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                        className="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-zinc-400 mb-1">Hoodie Page Title</label>
+                      <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-400 mb-1">Hoodie Page Title</label>
                       <input
                         type="text"
                         value={hc.title}
                         onChange={(e) =>
                           onUpdateState({ ...state, hoodieConfig: { ...hc, title: e.target.value } })
                         }
-                        className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                        className="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-zinc-400 mb-1">Hoodie Subtitle</label>
+                      <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-400 mb-1">Hoodie Subtitle</label>
                       <textarea
                         rows={2}
                         value={hc.subtitle}
                         onChange={(e) =>
                           onUpdateState({ ...state, hoodieConfig: { ...hc, subtitle: e.target.value } })
                         }
-                        className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white resize-none"
+                        className="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white resize-none"
                       />
                     </div>
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <label className="block text-xs font-medium text-zinc-400">
+                        <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-400">
                           Specifications ({hc.specs.length} lines)
                         </label>
                         <button
@@ -3031,7 +3067,7 @@ export function AdminModal({
                               hoodieConfig: { ...hc, specs: [...hc.specs, 'New Hoodie Specification'] },
                             })
                           }
-                          className="inline-flex items-center gap-1 text-xs text-rose-400 hover:text-rose-300 cursor-pointer"
+                          className="inline-flex items-center gap-1 text-xs text-rose-700 hover:text-rose-800 dark:text-rose-400 dark:hover:text-rose-300 font-medium cursor-pointer"
                         >
                           <Plus className="w-3.5 h-3.5" /> Add Line
                         </button>
@@ -3049,7 +3085,7 @@ export function AdminModal({
                                 hoodieConfig: { ...hc, specs: nextSpecs },
                               });
                             }}
-                            className="flex-1 px-3 py-1.5 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                            className="flex-1 px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
                           />
                           {hc.specs.length > 1 && (
                             <button
@@ -3061,7 +3097,7 @@ export function AdminModal({
                                   hoodieConfig: { ...hc, specs: nextSpecs },
                                 });
                               }}
-                              className="p-1.5 rounded-lg bg-zinc-800 hover:bg-rose-600 text-zinc-400 hover:text-white cursor-pointer"
+                              className="p-1.5 rounded-lg bg-zinc-100 hover:bg-rose-600 dark:bg-zinc-800 border border-zinc-300 dark:border-transparent text-zinc-700 dark:text-zinc-400 hover:text-white hover:border-rose-600 cursor-pointer"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -3076,7 +3112,7 @@ export function AdminModal({
                         onClick={() =>
                           void persistSettings(state.profile, hc, sc, 'Hoodie page changes saved.')
                         }
-                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-xs font-semibold text-white cursor-pointer disabled:opacity-50"
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-xs font-semibold text-white cursor-pointer disabled:opacity-50"
                       >
                         <Save className="w-3.5 h-3.5" /> Save Hoodie Settings
                       </button>
@@ -3093,7 +3129,7 @@ export function AdminModal({
                             'Hoodie page reset to default.'
                           );
                         }}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-200 cursor-pointer"
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-xs font-medium text-zinc-900 dark:text-zinc-200 cursor-pointer"
                       >
                         <RotateCcw className="w-3.5 h-3.5" /> Reset Hoodie Defaults
                       </button>
@@ -3107,7 +3143,7 @@ export function AdminModal({
                 <div className="space-y-6">
                   {/* Sub-Navigation Pills */}
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex flex-wrap gap-1.5 p-1 rounded-xl bg-zinc-900 border border-zinc-800">
+                    <div className="flex flex-wrap gap-1.5 p-1 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800">
                       {(
                         [
                           { id: 'global', label: 'Global & Visibility' },
@@ -3124,7 +3160,7 @@ export function AdminModal({
                           className={`px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
                             siteSubTab === sub.id
                               ? 'bg-rose-600 text-white'
-                              : 'text-zinc-400 hover:text-white'
+                              : 'text-zinc-700 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'
                           }`}
                         >
                           {sub.label}
@@ -3138,7 +3174,7 @@ export function AdminModal({
                       onClick={() =>
                         void persistSettings(state.profile, hc, sc, 'All website changes published live.')
                       }
-                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-xs font-semibold text-white cursor-pointer disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-xs font-semibold text-white cursor-pointer disabled:opacity-50"
                     >
                       <Save className="w-3.5 h-3.5" /> Publish All Site Changes
                     </button>
@@ -3147,9 +3183,9 @@ export function AdminModal({
                   {/* SUB 1: GLOBAL, BRANDING, SECTION VISIBILITY & MAINTENANCE */}
                   {siteSubTab === 'global' && (
                     <div className="space-y-5">
-                      <div className="p-4 rounded-xl bg-[#111116] border border-zinc-800 space-y-4">
-                        <h3 className="text-sm font-bold text-white">Section Visibility & Page Access</h3>
-                        <p className="text-xs text-zinc-400">
+                      <div className="p-4 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none space-y-4">
+                        <h3 className="text-sm font-bold text-zinc-950 dark:text-white">Section Visibility & Page Access</h3>
+                        <p className="text-xs text-zinc-600 dark:text-zinc-400">
                           Show or hide any section or navigation link across the entire website instantly.
                         </p>
                         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
@@ -3170,12 +3206,14 @@ export function AdminModal({
                                 type="button"
                                 disabled={isSyncing}
                                 onClick={() => void toggleSection(item.key, item.label)}
-                                className="p-3 rounded-lg bg-zinc-950 border border-zinc-800 hover:border-zinc-700 flex items-center justify-between gap-2 text-xs cursor-pointer"
+                                className="p-3 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 hover:border-zinc-400 dark:hover:border-zinc-700 flex items-center justify-between gap-2 text-xs cursor-pointer"
                               >
-                                <span className="text-zinc-200 font-medium">{item.label}</span>
+                                <span className="text-zinc-900 dark:text-zinc-200 font-medium">{item.label}</span>
                                 <span
                                   className={`px-2 py-0.5 rounded text-[11px] font-semibold ${
-                                    enabled ? 'bg-emerald-600/20 text-emerald-400' : 'bg-zinc-800 text-zinc-500'
+                                    enabled
+                                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-600/20 dark:text-emerald-400'
+                                      : 'bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-500'
                                   }`}
                                 >
                                   {enabled ? 'Shown' : 'Hidden'}
@@ -3186,54 +3224,54 @@ export function AdminModal({
                         </div>
                       </div>
 
-                      <div className="p-4 rounded-xl bg-[#111116] border border-zinc-800 space-y-3">
-                        <h3 className="text-sm font-bold text-white">Portal Header Branding & Banner</h3>
+                      <div className="p-4 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none space-y-3">
+                        <h3 className="text-sm font-bold text-zinc-950 dark:text-white">Portal Header Branding & Banner</h3>
                         <div className="grid sm:grid-cols-2 gap-3">
                           <div>
-                            <label className="block text-[11px] text-zinc-400 mb-1">Brand Wordmark</label>
+                            <label className="block text-[11px] text-zinc-700 dark:text-zinc-400 mb-1">Brand Wordmark</label>
                             <input
                               type="text"
                               value={sc.brandName || ''}
                               onChange={(e) => updateSiteField('brandName', e.target.value)}
-                              className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                              className="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
                             />
                           </div>
                           <div>
-                            <label className="block text-[11px] text-zinc-400 mb-1">Brand Accent (Year)</label>
+                            <label className="block text-[11px] text-zinc-700 dark:text-zinc-400 mb-1">Brand Accent (Year)</label>
                             <input
                               type="text"
                               value={sc.brandAccent || ''}
                               onChange={(e) => updateSiteField('brandAccent', e.target.value)}
-                              className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                              className="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
                             />
                           </div>
                         </div>
                         <div>
-                          <label className="block text-[11px] text-zinc-400 mb-1">Site-Wide Announcement Banner</label>
+                          <label className="block text-[11px] text-zinc-700 dark:text-zinc-400 mb-1">Site-Wide Announcement Banner</label>
                           <input
                             type="text"
                             value={sc.announcement}
                             onChange={(e) => updateSiteField('announcement', e.target.value)}
                             placeholder="Optional top banner text (leave blank to hide)"
-                            className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                            className="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500"
                           />
                         </div>
                         <div>
-                          <label className="block text-[11px] text-zinc-400 mb-1">Footer Copyright Text</label>
+                          <label className="block text-[11px] text-zinc-700 dark:text-zinc-400 mb-1">Footer Copyright Text</label>
                           <input
                             type="text"
                             value={sc.footerText || ''}
                             onChange={(e) => updateSiteField('footerText', e.target.value)}
-                            className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                            className="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
                           />
                         </div>
                       </div>
 
-                      <div className="p-4 rounded-xl bg-[#111116] border border-zinc-800 space-y-3">
+                      <div className="p-4 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none space-y-3">
                         <div className="flex items-center justify-between gap-3">
                           <div>
-                            <h3 className="text-sm font-bold text-white">Maintenance Lock Screen</h3>
-                            <p className="text-xs text-zinc-400">
+                            <h3 className="text-sm font-bold text-zinc-950 dark:text-white">Maintenance Lock Screen</h3>
+                            <p className="text-xs text-zinc-600 dark:text-zinc-400">
                               Pause public portal access during major updates (/admin-login always stays open).
                             </p>
                           </div>
@@ -3241,7 +3279,9 @@ export function AdminModal({
                             type="button"
                             onClick={() => updateSiteField('maintenanceMode', !sc.maintenanceMode)}
                             className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold cursor-pointer ${
-                              sc.maintenanceMode ? 'bg-amber-600 text-white' : 'bg-zinc-800 text-zinc-300'
+                              sc.maintenanceMode
+                                ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                                : 'bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-transparent text-zinc-900 dark:text-zinc-300'
                             }`}
                           >
                             {sc.maintenanceMode ? 'Maintenance ON' : 'Maintenance OFF'}
@@ -3252,7 +3292,7 @@ export function AdminModal({
                           value={sc.maintenanceMessage || ''}
                           onChange={(e) => updateSiteField('maintenanceMessage', e.target.value)}
                           placeholder="Message displayed to visitors during maintenance"
-                          className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white resize-none"
+                          className="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500 resize-none"
                         />
                       </div>
                     </div>
@@ -3261,29 +3301,29 @@ export function AdminModal({
                   {/* SUB 2: HERO SECTION, HERO IMAGE & 4 KPI CARDS */}
                   {siteSubTab === 'hero' && (
                     <div className="space-y-5">
-                      <div className="p-4 rounded-xl bg-[#111116] border border-zinc-800 space-y-3">
-                        <h3 className="text-sm font-bold text-white">Hero Text & Copy</h3>
+                      <div className="p-4 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none space-y-3">
+                        <h3 className="text-sm font-bold text-zinc-950 dark:text-white">Hero Text & Copy</h3>
                         <div className="grid sm:grid-cols-3 gap-3">
                           <input
                             type="text"
                             value={sc.heroKicker}
                             onChange={(e) => updateSiteField('heroKicker', e.target.value)}
                             placeholder="Hero kicker"
-                            className="px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                            className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
                           />
                           <input
                             type="text"
                             value={sc.heroTitle}
                             onChange={(e) => updateSiteField('heroTitle', e.target.value)}
                             placeholder="Hero title"
-                            className="px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                            className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
                           />
                           <input
                             type="text"
                             value={sc.heroHighlight}
                             onChange={(e) => updateSiteField('heroHighlight', e.target.value)}
                             placeholder="Highlighted phrase"
-                            className="px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                            className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
                           />
                         </div>
                         <textarea
@@ -3291,18 +3331,18 @@ export function AdminModal({
                           value={sc.heroDescription}
                           onChange={(e) => updateSiteField('heroDescription', e.target.value)}
                           placeholder="Hero description"
-                          className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white resize-none"
+                          className="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white resize-none"
                         />
                       </div>
 
-                      <div className="p-4 rounded-xl bg-[#111116] border border-zinc-800 space-y-4">
-                        <h3 className="text-sm font-bold text-white">Hero Showcase Image</h3>
+                      <div className="p-4 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none space-y-4">
+                        <h3 className="text-sm font-bold text-zinc-950 dark:text-white">Hero Showcase Image</h3>
                         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
                           <img
                             src={sc.heroImage || DEFAULT_HERO_IMAGE}
                             alt="Hero showcase preview"
                             referrerPolicy="no-referrer"
-                            className="w-36 h-24 rounded-xl object-cover border border-zinc-800 bg-white shrink-0"
+                            className="w-36 h-24 rounded-xl object-cover border border-zinc-300 dark:border-zinc-800 bg-white shrink-0"
                           />
                           <div className="flex-1 w-full space-y-2.5">
                             <input
@@ -3310,20 +3350,20 @@ export function AdminModal({
                               value={sc.heroImage || ''}
                               onChange={(e) => updateSiteField('heroImage', e.target.value)}
                               placeholder="Image URL or upload below"
-                              className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                              className="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500"
                             />
                             <div className="flex flex-wrap gap-2">
                               <button
                                 type="button"
                                 onClick={() => heroPhotoInputRef.current?.click()}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold cursor-pointer"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-white text-xs font-semibold cursor-pointer"
                               >
                                 <Upload className="w-3.5 h-3.5" /> Upload Hero Image
                               </button>
                               <button
                                 type="button"
                                 onClick={() => updateSiteField('heroImage', DEFAULT_HERO_IMAGE)}
-                                className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs cursor-pointer"
+                                className="px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-zinc-900 dark:text-zinc-200 text-xs cursor-pointer"
                               >
                                 Reset Default Sketch
                               </button>
@@ -3332,16 +3372,16 @@ export function AdminModal({
                         </div>
                       </div>
 
-                      <div className="p-4 rounded-xl bg-[#111116] border border-zinc-800 space-y-3">
-                        <h3 className="text-sm font-bold text-white">4 Homepage Stat KPI Cards</h3>
+                      <div className="p-4 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none space-y-3">
+                        <h3 className="text-sm font-bold text-zinc-950 dark:text-white">4 Homepage Stat KPI Cards</h3>
                         <div className="grid sm:grid-cols-2 gap-3">
                           {(sc.kpis || []).map((kpi, idx) => (
                             <div
                               key={kpi.id || idx}
-                              className="p-3 rounded-lg bg-zinc-950 border border-zinc-800 space-y-2"
+                              className="p-3 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 space-y-2"
                             >
-                              <div className="flex items-center justify-between text-[11px] text-zinc-400">
-                                <span>KPI Card #{idx + 1}</span>
+                              <div className="flex items-center justify-between text-[11px] text-zinc-700 dark:text-zinc-400">
+                                <span className="font-medium">KPI Card #{idx + 1}</span>
                                 <label className="inline-flex items-center gap-1.5 cursor-pointer">
                                   <input
                                     type="checkbox"
@@ -3367,7 +3407,7 @@ export function AdminModal({
                                     updateSiteField('kpis', next);
                                   }}
                                   placeholder="Value"
-                                  className="px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 font-mono text-xs text-white disabled:opacity-50"
+                                  className="px-2.5 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 font-mono text-xs text-zinc-950 dark:text-white disabled:opacity-50"
                                 />
                                 <input
                                   type="text"
@@ -3378,7 +3418,7 @@ export function AdminModal({
                                     updateSiteField('kpis', next);
                                   }}
                                   placeholder="Label"
-                                  className="col-span-2 px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-white"
+                                  className="col-span-2 px-2.5 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
                                 />
                               </div>
                             </div>
@@ -3391,22 +3431,22 @@ export function AdminModal({
                   {/* SUB 3: ABOUT SECTION & INSTAGRAM HUB */}
                   {siteSubTab === 'about' && (
                     <div className="space-y-5">
-                      <div className="p-4 rounded-xl bg-[#111116] border border-zinc-800 space-y-3">
-                        <h3 className="text-sm font-bold text-white">About Section & Pillar Cards</h3>
+                      <div className="p-4 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none space-y-3">
+                        <h3 className="text-sm font-bold text-zinc-950 dark:text-white">About Section & Pillar Cards</h3>
                         <div className="grid sm:grid-cols-2 gap-3">
                           <input
                             type="text"
                             value={sc.aboutKicker || ''}
                             onChange={(e) => updateSiteField('aboutKicker', e.target.value)}
                             placeholder="Section kicker"
-                            className="px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                            className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
                           />
                           <input
                             type="text"
                             value={sc.aboutTitle || ''}
                             onChange={(e) => updateSiteField('aboutTitle', e.target.value)}
                             placeholder="Section heading"
-                            className="px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                            className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
                           />
                         </div>
                         <textarea
@@ -3414,60 +3454,60 @@ export function AdminModal({
                           value={sc.aboutDescription || ''}
                           onChange={(e) => updateSiteField('aboutDescription', e.target.value)}
                           placeholder="About body description"
-                          className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white resize-none"
+                          className="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white resize-none"
                         />
                         <div className="grid sm:grid-cols-2 gap-3 pt-1">
-                          <div className="space-y-2 p-3 rounded-lg bg-zinc-950 border border-zinc-800">
+                          <div className="space-y-2 p-3 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800">
                             <input
                               type="text"
                               value={sc.visionTitle || ''}
                               onChange={(e) => updateSiteField('visionTitle', e.target.value)}
                               placeholder="Card 1 Title"
-                              className="w-full px-2.5 py-1.5 rounded bg-zinc-900 border border-zinc-800 text-xs text-white font-semibold"
+                              className="w-full px-2.5 py-1.5 rounded bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white font-semibold"
                             />
                             <textarea
                               rows={2}
                               value={sc.visionText || ''}
                               onChange={(e) => updateSiteField('visionText', e.target.value)}
                               placeholder="Card 1 Description"
-                              className="w-full px-2.5 py-1.5 rounded bg-zinc-900 border border-zinc-800 text-xs text-white resize-none"
+                              className="w-full px-2.5 py-1.5 rounded bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white resize-none"
                             />
                           </div>
-                          <div className="space-y-2 p-3 rounded-lg bg-zinc-950 border border-zinc-800">
+                          <div className="space-y-2 p-3 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800">
                             <input
                               type="text"
                               value={sc.unityTitle || ''}
                               onChange={(e) => updateSiteField('unityTitle', e.target.value)}
                               placeholder="Card 2 Title"
-                              className="w-full px-2.5 py-1.5 rounded bg-zinc-900 border border-zinc-800 text-xs text-white font-semibold"
+                              className="w-full px-2.5 py-1.5 rounded bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white font-semibold"
                             />
                             <textarea
                               rows={2}
                               value={sc.unityText || ''}
                               onChange={(e) => updateSiteField('unityText', e.target.value)}
                               placeholder="Card 2 Description"
-                              className="w-full px-2.5 py-1.5 rounded bg-zinc-900 border border-zinc-800 text-xs text-white resize-none"
+                              className="w-full px-2.5 py-1.5 rounded bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white resize-none"
                             />
                           </div>
                         </div>
                       </div>
 
-                      <div className="p-4 rounded-xl bg-[#111116] border border-zinc-800 space-y-3">
-                        <h3 className="text-sm font-bold text-white">Instagram Showcase Card</h3>
+                      <div className="p-4 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none space-y-3">
+                        <h3 className="text-sm font-bold text-zinc-950 dark:text-white">Instagram Showcase Card</h3>
                         <div className="grid sm:grid-cols-2 gap-3">
                           <input
                             type="text"
                             value={sc.instagramHandle || ''}
                             onChange={(e) => updateSiteField('instagramHandle', e.target.value)}
                             placeholder="@orthohin_27"
-                            className="px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                            className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
                           />
                           <input
                             type="url"
                             value={sc.instagramUrl}
                             onChange={(e) => updateSiteField('instagramUrl', e.target.value)}
                             placeholder="https://www.instagram.com/..."
-                            className="px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                            className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
                           />
                         </div>
                         <textarea
@@ -3475,7 +3515,7 @@ export function AdminModal({
                           value={sc.instagramBio || ''}
                           onChange={(e) => updateSiteField('instagramBio', e.target.value)}
                           placeholder="Instagram card description"
-                          className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white resize-none"
+                          className="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white resize-none"
                         />
                       </div>
                     </div>
@@ -3484,29 +3524,29 @@ export function AdminModal({
                   {/* SUB 4: LEADERSHIP DIRECTORY & PROFILE */}
                   {siteSubTab === 'leadership' && (
                     <div className="space-y-5">
-                      <div className="p-4 rounded-xl bg-[#111116] border border-zinc-800 space-y-3">
-                        <h3 className="text-sm font-bold text-white">Leadership Card & Copy</h3>
+                      <div className="p-4 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none space-y-3">
+                        <h3 className="text-sm font-bold text-zinc-950 dark:text-white">Leadership Card & Copy</h3>
                         <div className="grid sm:grid-cols-3 gap-3">
                           <input
                             type="text"
                             value={sc.leadSectionKicker || ''}
                             onChange={(e) => updateSiteField('leadSectionKicker', e.target.value)}
                             placeholder="Section kicker"
-                            className="px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                            className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
                           />
                           <input
                             type="text"
                             value={sc.leadSectionTitle || ''}
                             onChange={(e) => updateSiteField('leadSectionTitle', e.target.value)}
                             placeholder="Section title"
-                            className="px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                            className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
                           />
                           <input
                             type="text"
                             value={sc.leadSectionSubtitle || ''}
                             onChange={(e) => updateSiteField('leadSectionSubtitle', e.target.value)}
                             placeholder="Section subtitle"
-                            className="px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                            className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
                           />
                         </div>
                         <div className="grid sm:grid-cols-2 gap-3">
@@ -3515,14 +3555,14 @@ export function AdminModal({
                             value={sc.leadRole || ''}
                             onChange={(e) => updateSiteField('leadRole', e.target.value)}
                             placeholder="Role badge"
-                            className="px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                            className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
                           />
                           <input
                             type="text"
                             value={sc.leadName || ''}
                             onChange={(e) => updateSiteField('leadName', e.target.value)}
                             placeholder="Lead full name"
-                            className="px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                            className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
                           />
                         </div>
                         <textarea
@@ -3530,31 +3570,31 @@ export function AdminModal({
                           value={sc.devNote}
                           onChange={(e) => updateSiteField('devNote', e.target.value)}
                           placeholder="Developer note"
-                          className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white resize-none"
+                          className="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white resize-none"
                         />
                       </div>
 
-                      <div className="space-y-4 p-4 rounded-xl bg-[#111116] border border-zinc-800">
-                        <h3 className="text-sm font-bold text-white">Leadership Profile Photo</h3>
+                      <div className="space-y-4 p-4 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none">
+                        <h3 className="text-sm font-bold text-zinc-950 dark:text-white">Leadership Profile Photo</h3>
                         <div className="flex items-center gap-4">
                           <img
                             src={state.profile || DEFAULT_PROFILE_IMAGE}
                             alt="Lead profile preview"
                             referrerPolicy="no-referrer"
-                            className="w-20 h-20 rounded-xl object-cover object-[center_22%] border border-zinc-800 bg-zinc-950"
+                            className="w-20 h-20 rounded-xl object-cover object-[center_22%] border border-zinc-300 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-950"
                           />
                           <input
                             type="text"
                             value={profileUrlInput}
                             onChange={(e) => setProfileUrlInput(e.target.value)}
-                            className="flex-1 px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white"
+                            className="flex-1 px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
                           />
                         </div>
                         <div className="flex flex-wrap gap-2">
                           <button
                             type="button"
                             onClick={() => profilePhotoInputRef.current?.click()}
-                            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold cursor-pointer"
+                            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-white text-xs font-semibold cursor-pointer"
                           >
                             <Upload className="w-3.5 h-3.5" /> Upload New Photo
                           </button>
@@ -3566,7 +3606,7 @@ export function AdminModal({
                               onUpdateState({ ...state, profile: nextProf });
                               void persistSettings(nextProf, hc, sc, 'Profile URL applied.');
                             }}
-                            className="px-3.5 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium cursor-pointer"
+                            className="px-3.5 py-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-zinc-900 dark:text-zinc-200 text-xs font-medium cursor-pointer"
                           >
                             Apply URL
                           </button>
@@ -3577,7 +3617,7 @@ export function AdminModal({
                               onUpdateState({ ...state, profile: DEFAULT_PROFILE_IMAGE });
                               void persistSettings(DEFAULT_PROFILE_IMAGE, hc, sc, 'Profile photo reset.');
                             }}
-                            className="px-3.5 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium cursor-pointer"
+                            className="px-3.5 py-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-zinc-900 dark:text-zinc-200 text-xs font-medium cursor-pointer"
                           >
                             Reset Default
                           </button>
@@ -3590,13 +3630,13 @@ export function AdminModal({
                   {siteSubTab === 'timeline' && (
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
-                        <p className="text-xs text-zinc-400">
+                        <p className="text-xs text-zinc-700 dark:text-zinc-400">
                           Add, edit, reorder, or remove milestones in the "Our Journey" timeline.
                         </p>
                         <button
                           type="button"
                           onClick={handleAddTimeline}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold cursor-pointer"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-white text-xs font-semibold cursor-pointer"
                         >
                           <Plus className="w-3.5 h-3.5" /> Add Milestone
                         </button>
@@ -3606,7 +3646,7 @@ export function AdminModal({
                         {(sc.timeline || []).map((item, idx) => (
                           <div
                             key={item.id || idx}
-                            className="p-4 rounded-xl bg-[#111116] border border-zinc-800 space-y-2.5"
+                            className="p-4 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none space-y-2.5"
                           >
                             <div className="flex flex-col sm:flex-row sm:items-center gap-2.5">
                               <input
@@ -3618,7 +3658,7 @@ export function AdminModal({
                                   updateSiteField('timeline', next);
                                 }}
                                 placeholder="Tag / Year"
-                                className="sm:w-36 px-3 py-1.5 rounded-lg bg-zinc-950 border border-zinc-800 font-mono text-xs text-rose-400"
+                                className="sm:w-36 px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 font-mono text-xs text-rose-700 dark:text-rose-400"
                               />
                               <input
                                 type="text"
@@ -3629,14 +3669,14 @@ export function AdminModal({
                                   updateSiteField('timeline', next);
                                 }}
                                 placeholder="Milestone Title"
-                                className="flex-1 px-3 py-1.5 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white font-semibold"
+                                className="flex-1 px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white font-semibold"
                               />
                               <div className="flex items-center gap-1 shrink-0">
                                 <button
                                   type="button"
                                   disabled={idx === 0}
                                   onClick={() => handleMoveTimeline(idx, -1)}
-                                  className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 disabled:opacity-30 cursor-pointer"
+                                  className="p-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-zinc-800 dark:text-zinc-300 disabled:opacity-30 cursor-pointer"
                                 >
                                   <ArrowUp className="w-3.5 h-3.5" />
                                 </button>
@@ -3644,7 +3684,7 @@ export function AdminModal({
                                   type="button"
                                   disabled={idx === (sc.timeline || []).length - 1}
                                   onClick={() => handleMoveTimeline(idx, 1)}
-                                  className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 disabled:opacity-30 cursor-pointer"
+                                  className="p-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-zinc-800 dark:text-zinc-300 disabled:opacity-30 cursor-pointer"
                                 >
                                   <ArrowDown className="w-3.5 h-3.5" />
                                 </button>
@@ -3655,7 +3695,7 @@ export function AdminModal({
                                       const next = (sc.timeline || []).filter((_, i) => i !== idx);
                                       updateSiteField('timeline', next);
                                     }}
-                                    className="p-1.5 rounded-lg bg-zinc-800 hover:bg-rose-600 text-zinc-300 hover:text-white cursor-pointer"
+                                    className="p-1.5 rounded-lg bg-zinc-100 hover:bg-rose-600 dark:bg-zinc-800 border border-zinc-300 dark:border-transparent text-zinc-800 dark:text-zinc-300 hover:text-white hover:border-rose-600 cursor-pointer"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>
@@ -3671,7 +3711,7 @@ export function AdminModal({
                                 updateSiteField('timeline', next);
                               }}
                               placeholder="Milestone description"
-                              className="w-full px-3 py-1.5 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-zinc-300 resize-none"
+                              className="w-full px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-800 dark:text-zinc-300 resize-none"
                             />
                           </div>
                         ))}
@@ -3686,7 +3726,7 @@ export function AdminModal({
                               DEFAULT_SITE_CONFIG.timeline!.map((t) => ({ ...t }))
                             )
                           }
-                          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-200 cursor-pointer"
+                          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-xs text-zinc-900 dark:text-zinc-200 cursor-pointer"
                         >
                           <RotateCcw className="w-3.5 h-3.5" /> Reset Default Timeline
                         </button>
@@ -3699,9 +3739,9 @@ export function AdminModal({
               {/* TAB 8: BACKUP, ACTIVITY LOG & SECURITY */}
               {activeTab === 'security' && (
                 <div className="space-y-6">
-                  <div className="space-y-2 p-4 rounded-xl bg-[#111116] border border-zinc-800">
-                    <h3 className="text-sm font-bold text-white">Backup & Restore</h3>
-                    <p className="text-xs text-zinc-400">
+                  <div className="space-y-2 p-4 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none">
+                    <h3 className="text-sm font-bold text-zinc-950 dark:text-white">Backup & Restore</h3>
+                    <p className="text-xs text-zinc-600 dark:text-zinc-400">
                       Export all batchmates, direct orders, gallery items, and settings as JSON, or restore from a
                       saved backup.
                     </p>
@@ -3709,14 +3749,14 @@ export function AdminModal({
                       <button
                         type="button"
                         onClick={handleExportJson}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-white cursor-pointer"
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-xs font-medium text-zinc-900 dark:text-white cursor-pointer"
                       >
                         <Download className="w-3.5 h-3.5" /> Export Backup JSON
                       </button>
                       <button
                         type="button"
                         onClick={() => importBackupInputRef.current?.click()}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-white cursor-pointer"
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-xs font-medium text-zinc-900 dark:text-white cursor-pointer"
                       >
                         <Upload className="w-3.5 h-3.5" /> Import Backup JSON
                       </button>
@@ -3742,14 +3782,14 @@ export function AdminModal({
                                 setIsSyncing(false);
                               }
                             }}
-                            className="px-3.5 py-2 rounded-lg bg-rose-600 text-white text-xs font-semibold cursor-pointer disabled:opacity-50"
+                            className="px-3.5 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold cursor-pointer disabled:opacity-50"
                           >
                             Confirm Full Reset
                           </button>
                           <button
                             type="button"
                             onClick={() => setConfirmReset(false)}
-                            className="px-3 py-2 rounded-lg bg-zinc-800 text-zinc-300 text-xs cursor-pointer"
+                            className="px-3 py-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-transparent text-zinc-900 dark:text-zinc-300 text-xs cursor-pointer"
                           >
                             Cancel
                           </button>
@@ -3758,7 +3798,7 @@ export function AdminModal({
                         <button
                           type="button"
                           onClick={() => setConfirmReset(true)}
-                          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-300 cursor-pointer"
+                          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-xs font-medium text-zinc-900 dark:text-zinc-300 cursor-pointer"
                         >
                           <RotateCcw className="w-3.5 h-3.5" /> Reset All Data
                         </button>
@@ -3767,10 +3807,10 @@ export function AdminModal({
                   </div>
 
                   {/* Password & Auth */}
-                  <div className="space-y-3 p-4 rounded-xl bg-[#111116] border border-zinc-800">
+                  <div className="space-y-3 p-4 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-bold text-white">Authorization & Passcode</h3>
-                      <span className="text-[11px] font-mono text-zinc-400">{AUTHORIZED_ADMIN_EMAIL}</span>
+                      <h3 className="text-sm font-bold text-zinc-950 dark:text-white">Authorization & Passcode</h3>
+                      <span className="text-[11px] font-mono text-zinc-600 dark:text-zinc-400">{AUTHORIZED_ADMIN_EMAIL}</span>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-2">
                       <input
@@ -3778,12 +3818,12 @@ export function AdminModal({
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
                         placeholder="New passcode (min 6 characters)"
-                        className="flex-1 px-3.5 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white focus:outline-none focus:border-rose-500"
+                        className="flex-1 px-3.5 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500 focus:outline-none focus:border-rose-500"
                       />
                       <button
                         type="button"
                         onClick={handleSavePassword}
-                        className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold cursor-pointer"
+                        className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-white text-xs font-semibold cursor-pointer"
                       >
                         Update Passcode
                       </button>
@@ -3793,7 +3833,7 @@ export function AdminModal({
                           resetAdminPassword();
                           onToast('Admin passcode reset to default.', 'info');
                         }}
-                        className="px-3.5 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium cursor-pointer"
+                        className="px-3.5 py-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-zinc-900 dark:text-zinc-200 text-xs font-medium cursor-pointer"
                       >
                         Restore Default
                       </button>
@@ -3801,26 +3841,26 @@ export function AdminModal({
                   </div>
 
                   {/* Activity Log */}
-                  <div className="space-y-3 p-4 rounded-xl bg-[#111116] border border-zinc-800">
+                  <div className="space-y-3 p-4 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <h3 className="text-sm font-bold text-white">Recent Activity Log</h3>
+                      <h3 className="text-sm font-bold text-zinc-950 dark:text-white">Recent Activity Log</h3>
                       <input
                         type="text"
                         value={logSearch}
                         onChange={(e) => setLogSearch(e.target.value)}
                         placeholder="Filter activity..."
-                        className="px-3 py-1.5 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-white focus:outline-none focus:border-rose-500"
+                        className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500 focus:outline-none focus:border-rose-500"
                       />
                     </div>
                     <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                       {filteredLogs.map((entry) => (
                         <div
                           key={entry.id}
-                          className="flex items-start justify-between gap-3 text-xs py-1.5 border-b border-zinc-800/70 last:border-0"
+                          className="flex items-start justify-between gap-3 text-xs py-1.5 border-b border-zinc-200 dark:border-zinc-800/70 last:border-0"
                         >
                           <div>
-                            <span className="font-semibold text-zinc-200">{entry.action}</span>
-                            <span className="text-zinc-400"> — {entry.detail}</span>
+                            <span className="font-semibold text-zinc-900 dark:text-zinc-200">{entry.action}</span>
+                            <span className="text-zinc-600 dark:text-zinc-400"> — {entry.detail}</span>
                           </div>
                           <span className="font-mono text-[10px] text-zinc-500 shrink-0">
                             {new Date(entry.timestamp).toLocaleString()}

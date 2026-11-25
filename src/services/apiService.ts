@@ -24,11 +24,29 @@ import {
   saveGalleryItemInFirestore,
   saveSettingsInFirestore,
   seedDefaultsIfEmptyInFirestore,
+  subscribeAdminDataFromFirestore,
+  subscribePublicPortalFromFirestore,
   syncPortalStateInFirestore,
   updateBatchmateInFirestore,
   updateNoticeInFirestore,
   updateOrderStatusInFirestore,
+  type AdminFirestoreCallbacks,
+  type PublicFirestoreCallbacks,
 } from './firestoreFallback';
+
+let usingFirestoreBackend = false;
+
+export function isUsingFirestoreBackend(): boolean {
+  return usingFirestoreBackend;
+}
+
+export function subscribePublicPortalInFirestore(callbacks: PublicFirestoreCallbacks): () => void {
+  return subscribePublicPortalFromFirestore(callbacks);
+}
+
+export function subscribeAdminDataInFirestore(callbacks: AdminFirestoreCallbacks): () => void {
+  return subscribeAdminDataFromFirestore(callbacks);
+}
 
 class SchemaNotReadyError extends Error {
   constructor() {
@@ -64,7 +82,11 @@ async function handleApiResponse<T>(res: Response): Promise<T> {
     throw new SchemaNotReadyError();
   }
   if (!res.ok) {
-    if (res.status === 503 && meta.code === 'SUPABASE_SCHEMA_MISSING') {
+    if (
+      res.status >= 502 ||
+      (res.status === 500 && meta.code === 'SUPABASE_SCHEMA_MISSING') ||
+      meta.code === 'SUPABASE_SCHEMA_MISSING'
+    ) {
       throw new SchemaNotReadyError();
     }
     throw new Error(meta.error || 'Request failed');
@@ -74,9 +96,12 @@ async function handleApiResponse<T>(res: Response): Promise<T> {
 
 async function withSupabaseOrFallback<T>(supabaseCall: () => Promise<T>, fallbackCall: () => Promise<T>): Promise<T> {
   try {
-    return await supabaseCall();
+    const result = await supabaseCall();
+    usingFirestoreBackend = false;
+    return result;
   } catch (err) {
     if (err instanceof SchemaNotReadyError) {
+      usingFirestoreBackend = true;
       return fallbackCall();
     }
     throw err;

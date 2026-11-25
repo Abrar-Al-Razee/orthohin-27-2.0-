@@ -32,6 +32,9 @@ import {
   createOrderInDb,
   fetchAdminData,
   fetchPublicPortal,
+  isUsingFirestoreBackend,
+  subscribeAdminDataInFirestore,
+  subscribePublicPortalInFirestore,
 } from './services/apiService';
 import type { Batchmate, GalleryItem, HoodieOrder, PortalState, ToastMessage, ViewMode } from './types';
 import {
@@ -41,7 +44,9 @@ import {
   DEFAULT_PROFILE_IMAGE,
   mergeHoodieConfig,
   mergeSiteConfig,
+  SITE_LOGO_SRC,
 } from './utils/storage';
+import { useTheme } from './utils/theme';
 
 const ROUTE_PATHS: Record<ViewMode, string> = {
   home: '/',
@@ -111,6 +116,8 @@ export default function App() {
   const [adminOpen, setAdminOpen] = useState<boolean>(initialView === 'admin');
   const [lightboxItem, setLightboxItem] = useState<GalleryItem | null>(null);
   const [toast, setToast] = useState<ToastMessage | null>(null);
+  const [firestoreRealtimeActive, setFirestoreRealtimeActive] = useState(false);
+  const { theme, toggleTheme } = useTheme();
 
   const toastTimerRef = useRef<number | null>(null);
   const settingsSeededRef = useRef(false);
@@ -159,6 +166,7 @@ export default function App() {
     try {
       const defaults = createDefaultState();
       const payload = await fetchPublicPortal();
+      setFirestoreRealtimeActive(isUsingFirestoreBackend());
       const hasSettings = payload.settings !== null;
       if (hasSettings) settingsSeededRef.current = true;
 
@@ -191,6 +199,7 @@ export default function App() {
     }
     try {
       const adminPayload = await fetchAdminData();
+      setFirestoreRealtimeActive(isUsingFirestoreBackend());
       setState((prev) => ({
         ...prev,
         orders: adminPayload.orders,
@@ -220,6 +229,62 @@ export default function App() {
   useEffect(() => {
     void refreshAdminData();
   }, [refreshAdminData]);
+
+  useEffect(() => {
+    if (!firestoreRealtimeActive) return;
+    const defaults = createDefaultState();
+    return subscribePublicPortalInFirestore({
+      onBatchmates: (batchmates) => {
+        const hasSettings = settingsSeededRef.current;
+        setState((prev) => ({
+          ...prev,
+          batchmates:
+            batchmates.length > 0 || hasSettings
+              ? hasSettings
+                ? batchmates
+                : [...batchmates, ...defaults.batchmates.filter((d) => !batchmates.some((i) => i.id === d.id))]
+              : defaults.batchmates,
+        }));
+      },
+      onNotices: (notices) => {
+        const hasSettings = settingsSeededRef.current;
+        setState((prev) => ({
+          ...prev,
+          notices: notices.length > 0 || hasSettings ? notices : defaults.notices,
+        }));
+      },
+      onGallery: (gallery) => {
+        const hasSettings = settingsSeededRef.current;
+        setState((prev) => ({
+          ...prev,
+          gallery: gallery.length > 0 || hasSettings ? gallery : defaults.gallery,
+        }));
+      },
+      onSettings: (settings) => {
+        if (settings !== null) {
+          settingsSeededRef.current = true;
+          setState((prev) => ({
+            ...prev,
+            profile: settings.profile || defaults.profile,
+            hoodieConfig: mergeHoodieConfig(settings.hoodieConfig),
+            siteConfig: mergeSiteConfig(settings.siteConfig),
+          }));
+        }
+      },
+    });
+  }, [firestoreRealtimeActive]);
+
+  useEffect(() => {
+    if (!firestoreRealtimeActive || !isFirebaseAdmin) return;
+    return subscribeAdminDataInFirestore({
+      onOrders: (orders) => {
+        setState((prev) => ({ ...prev, orders }));
+      },
+      onActivityLogs: (activityLog) => {
+        setState((prev) => ({ ...prev, activityLog }));
+      },
+    });
+  }, [firestoreRealtimeActive, isFirebaseAdmin]);
 
   const updateState = useCallback((next: PortalState) => {
     setState(next);
@@ -309,13 +374,18 @@ export default function App() {
 
   if (isMaintenanceBlocked) {
     return (
-      <div className="min-h-screen bg-[#070709] text-zinc-100 flex items-center justify-center p-6">
-        <div className="max-w-md w-full rounded-2xl bg-[#111114] border border-zinc-800 p-8 text-center space-y-4">
-          <p className="text-xs font-semibold uppercase tracking-widest text-rose-400">
+      <div className="min-h-screen bg-white dark:bg-[#070709] text-zinc-950 dark:text-zinc-100 flex items-center justify-center p-6">
+        <div className="max-w-md w-full rounded-2xl bg-zinc-50 dark:bg-[#111114] border border-zinc-300 dark:border-zinc-800 shadow-sm dark:shadow-none p-8 text-center space-y-4">
+          <img
+            src={SITE_LOGO_SRC}
+            alt={`${sc.brandName} ${sc.brandAccent} logo`}
+            className="w-16 h-16 mx-auto rounded-xl object-cover border border-zinc-300 dark:border-zinc-700/80 shadow-xs bg-black"
+          />
+          <p className="text-xs font-semibold uppercase tracking-widest text-rose-700 dark:text-rose-400">
             {sc.brandName} {sc.brandAccent}
           </p>
-          <h1 className="text-2xl font-bold text-white">Portal Temporarily Paused</h1>
-          <p className="text-sm text-zinc-400 leading-relaxed">{sc.maintenanceMessage}</p>
+          <h1 className="text-2xl font-bold text-zinc-950 dark:text-white">Portal Temporarily Paused</h1>
+          <p className="text-sm text-zinc-700 dark:text-zinc-400 leading-relaxed">{sc.maintenanceMessage}</p>
         </div>
       </div>
     );
@@ -323,10 +393,12 @@ export default function App() {
 
   if (activeView === 'admin') {
     return (
-      <div className="min-h-screen bg-[#070709] text-zinc-100">
+      <div className="min-h-screen bg-white dark:bg-[#070709] text-zinc-950 dark:text-zinc-100">
         <AdminModal
           isOpen={true}
           isRouteAdmin={true}
+          theme={theme}
+          onToggleTheme={toggleTheme}
           state={{ ...state, siteConfig: sc, hoodieConfig: mergeHoodieConfig(state.hoodieConfig) }}
           authUser={authUser}
           isFirebaseAdmin={isFirebaseAdmin}
@@ -343,10 +415,10 @@ export default function App() {
             aria-live="polite"
             className={`fixed bottom-5 right-5 z-[60] px-4 py-3 rounded-xl border text-xs font-medium shadow-xl backdrop-blur-md ${
               toast.tone === 'error'
-                ? 'bg-rose-950/90 border-rose-500/40 text-rose-200'
+                ? 'bg-rose-50 dark:bg-rose-950/90 border-rose-300 dark:border-rose-500/40 text-rose-900 dark:text-rose-200'
                 : toast.tone === 'info'
-                  ? 'bg-zinc-900/95 border-zinc-700 text-zinc-200'
-                  : 'bg-emerald-950/90 border-emerald-500/40 text-emerald-200'
+                  ? 'bg-white dark:bg-zinc-900/95 border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-200'
+                  : 'bg-emerald-50 dark:bg-emerald-950/90 border-emerald-300 dark:border-emerald-500/40 text-emerald-900 dark:text-emerald-200'
             }`}
           >
             {toast.text}
@@ -357,10 +429,12 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#070709] text-zinc-100 flex flex-col">
+    <div className="min-h-screen bg-white dark:bg-[#070709] text-zinc-950 dark:text-zinc-100 flex flex-col transition-colors duration-150">
       <Navbar
         activeView={activeView}
         siteConfig={sc}
+        theme={theme}
+        onToggleTheme={toggleTheme}
         onNavigate={handleNavigate}
         onOpenRegister={() => {
           if (sc.registrationOpen !== false) {
@@ -373,7 +447,7 @@ export default function App() {
 
       <main className="flex-1">
         {sc.announcement.trim() && (
-          <div className="mt-16 bg-rose-950/60 border-b border-rose-500/30 px-4 py-2.5 text-center text-xs font-medium text-rose-200">
+          <div className="mt-16 bg-rose-50 dark:bg-rose-950/60 border-b border-rose-300 dark:border-rose-500/30 px-4 py-2.5 text-center text-xs font-semibold text-rose-900 dark:text-rose-200">
             {sc.announcement}
           </div>
         )}
@@ -388,18 +462,18 @@ export default function App() {
             >
               <div className="grid lg:grid-cols-12 gap-10 lg:gap-12 items-stretch">
                 <div className="lg:col-span-6 flex flex-col justify-center space-y-6">
-                  <p className="text-xs sm:text-sm font-medium text-rose-400">{sc.heroKicker}</p>
-                  <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white leading-[1.08] text-balance">
-                    {sc.heroTitle} <span className="text-rose-500">{sc.heroHighlight}</span>
+                  <p className="text-xs sm:text-sm font-semibold text-rose-700 dark:text-rose-400">{sc.heroKicker}</p>
+                  <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-zinc-950 dark:text-white leading-[1.08] text-balance">
+                    {sc.heroTitle} <span className="text-rose-600 dark:text-rose-500">{sc.heroHighlight}</span>
                   </h1>
-                  <p className="text-base sm:text-lg text-zinc-400 leading-relaxed max-w-xl">{sc.heroDescription}</p>
+                  <p className="text-base sm:text-lg text-zinc-700 dark:text-zinc-400 leading-relaxed max-w-xl">{sc.heroDescription}</p>
 
                   <div className="flex flex-wrap items-center gap-3 pt-2">
                     {sc.registrationOpen !== false && (
                       <button
                         type="button"
                         onClick={() => handleNavigate('register')}
-                        className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-sm font-semibold whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+                        className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-white text-sm font-semibold whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
                       >
                         <UserPlus className="w-4 h-4" />
                         Register Now
@@ -408,18 +482,18 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => handleNavigate('batchmates')}
-                      className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-lg bg-[#111114] hover:bg-zinc-900 border border-zinc-800 text-zinc-200 text-sm font-medium whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer"
+                      className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-[#111114] dark:hover:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-zinc-200 text-sm font-medium whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer"
                     >
-                      <Users className="w-4 h-4 text-zinc-400" />
+                      <Users className="w-4 h-4 text-zinc-700 dark:text-zinc-400" />
                       Batchmates Directory
                     </button>
                     {sec.hoodieNav && (
                       <button
                         type="button"
                         onClick={() => handleNavigate('hoodie')}
-                        className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-lg bg-[#111114] hover:bg-zinc-900 border border-zinc-800 text-zinc-200 text-sm font-medium whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer"
+                        className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-[#111114] dark:hover:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-zinc-200 text-sm font-medium whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer"
                       >
-                        <Shirt className="w-4 h-4 text-rose-400" />
+                        <Shirt className="w-4 h-4 text-rose-600 dark:text-rose-400" />
                         Hoodie '26-'27
                       </button>
                     )}
@@ -427,7 +501,7 @@ export default function App() {
                 </div>
 
                 <div className="lg:col-span-6">
-                  <div className="rounded-2xl overflow-hidden border border-zinc-800 bg-white h-full min-h-[280px] lg:min-h-[420px]">
+                  <div className="rounded-2xl overflow-hidden border border-zinc-300 dark:border-zinc-800 bg-white shadow-sm dark:shadow-none h-full min-h-[280px] lg:min-h-[420px]">
                     <img
                       src={sc.heroImage || DEFAULT_HERO_IMAGE}
                       alt="Rajshahi Collegiate School (Est. 1828) gate showcase"
@@ -439,22 +513,22 @@ export default function App() {
               </div>
 
               {/* Full-Width 4-Column KPI Strip */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-12 pt-10 border-t border-zinc-800/80">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-12 pt-10 border-t border-zinc-300 dark:border-zinc-800/80">
                 {(sc.kpis || []).map((kpi, idx) => (
                   <button
                     key={kpi.id || idx}
                     type="button"
                     onClick={() => handleNavigate(kpi.autoBatchmateCount ? 'batchmates' : 'about')}
-                    className="text-left p-5 rounded-2xl bg-[#111114] border border-zinc-800/80 hover:border-zinc-700 transition-colors cursor-pointer"
+                    className="text-left p-5 rounded-2xl bg-white dark:bg-[#111114] border border-zinc-300 dark:border-zinc-800/80 hover:border-zinc-500 dark:hover:border-zinc-700 shadow-xs dark:shadow-none transition-colors cursor-pointer"
                   >
                     <p
                       className={`text-3xl font-bold font-mono tabular-nums ${
-                        idx === (sc.kpis || []).length - 1 ? 'text-rose-500' : 'text-white'
+                        idx === (sc.kpis || []).length - 1 ? 'text-rose-600 dark:text-rose-500' : 'text-zinc-950 dark:text-white'
                       }`}
                     >
                       {kpi.autoBatchmateCount ? state.batchmates.length : kpi.value}
                     </p>
-                    <p className="text-xs text-zinc-400 mt-1">{kpi.label}</p>
+                    <p className="text-xs text-zinc-700 dark:text-zinc-400 mt-1">{kpi.label}</p>
                   </button>
                 ))}
               </div>
@@ -466,7 +540,7 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => handleNavigate('notices')}
-                      className="inline-flex items-center gap-2 text-xs font-medium text-rose-400 hover:text-rose-300 transition-colors cursor-pointer"
+                      className="inline-flex items-center gap-2 text-xs font-semibold text-rose-700 hover:text-rose-800 dark:text-rose-400 dark:hover:text-rose-300 transition-colors cursor-pointer"
                     >
                       <Megaphone className="w-3.5 h-3.5" />
                       <span>Official Batch Notices</span>
@@ -474,7 +548,7 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => handleNavigate('notices')}
-                      className="inline-flex items-center gap-1 text-xs font-medium text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                      className="inline-flex items-center gap-1 text-xs font-medium text-zinc-700 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white transition-colors cursor-pointer"
                     >
                       View All Notices
                       <ChevronRight className="w-3.5 h-3.5" />
@@ -489,31 +563,31 @@ export default function App() {
                           key={notice.id}
                           type="button"
                           onClick={() => handleNavigate('notices')}
-                          className="text-left p-5 rounded-2xl bg-[#111114] border border-zinc-800/80 hover:border-zinc-700 transition-colors space-y-2 cursor-pointer"
+                          className="text-left p-5 rounded-2xl bg-white dark:bg-[#111114] border border-zinc-300 dark:border-zinc-800/80 hover:border-zinc-500 dark:hover:border-zinc-700 shadow-xs dark:shadow-none transition-colors space-y-2 cursor-pointer"
                         >
                           <div className="flex items-center gap-2 text-xs">
                             <span
                               className={`font-semibold ${
                                 notice.category === 'Urgent'
-                                  ? 'text-rose-400'
+                                  ? 'text-rose-700 dark:text-rose-400'
                                   : notice.category === 'Event'
-                                    ? 'text-amber-400'
-                                    : 'text-emerald-400'
+                                    ? 'text-amber-700 dark:text-amber-400'
+                                    : 'text-emerald-700 dark:text-emerald-400'
                               }`}
                             >
                               {notice.category}
                             </span>
-                            <span className="text-zinc-600">·</span>
-                            <span className="font-mono text-zinc-500">{notice.createdAt}</span>
+                            <span className="text-zinc-400 dark:text-zinc-600">·</span>
+                            <span className="font-mono text-zinc-600 dark:text-zinc-500">{notice.createdAt}</span>
                             {notice.pinned && (
                               <>
-                                <span className="text-zinc-600">·</span>
-                                <span className="text-rose-400 font-medium">Pinned</span>
+                                <span className="text-zinc-400 dark:text-zinc-600">·</span>
+                                <span className="text-rose-700 dark:text-rose-400 font-semibold">Pinned</span>
                               </>
                             )}
                           </div>
-                          <h3 className="text-base font-semibold text-white">{notice.title}</h3>
-                          <p className="text-sm text-zinc-400 leading-relaxed">{notice.message}</p>
+                          <h3 className="text-base font-semibold text-zinc-950 dark:text-white">{notice.title}</h3>
+                          <p className="text-sm text-zinc-700 dark:text-zinc-400 leading-relaxed">{notice.message}</p>
                         </button>
                       ))}
                   </div>
@@ -523,67 +597,67 @@ export default function App() {
 
             {/* About Section */}
             {sec.about && (
-              <section id="about" className="py-20 bg-[#0b0b0e] border-y border-zinc-900">
+              <section id="about" className="py-20 bg-zinc-100 dark:bg-[#0b0b0e] border-y border-zinc-300 dark:border-zinc-900">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid lg:grid-cols-12 gap-12 items-center">
                   <div className="lg:col-span-7 space-y-6">
                     <div className="flex items-center justify-between gap-4">
-                      <p className="text-xs font-medium text-rose-400">{sc.aboutKicker}</p>
+                      <p className="text-xs font-semibold text-rose-700 dark:text-rose-400">{sc.aboutKicker}</p>
                       <button
                         type="button"
                         onClick={() => handleNavigate('about')}
-                        className="inline-flex items-center gap-1 text-xs font-medium text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                        className="inline-flex items-center gap-1 text-xs font-medium text-zinc-700 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white transition-colors cursor-pointer"
                       >
                         About Page
                         <ChevronRight className="w-3.5 h-3.5" />
                       </button>
                     </div>
-                    <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white text-balance">
+                    <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-zinc-950 dark:text-white text-balance">
                       {sc.aboutTitle}
                     </h2>
-                    <p className="text-sm sm:text-base text-zinc-400 leading-relaxed max-w-2xl">
+                    <p className="text-sm sm:text-base text-zinc-700 dark:text-zinc-400 leading-relaxed max-w-2xl">
                       {sc.aboutDescription}
                     </p>
                     <div className="grid sm:grid-cols-2 gap-4 pt-2">
                       <button
                         type="button"
                         onClick={() => handleNavigate('about')}
-                        className="text-left p-5 rounded-2xl bg-[#111114] border border-zinc-800/80 hover:border-zinc-700 transition-colors space-y-2 cursor-pointer"
+                        className="text-left p-5 rounded-2xl bg-white dark:bg-[#111114] border border-zinc-300 dark:border-zinc-800/80 hover:border-zinc-500 dark:hover:border-zinc-700 shadow-xs dark:shadow-none transition-colors space-y-2 cursor-pointer"
                       >
-                        <Target className="w-5 h-5 text-rose-500" />
-                        <h3 className="text-sm font-semibold text-white">{sc.visionTitle}</h3>
-                        <p className="text-xs text-zinc-400 leading-relaxed">{sc.visionText}</p>
+                        <Target className="w-5 h-5 text-rose-600 dark:text-rose-500" />
+                        <h3 className="text-sm font-semibold text-zinc-950 dark:text-white">{sc.visionTitle}</h3>
+                        <p className="text-xs text-zinc-700 dark:text-zinc-400 leading-relaxed">{sc.visionText}</p>
                       </button>
                       <button
                         type="button"
                         onClick={() => handleNavigate('about')}
-                        className="text-left p-5 rounded-2xl bg-[#111114] border border-zinc-800/80 hover:border-zinc-700 transition-colors space-y-2 cursor-pointer"
+                        className="text-left p-5 rounded-2xl bg-white dark:bg-[#111114] border border-zinc-300 dark:border-zinc-800/80 hover:border-zinc-500 dark:hover:border-zinc-700 shadow-xs dark:shadow-none transition-colors space-y-2 cursor-pointer"
                       >
-                        <Heart className="w-5 h-5 text-rose-500" />
-                        <h3 className="text-sm font-semibold text-white">{sc.unityTitle}</h3>
-                        <p className="text-xs text-zinc-400 leading-relaxed">{sc.unityText}</p>
+                        <Heart className="w-5 h-5 text-rose-600 dark:text-rose-500" />
+                        <h3 className="text-sm font-semibold text-zinc-950 dark:text-white">{sc.unityTitle}</h3>
+                        <p className="text-xs text-zinc-700 dark:text-zinc-400 leading-relaxed">{sc.unityText}</p>
                       </button>
                     </div>
                   </div>
 
                   <div className="lg:col-span-5">
-                    <div className="p-8 rounded-2xl bg-[#111114] border border-zinc-800/80 text-center space-y-5">
+                    <div className="p-8 rounded-2xl bg-white dark:bg-[#111114] border border-zinc-300 dark:border-zinc-800/80 shadow-xs dark:shadow-none text-center space-y-5">
                       <button
                         type="button"
                         onClick={() => handleNavigate('about')}
-                        className="w-14 h-14 mx-auto rounded-xl bg-zinc-900 border border-zinc-800 hover:border-rose-500/40 flex items-center justify-center transition-colors cursor-pointer"
+                        className="w-14 h-14 mx-auto rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 hover:border-rose-500/60 flex items-center justify-center transition-colors cursor-pointer"
                         aria-label="Open About Page"
                       >
-                        <Instagram className="w-7 h-7 text-rose-500" />
+                        <Instagram className="w-7 h-7 text-rose-600 dark:text-rose-500" />
                       </button>
                       <div className="space-y-1.5">
-                        <h3 className="text-xl font-bold text-white">{sc.instagramHandle}</h3>
-                        <p className="text-sm text-zinc-400 max-w-xs mx-auto leading-relaxed">{sc.instagramBio}</p>
+                        <h3 className="text-xl font-bold text-zinc-950 dark:text-white">{sc.instagramHandle}</h3>
+                        <p className="text-sm text-zinc-700 dark:text-zinc-400 max-w-xs mx-auto leading-relaxed">{sc.instagramBio}</p>
                       </div>
                       <a
                         href={sc.instagramUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-sm font-semibold transition-colors"
+                        className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-white text-sm font-semibold transition-colors"
                       >
                         View Posts on Instagram
                         <ArrowUpRight className="w-4 h-4" />
@@ -602,17 +676,17 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => handleNavigate('gallery')}
-                      className="inline-flex items-center gap-1.5 text-xs font-medium text-rose-400 hover:text-rose-300 mb-1 transition-colors cursor-pointer"
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-700 hover:text-rose-800 dark:text-rose-400 dark:hover:text-rose-300 mb-1 transition-colors cursor-pointer"
                     >
                       <Camera className="w-3.5 h-3.5" />
                       Memory Vault
                     </button>
-                    <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">Captured Moments</h2>
+                    <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-zinc-950 dark:text-white">Captured Moments</h2>
                   </div>
                   <button
                     type="button"
                     onClick={() => handleNavigate('gallery')}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#111114] hover:bg-zinc-900 border border-zinc-800 text-xs font-medium text-zinc-200 transition-colors cursor-pointer w-fit"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-[#111114] dark:hover:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 text-xs font-medium text-zinc-900 dark:text-zinc-200 transition-colors cursor-pointer w-fit"
                   >
                     Open Gallery Page
                     <ChevronRight className="w-3.5 h-3.5" />
@@ -620,9 +694,9 @@ export default function App() {
                 </div>
 
                 {state.gallery.length === 0 ? (
-                  <div className="p-12 text-center rounded-2xl bg-[#111114] border border-zinc-800/80">
-                    <Camera className="w-8 h-8 text-zinc-600 mx-auto mb-3" />
-                    <p className="text-sm text-zinc-400">No gallery moments added yet.</p>
+                  <div className="p-12 text-center rounded-2xl bg-zinc-50 dark:bg-[#111114] border border-zinc-300 dark:border-zinc-800/80">
+                    <Camera className="w-8 h-8 text-zinc-500 dark:text-zinc-600 mx-auto mb-3" />
+                    <p className="text-sm text-zinc-700 dark:text-zinc-400">No gallery moments added yet.</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -631,10 +705,10 @@ export default function App() {
                         key={item.id}
                         type="button"
                         onClick={() => setLightboxItem(item)}
-                        className="text-left rounded-2xl overflow-hidden bg-[#111114] border border-zinc-800/80 hover:border-zinc-700 transition-colors duration-150 group cursor-pointer flex flex-col"
+                        className="text-left rounded-2xl overflow-hidden bg-white dark:bg-[#111114] border border-zinc-300 dark:border-zinc-800/80 hover:border-zinc-500 dark:hover:border-zinc-700 shadow-xs dark:shadow-none transition-colors duration-150 group cursor-pointer flex flex-col"
                       >
                         {item.src && (
-                          <div className="relative w-full aspect-[4/3] overflow-hidden bg-zinc-900">
+                          <div className="relative w-full aspect-[4/3] overflow-hidden bg-zinc-100 dark:bg-zinc-900">
                             <img
                               src={item.src}
                               alt={item.title}
@@ -653,14 +727,14 @@ export default function App() {
                         )}
                         <div className="p-5 space-y-2 flex-1 flex flex-col justify-between">
                           <div className="space-y-1.5">
-                            {item.date && <p className="text-xs font-mono text-zinc-500">{item.date}</p>}
-                            <h3 className="text-base font-semibold text-white group-hover:text-rose-400 transition-colors">
+                            {item.date && <p className="text-xs font-mono text-zinc-600 dark:text-zinc-500">{item.date}</p>}
+                            <h3 className="text-base font-semibold text-zinc-950 dark:text-white group-hover:text-rose-700 dark:group-hover:text-rose-400 transition-colors">
                               {item.title}
                             </h3>
-                            <p className="text-xs text-zinc-400 leading-relaxed">{item.caption}</p>
+                            <p className="text-xs text-zinc-700 dark:text-zinc-400 leading-relaxed">{item.caption}</p>
                           </div>
                           {!item.src && item.isVideo && (
-                            <div className="pt-2 inline-flex items-center gap-2 text-xs font-medium text-rose-400">
+                            <div className="pt-2 inline-flex items-center gap-2 text-xs font-semibold text-rose-700 dark:text-rose-400">
                               <Play className="w-3.5 h-3.5 fill-current" />
                               <span>Watch video memory</span>
                             </div>
@@ -675,19 +749,19 @@ export default function App() {
 
             {/* Directory / Leadership Section */}
             {sec.directory && (
-              <section id="directory" className="py-20 bg-[#0b0b0e] border-y border-zinc-900">
+              <section id="directory" className="py-20 bg-zinc-100 dark:bg-[#0b0b0e] border-y border-zinc-300 dark:border-zinc-900">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                   <div className="text-center max-w-2xl mx-auto mb-12 space-y-2">
-                    <p className="text-xs font-medium text-rose-400">{sc.leadSectionKicker}</p>
-                    <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">{sc.leadSectionTitle}</h2>
-                    <p className="text-sm text-zinc-400">{sc.leadSectionSubtitle}</p>
+                    <p className="text-xs font-semibold text-rose-700 dark:text-rose-400">{sc.leadSectionKicker}</p>
+                    <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-zinc-950 dark:text-white">{sc.leadSectionTitle}</h2>
+                    <p className="text-sm text-zinc-700 dark:text-zinc-400">{sc.leadSectionSubtitle}</p>
                   </div>
 
-                  <div className="max-w-md mx-auto rounded-2xl bg-[#111114] border border-zinc-800/80 p-8 text-center space-y-5">
+                  <div className="max-w-md mx-auto rounded-2xl bg-white dark:bg-[#111114] border border-zinc-300 dark:border-zinc-800/80 shadow-xs dark:shadow-none p-8 text-center space-y-5">
                     <button
                       type="button"
                       onClick={() => handleNavigate('directory')}
-                      className="w-32 h-32 mx-auto rounded-full overflow-hidden border-2 border-zinc-700 hover:border-rose-500 transition-colors block cursor-pointer"
+                      className="w-32 h-32 mx-auto rounded-full overflow-hidden border-2 border-zinc-300 dark:border-zinc-700 hover:border-rose-500 transition-colors block cursor-pointer"
                       aria-label="Open Directory Page"
                     >
                       <img
@@ -704,18 +778,18 @@ export default function App() {
                     </button>
 
                     <div className="space-y-1">
-                      <p className="text-xs font-medium text-rose-400">{sc.leadRole}</p>
-                      <h3 className="text-xl font-bold text-white">{sc.leadName}</h3>
+                      <p className="text-xs font-semibold text-rose-700 dark:text-rose-400">{sc.leadRole}</p>
+                      <h3 className="text-xl font-bold text-zinc-950 dark:text-white">{sc.leadName}</h3>
                     </div>
 
-                    <p className="text-sm text-zinc-400 leading-relaxed">"{sc.devNote}"</p>
+                    <p className="text-sm text-zinc-700 dark:text-zinc-400 leading-relaxed">"{sc.devNote}"</p>
 
                     <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
                       <a
                         href={sc.instagramUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition-colors"
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-white text-xs font-semibold transition-colors"
                       >
                         Connect on Instagram
                         <ArrowUpRight className="w-3.5 h-3.5" />
@@ -723,14 +797,14 @@ export default function App() {
                       <button
                         type="button"
                         onClick={() => handleNavigate('directory')}
-                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-200 text-xs font-medium transition-colors cursor-pointer"
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-200 text-xs font-medium transition-colors cursor-pointer"
                       >
                         Directory Page
                       </button>
                       <button
                         type="button"
                         onClick={() => handleNavigate('batchmates')}
-                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-200 text-xs font-medium transition-colors cursor-pointer"
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-200 text-xs font-medium transition-colors cursor-pointer"
                       >
                         View All Batchmates
                       </button>
@@ -744,35 +818,35 @@ export default function App() {
             {sec.timeline && (sc.timeline || []).length > 0 && (
               <section id="timeline" className="py-20 max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="text-center mb-12 space-y-2">
-                  <p className="text-xs font-medium text-rose-400">Cohort Milestones</p>
-                  <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">Our Journey</h2>
+                  <p className="text-xs font-semibold text-rose-700 dark:text-rose-400">Cohort Milestones</p>
+                  <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-zinc-950 dark:text-white">Our Journey</h2>
                   <button
                     type="button"
                     onClick={() => handleNavigate('timeline')}
-                    className="inline-flex items-center gap-1 text-xs font-medium text-zinc-400 hover:text-white pt-1 transition-colors cursor-pointer"
+                    className="inline-flex items-center gap-1 text-xs font-medium text-zinc-700 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white pt-1 transition-colors cursor-pointer"
                   >
                     Open Journey Page
                     <ChevronRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
 
-                <ol className="relative border-l border-zinc-800 space-y-8 ml-3">
+                <ol className="relative border-l border-zinc-300 dark:border-zinc-800 space-y-8 ml-3">
                   {(sc.timeline || []).map((item, idx) => (
                     <li key={item.id || idx} className="pl-7 relative">
                       <span
                         className={`absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full ${
-                          idx === (sc.timeline || []).length - 1 ? 'bg-zinc-600' : 'bg-rose-500'
+                          idx === (sc.timeline || []).length - 1 ? 'bg-zinc-500 dark:bg-zinc-600' : 'bg-rose-600 dark:bg-rose-500'
                         }`}
                       />
                       <p
-                        className={`text-xs font-mono ${
-                          idx === (sc.timeline || []).length - 1 ? 'text-zinc-400' : 'text-rose-400'
+                        className={`text-xs font-mono font-semibold ${
+                          idx === (sc.timeline || []).length - 1 ? 'text-zinc-600 dark:text-zinc-400' : 'text-rose-700 dark:text-rose-400'
                         }`}
                       >
                         {item.tag}
                       </p>
-                      <h3 className="text-base font-semibold text-white mt-0.5">{item.title}</h3>
-                      <p className="text-sm text-zinc-400 mt-1">{item.description}</p>
+                      <h3 className="text-base font-semibold text-zinc-950 dark:text-white mt-0.5">{item.title}</h3>
+                      <p className="text-sm text-zinc-700 dark:text-zinc-400 mt-1">{item.description}</p>
                     </li>
                   ))}
                 </ol>
@@ -844,14 +918,21 @@ export default function App() {
       </main>
 
       {/* Footer */}
-      <footer className="py-8 border-t border-zinc-900 text-center px-4">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-zinc-500">
-          <p>{sc.footerText}</p>
+      <footer className="py-8 border-t border-zinc-300 dark:border-zinc-900 bg-zinc-50 dark:bg-transparent text-center px-4">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-zinc-600 dark:text-zinc-500">
+          <div className="flex items-center gap-2.5">
+            <img
+              src={SITE_LOGO_SRC}
+              alt={`${sc.brandName} ${sc.brandAccent} logo`}
+              className="w-7 h-7 rounded-md object-cover border border-zinc-300 dark:border-zinc-800 shrink-0 bg-black"
+            />
+            <p className="text-left">{sc.footerText}</p>
+          </div>
           <div className="flex flex-wrap items-center justify-center gap-5">
             <button
               type="button"
               onClick={() => handleNavigate('home')}
-              className="hover:text-zinc-200 transition-colors cursor-pointer"
+              className="hover:text-zinc-950 dark:hover:text-zinc-200 transition-colors cursor-pointer"
             >
               Home
             </button>
@@ -859,7 +940,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => handleNavigate('notices')}
-                className="hover:text-zinc-200 transition-colors cursor-pointer"
+                className="hover:text-zinc-950 dark:hover:text-zinc-200 transition-colors cursor-pointer"
               >
                 Notices
               </button>
@@ -868,7 +949,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => handleNavigate('about')}
-                className="hover:text-zinc-200 transition-colors cursor-pointer"
+                className="hover:text-zinc-950 dark:hover:text-zinc-200 transition-colors cursor-pointer"
               >
                 About
               </button>
@@ -877,7 +958,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => handleNavigate('gallery')}
-                className="hover:text-zinc-200 transition-colors cursor-pointer"
+                className="hover:text-zinc-950 dark:hover:text-zinc-200 transition-colors cursor-pointer"
               >
                 Gallery
               </button>
@@ -885,7 +966,7 @@ export default function App() {
             <button
               type="button"
               onClick={() => handleNavigate('batchmates')}
-              className="hover:text-zinc-200 transition-colors cursor-pointer"
+              className="hover:text-zinc-950 dark:hover:text-zinc-200 transition-colors cursor-pointer"
             >
               Batchmates
             </button>
@@ -893,7 +974,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => handleNavigate('hoodie')}
-                className="hover:text-zinc-200 transition-colors cursor-pointer"
+                className="hover:text-zinc-950 dark:hover:text-zinc-200 transition-colors cursor-pointer"
               >
                 Hoodie '26-'27
               </button>
@@ -902,7 +983,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => handleNavigate('directory')}
-                className="hover:text-zinc-200 transition-colors cursor-pointer"
+                className="hover:text-zinc-950 dark:hover:text-zinc-200 transition-colors cursor-pointer"
               >
                 Directory
               </button>
@@ -911,7 +992,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => handleNavigate('timeline')}
-                className="hover:text-zinc-200 transition-colors cursor-pointer"
+                className="hover:text-zinc-950 dark:hover:text-zinc-200 transition-colors cursor-pointer"
               >
                 Our Journey
               </button>
@@ -920,7 +1001,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => handleNavigate('register')}
-                className="hover:text-zinc-200 transition-colors cursor-pointer"
+                className="hover:text-zinc-950 dark:hover:text-zinc-200 transition-colors cursor-pointer"
               >
                 Register
               </button>
@@ -945,10 +1026,10 @@ export default function App() {
           aria-live="polite"
           className={`fixed bottom-5 right-5 z-50 px-4 py-3 rounded-xl border text-xs font-medium shadow-xl backdrop-blur-md ${
             toast.tone === 'error'
-              ? 'bg-rose-950/90 border-rose-500/40 text-rose-200'
+              ? 'bg-rose-50 dark:bg-rose-950/90 border-rose-300 dark:border-rose-500/40 text-rose-900 dark:text-rose-200'
               : toast.tone === 'info'
-                ? 'bg-zinc-900/95 border-zinc-700 text-zinc-200'
-                : 'bg-emerald-950/90 border-emerald-500/40 text-emerald-200'
+                ? 'bg-white dark:bg-zinc-900/95 border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-200'
+                : 'bg-emerald-50 dark:bg-emerald-950/90 border-emerald-300 dark:border-emerald-500/40 text-emerald-900 dark:text-emerald-200'
           }`}
         >
           {toast.text}

@@ -31,25 +31,64 @@ function clampStr(val: string | undefined, max: number): string {
   return String(val ?? '').trim().slice(0, max);
 }
 
+let supabaseOfflineUntil = 0;
+
+export function isSupabaseNetworkOrSchemaMessage(msg: string, code?: string): boolean {
+  const lower = msg.toLowerCase();
+  return (
+    code === 'PGRST205' ||
+    code === '42P01' ||
+    code === '42501' ||
+    lower.includes('schema cache') ||
+    lower.includes('does not exist') ||
+    lower.includes('row-level security') ||
+    lower.includes('invalid api key') ||
+    lower.includes('fetch failed') ||
+    lower.includes('enotfound') ||
+    lower.includes('econnrefused') ||
+    lower.includes('etimedout') ||
+    lower.includes('eai_again') ||
+    lower.includes('timeout') ||
+    lower.includes('aborted') ||
+    lower.includes('network')
+  );
+}
+
+function assertSupabaseReady(): void {
+  if (Date.now() < supabaseOfflineUntil) {
+    throw new SupabaseSchemaMissingError('Supabase unreachable; using Firebase Firestore.');
+  }
+}
+
+function markSupabaseOfflineIfNetwork(msg: string): void {
+  const lower = msg.toLowerCase();
+  if (
+    lower.includes('fetch failed') ||
+    lower.includes('enotfound') ||
+    lower.includes('econnrefused') ||
+    lower.includes('etimedout') ||
+    lower.includes('eai_again') ||
+    lower.includes('timeout') ||
+    lower.includes('aborted') ||
+    lower.includes('network')
+  ) {
+    supabaseOfflineUntil = Date.now() + 60_000;
+  }
+}
+
 function throwIfSupabaseError(error: { code?: string; message?: string } | null, fallbackMsg: string): void {
   if (!error) return;
   const msg = String(error.message || '');
-  if (
-    error.code === 'PGRST205' ||
-    error.code === '42P01' ||
-    error.code === '42501' ||
-    msg.includes('schema cache') ||
-    msg.includes('does not exist') ||
-    msg.includes('row-level security') ||
-    msg.includes('Invalid API key')
-  ) {
-    throw new SupabaseSchemaMissingError(msg || 'Supabase schema setup pending.');
+  if (isSupabaseNetworkOrSchemaMessage(msg, error.code)) {
+    markSupabaseOfflineIfNetwork(msg);
+    throw new SupabaseSchemaMissingError(msg || 'Supabase unavailable; falling back to Firestore.');
   }
   console.error(`Supabase query failed (${error.code || 'ERR'}): ${msg}`);
   throw new Error(fallbackMsg);
 }
 
 export async function getPublicPortalData() {
+  assertSupabaseReady();
   const [bmRes, noticeRes, galleryRes, settingsRes] = await Promise.all([
     supabase.from('batchmates').select('*').order('created_at', { ascending: false }),
     supabase.from('notices').select('*').order('updated_at', { ascending: false }),
@@ -110,6 +149,7 @@ export async function getPublicPortalData() {
 }
 
 export async function getAdminPortalData() {
+  assertSupabaseReady();
   const [orderRes, logRes] = await Promise.all([
     supabase.from('hoodie_orders').select('*').order('created_at', { ascending: false }),
     supabase.from('activity_logs').select('*').order('created_at', { ascending: false }).limit(50),
@@ -141,6 +181,7 @@ export async function getAdminPortalData() {
 }
 
 export async function createBatchmate(bm: Batchmate): Promise<Batchmate> {
+  assertSupabaseReady();
   const id = sanitizeId(bm.id, 'bm');
   const name = clampStr(bm.name, 100) || 'Batchmate';
   const roll = clampStr(bm.roll, 32) || '2700';
@@ -179,6 +220,7 @@ export async function createBatchmate(bm: Batchmate): Promise<Batchmate> {
 }
 
 export async function updateBatchmate(id: string, bm: Partial<Batchmate>): Promise<void> {
+  assertSupabaseReady();
   const docId = sanitizeId(id, 'bm');
   const patch: Record<string, unknown> = {
     name: clampStr(bm.name, 100),
@@ -196,12 +238,14 @@ export async function updateBatchmate(id: string, bm: Partial<Batchmate>): Promi
 }
 
 export async function deleteBatchmate(id: string): Promise<void> {
+  assertSupabaseReady();
   const docId = sanitizeId(id, 'bm');
   const { error } = await supabase.from('batchmates').delete().eq('id', docId);
   throwIfSupabaseError(error, 'Failed to remove batchmate record.');
 }
 
 export async function createOrder(order: HoodieOrder): Promise<HoodieOrder> {
+  assertSupabaseReady();
   const id = sanitizeId(order.id, 'RCS');
   const customerName = clampStr(order.customerName, 100) || 'Student';
   const roll = clampStr(order.roll, 32) || '0000';
@@ -249,6 +293,7 @@ export async function updateOrderStatus(
   notes?: string,
   extra?: Partial<Pick<HoodieOrder, 'customerName' | 'roll' | 'size' | 'quantity' | 'contact'>>
 ): Promise<void> {
+  assertSupabaseReady();
   const docId = sanitizeId(id, 'RCS');
   const allowedStatuses: OrderStatus[] = ['Pending', 'Confirmed', 'Delivered'];
   const safeStatus = allowedStatuses.includes(status) ? status : 'Pending';
@@ -269,12 +314,14 @@ export async function updateOrderStatus(
 }
 
 export async function deleteOrder(id: string): Promise<void> {
+  assertSupabaseReady();
   const docId = sanitizeId(id, 'RCS');
   const { error } = await supabase.from('hoodie_orders').delete().eq('id', docId);
   throwIfSupabaseError(error, 'Failed to delete order.');
 }
 
 export async function saveNotice(notice: BatchNotice): Promise<void> {
+  assertSupabaseReady();
   const id = sanitizeId(notice.id, 'notice');
   const title = clampStr(notice.title, 140) || 'Notice';
   const message = clampStr(notice.message, 1000) || 'Details updated.';
@@ -301,12 +348,14 @@ export async function saveNotice(notice: BatchNotice): Promise<void> {
 }
 
 export async function deleteNotice(id: string): Promise<void> {
+  assertSupabaseReady();
   const docId = sanitizeId(id, 'notice');
   const { error } = await supabase.from('notices').delete().eq('id', docId);
   throwIfSupabaseError(error, 'Failed to delete notice.');
 }
 
 export async function saveGalleryItem(item: GalleryItem, sortOrder: number): Promise<void> {
+  assertSupabaseReady();
   const id = sanitizeId(item.id, 'gal');
   const src = item.src && item.src.length <= 350000 ? item.src : '';
   const title = clampStr(item.title, 140) || 'Untitled Memory';
@@ -339,6 +388,7 @@ export async function reorderGalleryItems(items: GalleryItem[]): Promise<void> {
 }
 
 export async function deleteGalleryItem(id: string): Promise<void> {
+  assertSupabaseReady();
   const docId = sanitizeId(id, 'gal');
   const { error } = await supabase.from('gallery_items').delete().eq('id', docId);
   throwIfSupabaseError(error, 'Failed to delete gallery item.');
@@ -349,6 +399,7 @@ export async function saveSettings(
   hoodieConfig: HoodieConfig,
   siteConfig: SiteConfig
 ): Promise<void> {
+  assertSupabaseReady();
   const cleanSpecs = (hoodieConfig.specs || [])
     .map((s) => clampStr(s, 140))
     .filter(Boolean)
@@ -444,6 +495,7 @@ export async function saveSettings(
 }
 
 export async function addActivityLog(action: string, detail: string, userUid?: string): Promise<void> {
+  assertSupabaseReady();
   const id = `log-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
   const { error } = await supabase.from('activity_logs').insert({
     id,
@@ -456,6 +508,7 @@ export async function addActivityLog(action: string, detail: string, userUid?: s
 }
 
 export async function seedDefaultsIfEmpty(defaults: PortalState): Promise<void> {
+  assertSupabaseReady();
   const [bmRes, noticeRes, galleryRes, settingsRes] = await Promise.all([
     supabase.from('batchmates').select('id').limit(1),
     supabase.from('notices').select('id').limit(1),
@@ -494,6 +547,7 @@ export async function seedDefaultsIfEmpty(defaults: PortalState): Promise<void> 
 }
 
 export async function syncFullPortalState(nextState: PortalState, replaceCollections: boolean): Promise<void> {
+  assertSupabaseReady();
   if (replaceCollections) {
     const [bmDel, noticeDel, galleryDel] = await Promise.all([
       supabase.from('batchmates').delete().neq('id', ''),

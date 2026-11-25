@@ -12,6 +12,7 @@ import {
   deleteOrder,
   getAdminPortalData,
   getPublicPortalData,
+  isSupabaseNetworkOrSchemaMessage,
   reorderGalleryItems,
   saveGalleryItem,
   saveNotice,
@@ -30,14 +31,14 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 function sendRepoError(res: Response, error: unknown, fallbackMessage: string) {
-  if (error instanceof SupabaseSchemaMissingError) {
+  const message = error instanceof Error ? error.message : fallbackMessage;
+  if (error instanceof SupabaseSchemaMissingError || isSupabaseNetworkOrSchemaMessage(message)) {
     res.status(200).json({
       useFallback: true,
       code: 'SUPABASE_SCHEMA_MISSING',
     });
     return;
   }
-  const message = error instanceof Error ? error.message : fallbackMessage;
   res.status(500).json({ error: message });
 }
 
