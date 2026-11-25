@@ -1233,7 +1233,7 @@ export function AdminModal({
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const src = await compressImage(file, 900);
+      const src = await compressImage(file, 850, 140000);
       const nextHoodie = { ...hc, [hoodieSideTarget]: src };
       onUpdateState({ ...state, hoodieConfig: nextHoodie });
       await persistSettings(
@@ -1257,7 +1257,7 @@ export function AdminModal({
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const src = await compressImage(file, 950);
+      const src = await compressImage(file, 900, 140000);
       const nextSite = { ...sc, heroImage: src };
       onUpdateState({ ...state, siteConfig: nextSite });
       await persistSettings(state.profile, hc, nextSite, 'Hero showcase image saved live.');
@@ -1272,7 +1272,7 @@ export function AdminModal({
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const src = await compressImage(file, 600);
+      const src = await compressImage(file, 600, 120000);
       onUpdateState({ ...state, profile: src });
       setProfileUrlInput(src);
       await persistSettings(src, hc, sc, 'Leadership profile photo saved live.');

@@ -35,6 +35,7 @@ import {
 } from './firestoreFallback';
 
 let usingFirestoreBackend = false;
+let apiServerUnavailable = false;
 
 export function isUsingFirestoreBackend(): boolean {
   return usingFirestoreBackend;
@@ -67,12 +68,20 @@ async function getAuthHeaders(): Promise<HeadersInit> {
 }
 
 async function handleApiResponse<T>(res: Response): Promise<T> {
+  const contentType = (res.headers.get('content-type') || '').toLowerCase();
+  if (!contentType.includes('application/json')) {
+    apiServerUnavailable = true;
+    throw new SchemaNotReadyError();
+  }
+
   let payload: unknown = null;
   try {
     payload = await res.json();
   } catch {
-    payload = null;
+    apiServerUnavailable = true;
+    throw new SchemaNotReadyError();
   }
+
   const meta = (payload && typeof payload === 'object' ? payload : {}) as {
     error?: string;
     code?: string;
@@ -82,6 +91,10 @@ async function handleApiResponse<T>(res: Response): Promise<T> {
     throw new SchemaNotReadyError();
   }
   if (!res.ok) {
+    if (res.status === 404 || res.status === 405 || res.status === 501) {
+      apiServerUnavailable = true;
+      throw new SchemaNotReadyError();
+    }
     if (
       res.status >= 502 ||
       (res.status === 500 && meta.code === 'SUPABASE_SCHEMA_MISSING') ||
@@ -95,12 +108,16 @@ async function handleApiResponse<T>(res: Response): Promise<T> {
 }
 
 async function withSupabaseOrFallback<T>(supabaseCall: () => Promise<T>, fallbackCall: () => Promise<T>): Promise<T> {
+  if (apiServerUnavailable) {
+    usingFirestoreBackend = true;
+    return fallbackCall();
+  }
   try {
     const result = await supabaseCall();
     usingFirestoreBackend = false;
     return result;
   } catch (err) {
-    if (err instanceof SchemaNotReadyError) {
+    if (err instanceof SchemaNotReadyError || err instanceof TypeError) {
       usingFirestoreBackend = true;
       return fallbackCall();
     }

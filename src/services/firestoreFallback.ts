@@ -357,8 +357,18 @@ export async function updateBatchmateInFirestore(bm: Batchmate): Promise<void> {
     payload.registeredAt = clampStr(bm.registeredAt, 32);
   }
 
+  const ref = doc(db, 'batchmates', id);
   try {
-    await updateDoc(doc(db, 'batchmates', id), payload);
+    const snap = await getDoc(ref);
+    if (snap.exists()) {
+      await updateDoc(ref, payload);
+    } else {
+      await setDoc(ref, {
+        ...payload,
+        registeredAt: payload.registeredAt || new Date().toISOString().slice(0, 10),
+        createdAt: serverTimestamp(),
+      });
+    }
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, `batchmates/${id}`);
   }
@@ -479,15 +489,29 @@ export async function updateNoticeInFirestore(notice: BatchNotice): Promise<void
   const message = clampStr(notice.message, 1000) || 'Details updated.';
   const category = ['General', 'Urgent', 'Event'].includes(notice.category) ? notice.category : 'General';
 
+  const ref = doc(db, 'notices', id);
   try {
-    await updateDoc(doc(db, 'notices', id), {
-      title,
-      message,
-      category,
-      pinned: Boolean(notice.pinned),
-      active: Boolean(notice.active),
-      updatedAt: serverTimestamp(),
-    });
+    const snap = await getDoc(ref);
+    if (snap.exists()) {
+      await updateDoc(ref, {
+        title,
+        message,
+        category,
+        pinned: Boolean(notice.pinned),
+        active: Boolean(notice.active),
+        updatedAt: serverTimestamp(),
+      });
+    } else {
+      await setDoc(ref, {
+        title,
+        message,
+        category,
+        pinned: Boolean(notice.pinned),
+        active: Boolean(notice.active),
+        createdAt: clampStr(notice.createdAt || new Date().toISOString().slice(0, 10), 32),
+        updatedAt: serverTimestamp(),
+      });
+    }
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, `notices/${id}`);
   }
