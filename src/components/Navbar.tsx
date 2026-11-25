@@ -8,6 +8,7 @@ interface NavbarProps {
   activeView: ViewMode;
   siteConfig?: SiteConfig;
   theme: ThemeMode;
+  showAdminButton?: boolean;
   onToggleTheme: () => void;
   onNavigate: (view: ViewMode, sectionId?: string) => void;
   onOpenRegister: () => void;
@@ -17,6 +18,7 @@ export function Navbar({
   activeView,
   siteConfig,
   theme,
+  showAdminButton = false,
   onToggleTheme,
   onNavigate,
   onOpenRegister,
@@ -112,16 +114,18 @@ export function Navbar({
               Directory
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => handleNav('admin')}
-            className={`inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer hover:text-rose-700 dark:hover:text-rose-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 rounded ${
-              activeView === 'admin' ? 'text-rose-700 dark:text-rose-400 font-semibold' : 'text-zinc-800 dark:text-zinc-300'
-            }`}
-          >
-            <Lock className="w-3.5 h-3.5 text-rose-600 dark:text-rose-500" />
-            Admin Login
-          </button>
+          {showAdminButton && (
+            <button
+              type="button"
+              onClick={() => handleNav('admin')}
+              className={`inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer hover:text-rose-700 dark:hover:text-rose-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 rounded ${
+                activeView === 'admin' ? 'text-rose-700 dark:text-rose-400 font-semibold' : 'text-zinc-800 dark:text-zinc-300'
+              }`}
+            >
+              <Lock className="w-3.5 h-3.5 text-rose-600 dark:text-rose-500" />
+              Admin Login
+            </button>
+          )}
         </nav>
 
         {/* Zone 3: Theme Switcher & Primary Action */}
@@ -250,16 +254,18 @@ export function Navbar({
           >
             Our Journey
           </button>
-          <button
-            type="button"
-            onClick={() => handleNav('admin')}
-            className={`w-full text-left px-3 py-3 rounded-lg text-sm font-medium hover:bg-zinc-100 dark:hover:bg-zinc-900 flex items-center gap-2 ${
-              activeView === 'admin' ? 'text-rose-700 dark:text-rose-400 bg-zinc-100 dark:bg-zinc-900/60 font-semibold' : 'text-zinc-800 dark:text-zinc-200'
-            }`}
-          >
-            <Lock className="w-4 h-4 text-rose-600 dark:text-rose-500" />
-            Admin Login
-          </button>
+          {showAdminButton && (
+            <button
+              type="button"
+              onClick={() => handleNav('admin')}
+              className={`w-full text-left px-3 py-3 rounded-lg text-sm font-medium hover:bg-zinc-100 dark:hover:bg-zinc-900 flex items-center gap-2 ${
+                activeView === 'admin' ? 'text-rose-700 dark:text-rose-400 bg-zinc-100 dark:bg-zinc-900/60 font-semibold' : 'text-zinc-800 dark:text-zinc-200'
+              }`}
+            >
+              <Lock className="w-4 h-4 text-rose-600 dark:text-rose-500" />
+              Admin Login
+            </button>
+          )}
           <button
             type="button"
             onClick={onToggleTheme}
