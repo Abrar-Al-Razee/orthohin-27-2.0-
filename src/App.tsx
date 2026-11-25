@@ -48,7 +48,6 @@ import {
 } from './utils/storage';
 import { useTheme } from './utils/theme';
 
-const RCS_ADMIN_REVEAL_KEY = 'orthohin_rcs_admin_revealed';
 export const LIVE_SYNC_CHANNEL = 'orthohin27_live_sync';
 export const LIVE_SYNC_STORAGE_KEY = 'orthohin27_live_sync_ping';
 
@@ -78,20 +77,6 @@ const ROUTE_TITLES: Record<ViewMode, string> = {
   admin: "Admin Panel · ORTHOHIN '27",
 };
 
-function isRcsAdminLocation(): boolean {
-  if (typeof window === 'undefined') return false;
-  const rawHash = window.location.hash.replace(/^#/, '').toLowerCase().replace(/\/+$/, '');
-  const rawPath = window.location.pathname.toLowerCase().replace(/\/+$/, '') || '/';
-  const rawSearch = window.location.search.toLowerCase();
-  const candidate = rawHash.startsWith('/') ? rawHash : rawPath;
-  return (
-    candidate === '/rcs-admin' ||
-    candidate.startsWith('/rcs-admin/') ||
-    rawHash === 'rcs-admin' ||
-    rawSearch.includes('rcs-admin')
-  );
-}
-
 function resolveViewFromLocation(): ViewMode {
   if (typeof window === 'undefined') return 'home';
   const rawHash = window.location.hash.replace(/^#/, '').toLowerCase().replace(/\/+$/, '');
@@ -103,10 +88,7 @@ function resolveViewFromLocation(): ViewMode {
     candidate === '/rcs-admin' ||
     candidate.startsWith('/rcs-admin/') ||
     rawHash === 'rcs-admin' ||
-    rawSearch.includes('rcs-admin') ||
-    candidate === '/admin' ||
-    candidate === '/admin-login' ||
-    candidate.startsWith('/admin/')
+    rawSearch.includes('rcs-admin')
   ) {
     return 'admin';
   }
@@ -141,18 +123,6 @@ export default function App() {
   const [registerOpen, setRegisterOpen] = useState(false);
   const [isRouteAdmin, setIsRouteAdmin] = useState<boolean>(initialView === 'admin');
   const [adminOpen, setAdminOpen] = useState<boolean>(initialView === 'admin');
-  const [adminButtonRevealed, setAdminButtonRevealed] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    try {
-      if (isRcsAdminLocation()) {
-        window.sessionStorage.setItem(RCS_ADMIN_REVEAL_KEY, 'true');
-        return true;
-      }
-      return window.sessionStorage.getItem(RCS_ADMIN_REVEAL_KEY) === 'true';
-    } catch {
-      return isRcsAdminLocation();
-    }
-  });
   const [lightboxItem, setLightboxItem] = useState<GalleryItem | null>(null);
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [firestoreRealtimeActive, setFirestoreRealtimeActive] = useState(false);
@@ -166,15 +136,6 @@ export default function App() {
   const isFirebaseAdmin = Boolean(
     authUser && authUser.email?.toLowerCase() === AUTHORIZED_ADMIN_EMAIL && authUser.emailVerified
   );
-
-  const revealAdminButton = useCallback(() => {
-    setAdminButtonRevealed(true);
-    try {
-      window.sessionStorage.setItem(RCS_ADMIN_REVEAL_KEY, 'true');
-    } catch {
-      // ignore storage failure
-    }
-  }, []);
 
   const showToast = useCallback((text: string, tone: ToastMessage['tone'] = 'success') => {
     if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
@@ -192,9 +153,6 @@ export default function App() {
     const syncRoute = () => {
       const resolved = resolveViewFromLocation();
       const onAdmin = resolved === 'admin';
-      if (isRcsAdminLocation()) {
-        revealAdminButton();
-      }
       setActiveView(resolved);
       setIsRouteAdmin(onAdmin);
       setAdminOpen(onAdmin);
@@ -206,9 +164,23 @@ export default function App() {
       window.removeEventListener('hashchange', syncRoute);
       if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
     };
-  }, [revealAdminButton]);
+  }, []);
 
   useEffect(() => {
+    const triggerRcsAdmin = (target?: HTMLElement | null) => {
+      keyBufferRef.current = '';
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
+        (target as HTMLInputElement).blur();
+      }
+      if (window.location.pathname !== ROUTE_PATHS.admin) {
+        window.history.pushState({}, '', ROUTE_PATHS.admin);
+      }
+      setIsRouteAdmin(true);
+      setAdminOpen(true);
+      setActiveView('admin');
+      showToast('Admin gateway opened.', 'info');
+    };
+
     const onKeyDown = (e: KeyboardEvent) => {
       if (adminOpen) return;
       const target = e.target as HTMLElement | null;
@@ -227,29 +199,34 @@ export default function App() {
 
       if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
         keyBufferRef.current = (keyBufferRef.current + e.key.toLowerCase()).slice(-24);
-        if (
-          keyBufferRef.current.endsWith('/rcs-admin') ||
-          keyBufferRef.current.endsWith('rcs-admin')
-        ) {
-          keyBufferRef.current = '';
+        if (keyBufferRef.current.endsWith('/rcs-admin')) {
           if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
             e.preventDefault();
-            (target as HTMLInputElement).blur();
           }
-          revealAdminButton();
-          if (window.location.pathname !== ROUTE_PATHS.admin) {
-            window.history.pushState({}, '', ROUTE_PATHS.admin);
-          }
-          setIsRouteAdmin(true);
-          setAdminOpen(true);
-          setActiveView('admin');
-          showToast('Admin panel opened.', 'info');
+          triggerRcsAdmin(target);
         }
       }
     };
+
+    const onInput = (e: Event) => {
+      if (adminOpen) return;
+      const target = e.target as HTMLInputElement | HTMLTextAreaElement | null;
+      if (!target || (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA')) return;
+      if (target.tagName === 'INPUT' && (target as HTMLInputElement).type === 'password') return;
+      const val = (target.value || '').trim().toLowerCase();
+      if (val === '/rcs-admin' || val.endsWith('/rcs-admin')) {
+        target.value = '';
+        triggerRcsAdmin(target);
+      }
+    };
+
     window.addEventListener('keydown', onKeyDown, true);
-    return () => window.removeEventListener('keydown', onKeyDown, true);
-  }, [adminOpen, revealAdminButton, showToast]);
+    document.addEventListener('input', onInput, true);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, true);
+      document.removeEventListener('input', onInput, true);
+    };
+  }, [adminOpen, showToast]);
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (user) => {
@@ -572,7 +549,7 @@ export default function App() {
         activeView={activeView}
         siteConfig={sc}
         theme={theme}
-        showAdminButton={adminButtonRevealed || isFirebaseAdmin}
+        showAdminButton={isFirebaseAdmin}
         onToggleTheme={toggleTheme}
         onNavigate={handleNavigate}
         onOpenRegister={() => {

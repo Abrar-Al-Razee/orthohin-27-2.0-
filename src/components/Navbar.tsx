@@ -123,7 +123,7 @@ export function Navbar({
               }`}
             >
               <Lock className="w-3.5 h-3.5 text-rose-600 dark:text-rose-500" />
-              Admin Login
+              Admin Panel
             </button>
           )}
         </nav>
@@ -263,7 +263,7 @@ export function Navbar({
               }`}
             >
               <Lock className="w-4 h-4 text-rose-600 dark:text-rose-500" />
-              Admin Login
+              Admin Panel
             </button>
           )}
           <button

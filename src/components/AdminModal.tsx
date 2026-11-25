@@ -12,6 +12,7 @@ import {
   Copy,
   Download,
   Edit3,
+  ExternalLink,
   Eye,
   EyeOff,
   FileSpreadsheet,
@@ -615,12 +616,10 @@ export function AdminModal({
   };
 
   const handleGoogleSignIn = async () => {
+    if (isAuthenticating) return null;
     setLoginError('');
     setIsAuthenticating(true);
     try {
-      if (auth.currentUser && auth.currentUser.email?.toLowerCase() !== AUTHORIZED_ADMIN_EMAIL) {
-        await signOut(auth);
-      }
       const cred = await signInWithPopup(auth, googleProvider);
       const signedEmail = cred.user.email?.toLowerCase() || '';
       if (signedEmail !== AUTHORIZED_ADMIN_EMAIL || !cred.user.emailVerified) {
@@ -633,13 +632,39 @@ export function AdminModal({
       setEmailInput(signedEmail);
       return cred.user;
     } catch (error) {
-      const code = (error as { code?: string })?.code || '';
+      const errObj = error as { code?: string; message?: string };
+      const code = errObj?.code || '';
+      const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+      console.error('Admin Google Sign-In error:', code, errObj?.message || error);
+
       if (code === 'auth/popup-closed-by-user') {
         setLoginError('Google sign-in popup was closed before completing verification.');
+      } else if (code === 'auth/cancelled-popup-request') {
+        setLoginError('Another Google sign-in popup is already open. Please finish or close it and try again.');
       } else if (code === 'auth/popup-blocked') {
-        setLoginError('Popup blocked by browser. Please allow popups and try again.');
+        setLoginError(
+          'Popup blocked by browser. Allow popups for this site or open /rcs-admin in a new browser tab.'
+        );
+      } else if (code === 'auth/unauthorized-domain') {
+        setLoginError(
+          `Domain "${hostname}" is not authorized in Firebase Auth. Add "${hostname}" in Firebase Console → Authentication → Settings → Authorized domains.`
+        );
+      } else if (code === 'auth/operation-not-allowed') {
+        setLoginError(
+          'Google Sign-In is currently disabled in Firebase Console. Enable Google under Authentication → Sign-in method.'
+        );
+      } else if (code === 'auth/network-request-failed') {
+        setLoginError(
+          'Network error reaching Google Auth. Check your internet connection or disable ad-blockers and retry.'
+        );
+      } else if (code === 'auth/web-storage-unsupported' || code === 'auth/internal-error') {
+        setLoginError(
+          'This embedded preview frame or browser blocked Google Sign-In storage. Open /rcs-admin in a full browser tab and try again.'
+        );
       } else {
-        setLoginError('Google verification failed. Please confirm your account and try again.');
+        setLoginError(
+          `Google verification failed (${code || 'unknown'}). Please confirm your account (${AUTHORIZED_ADMIN_EMAIL}) and try again.`
+        );
       }
       return null;
     } finally {
@@ -1675,7 +1700,7 @@ export function AdminModal({
       </header>
 
       {!unlocked ? (
-        /* Dedicated /admin-login Auth View */
+        /* Dedicated /rcs-admin Auth View */
         <div className="flex-1 overflow-y-auto flex items-center justify-center p-4 sm:p-8 bg-zinc-100 dark:bg-[#070709]">
           <form
             onSubmit={handleLogin}
@@ -1724,14 +1749,27 @@ export function AdminModal({
                   </button>
                 </div>
               ) : (
-                <button
-                  type="button"
-                  disabled={isAuthenticating}
-                  onClick={() => void handleGoogleSignIn()}
-                  className="w-full py-2 px-3 rounded-lg bg-white hover:bg-zinc-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-zinc-700 text-xs font-semibold text-zinc-950 dark:text-white transition-colors cursor-pointer disabled:opacity-50"
-                >
-                  {isAuthenticating ? 'Verifying Google account...' : `Sign in with Google (${AUTHORIZED_ADMIN_EMAIL})`}
-                </button>
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    disabled={isAuthenticating}
+                    onClick={() => void handleGoogleSignIn()}
+                    className="w-full py-2 px-3 rounded-lg bg-white hover:bg-zinc-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-zinc-700 text-xs font-semibold text-zinc-950 dark:text-white transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    {isAuthenticating ? 'Verifying Google account...' : `Sign in with Google (${AUTHORIZED_ADMIN_EMAIL})`}
+                  </button>
+                  {typeof window !== 'undefined' && window.self !== window.top && (
+                    <a
+                      href={window.location.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full inline-flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg border border-zinc-300 dark:border-zinc-700/80 text-[11px] font-medium text-zinc-700 hover:text-zinc-950 dark:text-zinc-300 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800/70 transition-colors"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      Open /rcs-admin in a New Tab (if popup is blocked)
+                    </a>
+                  )}
+                </div>
               )}
             </div>
 
@@ -1780,8 +1818,19 @@ export function AdminModal({
             </div>
 
             {loginError && (
-              <div role="alert" className="p-3 rounded-lg bg-rose-50 dark:bg-rose-950/60 border border-rose-300 dark:border-rose-500/40 text-xs font-medium text-rose-800 dark:text-rose-300">
-                {loginError}
+              <div role="alert" className="p-3 rounded-lg bg-rose-50 dark:bg-rose-950/60 border border-rose-300 dark:border-rose-500/40 text-xs font-medium text-rose-800 dark:text-rose-300 space-y-2">
+                <p>{loginError}</p>
+                {typeof window !== 'undefined' && (
+                  <a
+                    href={window.location.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 underline font-semibold text-rose-900 dark:text-rose-200 hover:opacity-80"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    Open /rcs-admin directly in new tab
+                  </a>
+                )}
               </div>
             )}
 
