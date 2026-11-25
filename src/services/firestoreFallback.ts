@@ -17,6 +17,7 @@ import {
 import { auth, db } from '../firebase';
 import type {
   ActivityLogEntry,
+  AdminTeamMember,
   Batchmate,
   BatchNotice,
   GalleryItem,
@@ -157,10 +158,24 @@ function mapActivityLogDoc(d: QueryDocumentSnapshot): ActivityLogEntry {
   };
 }
 
+function mapAdminTeamDoc(d: QueryDocumentSnapshot): AdminTeamMember {
+  const data = d.data();
+  return {
+    id: d.id,
+    name: String(data.name || ''),
+    role: String(data.role || ''),
+    bio: String(data.bio || ''),
+    photo: data.photo ? String(data.photo) : undefined,
+    social: data.social ? String(data.social) : undefined,
+    sortOrder: typeof data.sortOrder === 'number' ? data.sortOrder : 0,
+  };
+}
+
 export interface PublicFirestoreCallbacks {
   onBatchmates: (batchmates: Batchmate[]) => void;
   onNotices: (notices: BatchNotice[]) => void;
   onGallery: (gallery: GalleryItem[]) => void;
+  onAdminTeam: (adminTeam: AdminTeamMember[]) => void;
   onSettings: (
     settings: {
       profile: string;
@@ -202,6 +217,12 @@ export function subscribePublicPortalFromFirestore(callbacks: PublicFirestoreCal
     (err) => reportListenerError(err, OperationType.LIST, 'gallery')
   );
 
+  const unsubAdminTeam = onSnapshot(
+    query(collection(db, 'adminTeam'), orderBy('sortOrder', 'asc')),
+    (snap) => callbacks.onAdminTeam(snap.docs.map(mapAdminTeamDoc)),
+    (err) => reportListenerError(err, OperationType.LIST, 'adminTeam')
+  );
+
   const unsubSettings = onSnapshot(
     doc(db, 'settings', 'main'),
     (snap) => {
@@ -223,6 +244,7 @@ export function subscribePublicPortalFromFirestore(callbacks: PublicFirestoreCal
     unsubBatchmates();
     unsubNotices();
     unsubGallery();
+    unsubAdminTeam();
     unsubSettings();
   };
 }
@@ -247,7 +269,7 @@ export function subscribeAdminDataFromFirestore(callbacks: AdminFirestoreCallbac
 }
 
 export async function fetchPublicPortalFromFirestore() {
-  const [bmSnap, noticeSnap, gallerySnap, settingsSnap] = await Promise.all([
+  const [bmSnap, noticeSnap, gallerySnap, adminTeamSnap, settingsSnap] = await Promise.all([
     getDocs(query(collection(db, 'batchmates'), orderBy('createdAt', 'desc'))).catch((err) =>
       handleFirestoreError(err, OperationType.LIST, 'batchmates')
     ),
@@ -257,6 +279,9 @@ export async function fetchPublicPortalFromFirestore() {
     getDocs(query(collection(db, 'gallery'), orderBy('sortOrder', 'asc'))).catch((err) =>
       handleFirestoreError(err, OperationType.LIST, 'gallery')
     ),
+    getDocs(query(collection(db, 'adminTeam'), orderBy('sortOrder', 'asc'))).catch((err) =>
+      handleFirestoreError(err, OperationType.LIST, 'adminTeam')
+    ),
     getDoc(doc(db, 'settings', 'main')).catch((err) =>
       handleFirestoreError(err, OperationType.GET, 'settings/main')
     ),
@@ -265,12 +290,14 @@ export async function fetchPublicPortalFromFirestore() {
   const batchmates: Batchmate[] = bmSnap.docs.map(mapBatchmateDoc);
   const notices: BatchNotice[] = noticeSnap.docs.map(mapNoticeDoc);
   const gallery: GalleryItem[] = gallerySnap.docs.map(mapGalleryDoc);
+  const adminTeam: AdminTeamMember[] = adminTeamSnap.docs.map(mapAdminTeamDoc);
   const settingsData = settingsSnap.exists() ? settingsSnap.data() : null;
 
   return {
     batchmates,
     notices,
     gallery,
+    adminTeam,
     settings: settingsData
       ? {
           profile: String(settingsData.profile || ''),
@@ -561,6 +588,39 @@ export async function deleteGalleryItemInFirestore(id: string): Promise<void> {
   }
 }
 
+export async function saveAdminTeamMemberInFirestore(member: AdminTeamMember, sortOrder: number): Promise<void> {
+  const id = sanitizeId(member.id, 'admin');
+  const name = clampStr(member.name, 100) || 'Organizer';
+  const role = clampStr(member.role, 120) || 'Batch Admin';
+  const bio = clampStr(member.bio, 500);
+  const photo = member.photo && member.photo.trim().length <= 350000 ? member.photo.trim() : '';
+  const social = clampStr(member.social, 200);
+  const clampedSort = Math.max(0, Math.min(10000, Math.round(sortOrder)));
+
+  try {
+    await setDoc(doc(db, 'adminTeam', id), {
+      name,
+      role,
+      bio,
+      ...(photo ? { photo } : {}),
+      ...(social ? { social } : {}),
+      sortOrder: clampedSort,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `adminTeam/${id}`);
+  }
+}
+
+export async function deleteAdminTeamMemberInFirestore(id: string): Promise<void> {
+  const docId = sanitizeId(id, 'admin');
+  try {
+    await deleteDoc(doc(db, 'adminTeam', docId));
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, `adminTeam/${docId}`);
+  }
+}
+
 export async function saveSettingsInFirestore(
   profile: string,
   hoodieConfig: HoodieConfig,
@@ -678,10 +738,11 @@ export async function addActivityLogInFirestore(action: string, detail: string):
 }
 
 export async function seedDefaultsIfEmptyInFirestore(defaults: PortalState): Promise<void> {
-  const [bmSnap, noticeSnap, gallerySnap, settingsSnap] = await Promise.all([
+  const [bmSnap, noticeSnap, gallerySnap, adminTeamSnap, settingsSnap] = await Promise.all([
     getDocs(query(collection(db, 'batchmates'), limit(1))),
     getDocs(query(collection(db, 'notices'), limit(1))),
     getDocs(query(collection(db, 'gallery'), limit(1))),
+    getDocs(query(collection(db, 'adminTeam'), limit(1))),
     getDoc(doc(db, 'settings', 'main')),
   ]);
 
@@ -695,6 +756,9 @@ export async function seedDefaultsIfEmptyInFirestore(defaults: PortalState): Pro
   if (gallerySnap.empty) {
     defaults.gallery.forEach((item, idx) => tasks.push(saveGalleryItemInFirestore(item, idx)));
   }
+  if (adminTeamSnap.empty && Array.isArray(defaults.adminTeam)) {
+    defaults.adminTeam.forEach((member, idx) => tasks.push(saveAdminTeamMemberInFirestore(member, idx)));
+  }
   if (!settingsSnap.exists()) {
     tasks.push(saveSettingsInFirestore(defaults.profile, defaults.hoodieConfig, defaults.siteConfig));
   }
@@ -703,21 +767,24 @@ export async function seedDefaultsIfEmptyInFirestore(defaults: PortalState): Pro
 
 export async function syncPortalStateInFirestore(nextState: PortalState, replaceCollections: boolean): Promise<void> {
   if (replaceCollections) {
-    const [bmSnap, noticeSnap, gallerySnap] = await Promise.all([
+    const [bmSnap, noticeSnap, gallerySnap, adminTeamSnap] = await Promise.all([
       getDocs(collection(db, 'batchmates')),
       getDocs(collection(db, 'notices')),
       getDocs(collection(db, 'gallery')),
+      getDocs(collection(db, 'adminTeam')),
     ]);
     await Promise.all([
       ...bmSnap.docs.map((d) => deleteDoc(d.ref)),
       ...noticeSnap.docs.map((d) => deleteDoc(d.ref)),
       ...gallerySnap.docs.map((d) => deleteDoc(d.ref)),
+      ...adminTeamSnap.docs.map((d) => deleteDoc(d.ref)),
     ]);
   }
   await Promise.all([
     ...nextState.batchmates.map((bm) => createBatchmateInFirestore(bm)),
     ...(nextState.notices || []).map((n) => createNoticeInFirestore(n)),
     ...nextState.gallery.map((g, idx) => saveGalleryItemInFirestore(g, idx)),
+    ...(nextState.adminTeam || []).map((m, idx) => saveAdminTeamMemberInFirestore(m, idx)),
     saveSettingsInFirestore(nextState.profile, nextState.hoodieConfig, nextState.siteConfig),
   ]);
 }

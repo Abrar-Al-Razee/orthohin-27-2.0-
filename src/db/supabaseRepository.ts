@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabaseServer.ts';
 import type {
   ActivityLogEntry,
+  AdminTeamMember,
   Batchmate,
   BatchNotice,
   GalleryItem,
@@ -134,10 +135,25 @@ export async function getPublicPortalData() {
 
   const settingsRow = settingsRes.data;
 
+  let adminTeam: AdminTeamMember[] = [];
+  const teamRes = await supabase.from('admin_team').select('*').order('sort_order', { ascending: true });
+  if (!teamRes.error && Array.isArray(teamRes.data)) {
+    adminTeam = teamRes.data.map((row) => ({
+      id: String(row.id),
+      name: String(row.name || ''),
+      role: String(row.role || ''),
+      bio: String(row.bio || ''),
+      photo: row.photo ? String(row.photo) : undefined,
+      social: row.social ? String(row.social) : undefined,
+      sortOrder: typeof row.sort_order === 'number' ? row.sort_order : 0,
+    }));
+  }
+
   return {
     batchmates,
     notices,
     gallery,
+    adminTeam,
     settings: settingsRow
       ? {
           profile: String(settingsRow.profile || ''),
@@ -565,4 +581,34 @@ export async function syncFullPortalState(nextState: PortalState, replaceCollect
     ...nextState.gallery.map((g, idx) => saveGalleryItem(g, idx)),
     saveSettings(nextState.profile, nextState.hoodieConfig, nextState.siteConfig),
   ]);
+}
+
+export async function saveAdminTeamMember(member: AdminTeamMember, sortOrder: number): Promise<void> {
+  assertSupabaseReady();
+  const id = sanitizeId(member.id, 'admin');
+  const { error } = await supabase.from('admin_team').upsert(
+    {
+      id,
+      name: clampStr(member.name, 100) || 'Organizer',
+      role: clampStr(member.role, 120) || 'Batch Admin',
+      bio: clampStr(member.bio, 500),
+      photo: member.photo && member.photo.trim().length <= 350000 ? member.photo.trim() : null,
+      social: clampStr(member.social, 200) || null,
+      sort_order: Math.max(0, Math.min(10000, Math.round(sortOrder))),
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'id' }
+  );
+  throwIfSupabaseError(error, 'Failed to save admin team member.');
+}
+
+export async function reorderAdminTeamMembers(members: AdminTeamMember[]): Promise<void> {
+  assertSupabaseReady();
+  await Promise.all(members.map((m, idx) => saveAdminTeamMember(m, idx)));
+}
+
+export async function deleteAdminTeamMember(id: string): Promise<void> {
+  assertSupabaseReady();
+  const { error } = await supabase.from('admin_team').delete().eq('id', sanitizeId(id, 'admin'));
+  throwIfSupabaseError(error, 'Failed to delete admin team member.');
 }

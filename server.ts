@@ -6,6 +6,7 @@ import {
   addActivityLog,
   createBatchmate,
   createOrder,
+  deleteAdminTeamMember,
   deleteBatchmate,
   deleteGalleryItem,
   deleteNotice,
@@ -13,7 +14,9 @@ import {
   getAdminPortalData,
   getPublicPortalData,
   isSupabaseNetworkOrSchemaMessage,
+  reorderAdminTeamMembers,
   reorderGalleryItems,
+  saveAdminTeamMember,
   saveGalleryItem,
   saveNotice,
   saveSettings,
@@ -25,7 +28,7 @@ import {
 } from './src/db/supabaseRepository.ts';
 import { ensureSupabaseSchema } from './src/lib/supabaseDbInit.ts';
 import { requireAdmin, requireAuth, type AuthRequest } from './src/middleware/auth.ts';
-import type { Batchmate, BatchNotice, GalleryItem, HoodieOrder, OrderStatus, PortalState } from './src/types.ts';
+import type { AdminTeamMember, Batchmate, BatchNotice, GalleryItem, HoodieOrder, OrderStatus, PortalState } from './src/types.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -257,6 +260,35 @@ async function startServer() {
       res.json({ ok: true });
     } catch (error) {
       sendRepoError(res, error, 'Failed to delete gallery item');
+    }
+  });
+
+  app.put('/api/admin/team/reorder', requireAuth, requireAdmin, async (req: AuthRequest, res) => {
+    try {
+      const { members } = req.body as { members: AdminTeamMember[] };
+      await reorderAdminTeamMembers(members || []);
+      res.json({ ok: true });
+    } catch (error) {
+      sendRepoError(res, error, 'Failed to reorder admin team');
+    }
+  });
+
+  app.put('/api/admin/team/:id', requireAuth, requireAdmin, async (req: AuthRequest, res) => {
+    try {
+      const { member, sortOrder } = req.body as { member: AdminTeamMember; sortOrder: number };
+      await saveAdminTeamMember({ ...member, id: req.params.id }, sortOrder ?? 0);
+      res.json({ ok: true });
+    } catch (error) {
+      sendRepoError(res, error, 'Failed to save admin team member');
+    }
+  });
+
+  app.delete('/api/admin/team/:id', requireAuth, requireAdmin, async (req: AuthRequest, res) => {
+    try {
+      await deleteAdminTeamMember(req.params.id);
+      res.json({ ok: true });
+    } catch (error) {
+      sendRepoError(res, error, 'Failed to remove admin team member');
     }
   });
 

@@ -1,6 +1,7 @@
 import { auth } from '../firebase';
 import type {
   ActivityLogEntry,
+  AdminTeamMember,
   Batchmate,
   BatchNotice,
   GalleryItem,
@@ -15,12 +16,14 @@ import {
   createBatchmateInFirestore,
   createNoticeInFirestore,
   createOrderInFirestore,
+  deleteAdminTeamMemberInFirestore,
   deleteBatchmateInFirestore,
   deleteGalleryItemInFirestore,
   deleteNoticeInFirestore,
   deleteOrderInFirestore,
   fetchAdminDataFromFirestore,
   fetchPublicPortalFromFirestore,
+  saveAdminTeamMemberInFirestore,
   saveGalleryItemInFirestore,
   saveSettingsInFirestore,
   seedDefaultsIfEmptyInFirestore,
@@ -129,6 +132,7 @@ export interface PublicPortalPayload {
   batchmates: Batchmate[];
   notices: BatchNotice[];
   gallery: GalleryItem[];
+  adminTeam?: AdminTeamMember[];
   settings: {
     profile: string;
     hoodieConfig: HoodieConfig;
@@ -343,6 +347,52 @@ export async function deleteGalleryItemInDb(id: string): Promise<void> {
       await handleApiResponse(res);
     },
     () => deleteGalleryItemInFirestore(id)
+  );
+}
+
+export async function saveAdminTeamMemberInDb(member: AdminTeamMember, sortOrder: number): Promise<void> {
+  return withSupabaseOrFallback(
+    async () => {
+      const headers = await getAuthHeaders();
+      const res = await fetch(`/api/admin/team/${encodeURIComponent(member.id)}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ member, sortOrder }),
+      });
+      await handleApiResponse(res);
+    },
+    () => saveAdminTeamMemberInFirestore(member, sortOrder)
+  );
+}
+
+export async function reorderAdminTeamInDb(members: AdminTeamMember[]): Promise<void> {
+  return withSupabaseOrFallback(
+    async () => {
+      const headers = await getAuthHeaders();
+      const res = await fetch('/api/admin/team/reorder', {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ members }),
+      });
+      await handleApiResponse(res);
+    },
+    async () => {
+      await Promise.all(members.map((m, idx) => saveAdminTeamMemberInFirestore(m, idx)));
+    }
+  );
+}
+
+export async function deleteAdminTeamMemberInDb(id: string): Promise<void> {
+  return withSupabaseOrFallback(
+    async () => {
+      const headers = await getAuthHeaders();
+      const res = await fetch(`/api/admin/team/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers,
+      });
+      await handleApiResponse(res);
+    },
+    () => deleteAdminTeamMemberInFirestore(id)
   );
 }
 

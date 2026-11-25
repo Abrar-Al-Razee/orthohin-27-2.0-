@@ -1,22 +1,65 @@
-import { ArrowLeft, ArrowUpRight, UserPlus, Users } from 'lucide-react';
-import type { SiteConfig, ViewMode } from '../types';
-import { DEFAULT_PROFILE_IMAGE } from '../utils/storage';
+import { ArrowLeft, ArrowUpRight, Shield, UserPlus, Users } from 'lucide-react';
+import type { AdminTeamMember, SiteConfig, ViewMode } from '../types';
+import { DEFAULT_PROFILE_IMAGE, getInitials } from '../utils/storage';
 
 interface DirectoryPageProps {
   siteConfig: SiteConfig;
   profileImage: string;
+  adminTeam: AdminTeamMember[];
   batchmateCount: number;
   onNavigate: (view: ViewMode) => void;
 }
 
-export function DirectoryPage({ siteConfig, profileImage, batchmateCount, onNavigate }: DirectoryPageProps) {
-  const resolvedAvatar =
+function resolveSocialLink(raw?: string): { href: string; label: string } | null {
+  const val = (raw || '').trim();
+  if (!val) return null;
+  if (/^https?:\/\//i.test(val)) {
+    return { href: val, label: 'Connect Profile' };
+  }
+  const cleanHandle = val.replace(/^@/, '');
+  if (!cleanHandle) return null;
+  return {
+    href: `https://www.instagram.com/${encodeURIComponent(cleanHandle)}/`,
+    label: `@${cleanHandle}`,
+  };
+}
+
+export function DirectoryPage({
+  siteConfig,
+  profileImage,
+  adminTeam,
+  batchmateCount,
+  onNavigate,
+}: DirectoryPageProps) {
+  const fallbackAvatar =
     profileImage && profileImage !== '/src/assets/images/portrait_lead_abrar_1794766076468.jpg'
       ? profileImage
       : DEFAULT_PROFILE_IMAGE;
 
+  const teamMembers: AdminTeamMember[] =
+    adminTeam.length > 0
+      ? adminTeam
+      : [
+          {
+            id: 'admin-1',
+            name: siteConfig.leadName || 'Abrar Al Razee Oytizzoh',
+            role: siteConfig.leadRole || 'Lead Developer · Head Orthohin-27',
+            bio: siteConfig.devNote || '',
+            photo: fallbackAvatar,
+            social: siteConfig.instagramUrl,
+            sortOrder: 0,
+          },
+        ];
+
+  const gridClass =
+    teamMembers.length === 1
+      ? 'max-w-xl mx-auto'
+      : teamMembers.length === 2
+        ? 'grid sm:grid-cols-2 gap-6 max-w-4xl mx-auto'
+        : 'grid sm:grid-cols-2 lg:grid-cols-3 gap-6';
+
   return (
-    <section className="pt-28 pb-24 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+    <section className="pt-28 pb-24 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
       <button
         type="button"
         onClick={() => onNavigate('home')}
@@ -27,60 +70,90 @@ export function DirectoryPage({ siteConfig, profileImage, batchmateCount, onNavi
       </button>
 
       <div className="text-center max-w-2xl mx-auto mb-12 space-y-2.5">
-        <p className="text-xs font-semibold text-rose-700 dark:text-rose-400">{siteConfig.leadSectionKicker}</p>
-        <h1 className="text-3xl sm:text-5xl font-bold tracking-tight text-zinc-950 dark:text-white">{siteConfig.leadSectionTitle}</h1>
-        <p className="text-sm sm:text-base text-zinc-700 dark:text-zinc-400">{siteConfig.leadSectionSubtitle}</p>
+        <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-700 dark:text-rose-400">
+          <Shield className="w-3.5 h-3.5" />
+          <span>{siteConfig.leadSectionKicker || "Core Organizers · Orthohin '27"}</span>
+        </p>
+        <h1 className="text-3xl sm:text-5xl font-bold tracking-tight text-zinc-950 dark:text-white">
+          {siteConfig.leadSectionTitle || 'Admin Panel'}
+        </h1>
+        <p className="text-sm sm:text-base text-zinc-700 dark:text-zinc-400">
+          {siteConfig.leadSectionSubtitle || "The core organizers and admins running Orthohin '27."}
+        </p>
+        <p className="text-xs text-zinc-600 dark:text-zinc-500 font-mono tabular-nums pt-1">
+          {teamMembers.length} {teamMembers.length === 1 ? 'Organizer' : 'Organizers'} · {batchmateCount} Registered Batchmates
+        </p>
       </div>
 
-      <div className="max-w-xl mx-auto rounded-2xl bg-white dark:bg-[#111114] border border-zinc-300 dark:border-zinc-800/80 shadow-xs dark:shadow-none p-8 sm:p-10 text-center space-y-6">
-        <div className="w-36 h-36 mx-auto rounded-full overflow-hidden border-2 border-zinc-400 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900">
-          <img
-            src={resolvedAvatar}
-            alt={siteConfig.leadName || 'Abrar Al Razee Oytizzoh'}
-            referrerPolicy="no-referrer"
-            className="w-full h-full object-cover object-[center_22%]"
-          />
-        </div>
+      <div className={gridClass}>
+        {teamMembers.map((member) => {
+          const socialLink = resolveSocialLink(member.social);
+          return (
+            <article
+              key={member.id}
+              className="rounded-2xl bg-white dark:bg-[#111114] border border-zinc-300 dark:border-zinc-800/80 shadow-xs dark:shadow-none p-7 sm:p-8 flex flex-col items-center text-center space-y-5"
+            >
+              <div className="w-32 h-32 rounded-full overflow-hidden border-2 border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center shrink-0">
+                {member.photo ? (
+                  <img
+                    src={member.photo}
+                    alt={member.name}
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-cover object-[center_22%]"
+                  />
+                ) : (
+                  <span className="text-2xl font-bold text-rose-700 dark:text-rose-400">
+                    {getInitials(member.name)}
+                  </span>
+                )}
+              </div>
 
-        <div className="space-y-1.5">
-          <p className="text-xs font-semibold text-rose-700 dark:text-rose-400">{siteConfig.leadRole}</p>
-          <h2 className="text-2xl font-bold text-zinc-950 dark:text-white">{siteConfig.leadName}</h2>
-          <p className="text-xs text-zinc-600 dark:text-zinc-500 font-mono tabular-nums">
-            Orthohin '27 · {batchmateCount} Registered Batchmates
-          </p>
-        </div>
+              <div className="space-y-1.5">
+                <p className="text-xs font-semibold text-rose-700 dark:text-rose-400">{member.role}</p>
+                <h2 className="text-xl font-bold text-zinc-950 dark:text-white">{member.name}</h2>
+              </div>
 
-        <p className="text-sm text-zinc-700 dark:text-zinc-400 leading-relaxed max-w-md mx-auto">"{siteConfig.devNote}"</p>
+              {member.bio && (
+                <p className="text-sm text-zinc-700 dark:text-zinc-400 leading-relaxed flex-1">
+                  "{member.bio}"
+                </p>
+              )}
 
-        <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-          <a
-            href={siteConfig.instagramUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-white text-xs font-semibold transition-colors"
-          >
-            Connect on Instagram
-            <ArrowUpRight className="w-3.5 h-3.5" />
-          </a>
+              {socialLink && (
+                <a
+                  href={socialLink.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-white text-xs font-semibold transition-colors"
+                >
+                  {socialLink.label}
+                  <ArrowUpRight className="w-3.5 h-3.5" />
+                </a>
+              )}
+            </article>
+          );
+        })}
+      </div>
+
+      <div className="flex flex-wrap items-center justify-center gap-3 pt-10">
+        <button
+          type="button"
+          onClick={() => onNavigate('batchmates')}
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-200 text-xs font-semibold transition-colors cursor-pointer"
+        >
+          <Users className="w-3.5 h-3.5" />
+          View All Batchmates
+        </button>
+        {siteConfig.registrationOpen !== false && (
           <button
             type="button"
-            onClick={() => onNavigate('batchmates')}
+            onClick={() => onNavigate('register')}
             className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-200 text-xs font-semibold transition-colors cursor-pointer"
           >
-            <Users className="w-3.5 h-3.5" />
-            View All Batchmates
+            <UserPlus className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+            Register Yourself
           </button>
-          {siteConfig.registrationOpen !== false && (
-            <button
-              type="button"
-              onClick={() => onNavigate('register')}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-200 text-xs font-semibold transition-colors cursor-pointer"
-            >
-              <UserPlus className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
-              Register Yourself
-            </button>
-          )}
-        </div>
+        )}
       </div>
     </section>
   );

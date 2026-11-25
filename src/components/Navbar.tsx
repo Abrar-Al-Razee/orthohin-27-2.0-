@@ -111,7 +111,7 @@ export function Navbar({
                 activeView === 'directory' ? 'text-zinc-950 dark:text-white font-semibold' : ''
               }`}
             >
-              Directory
+              Admin Panel
             </button>
           )}
           {showAdminButton && (
@@ -123,7 +123,7 @@ export function Navbar({
               }`}
             >
               <Lock className="w-3.5 h-3.5 text-rose-600 dark:text-rose-500" />
-              Admin Panel
+              RCS Control
             </button>
           )}
         </nav>
@@ -242,7 +242,7 @@ export function Navbar({
                 activeView === 'directory' ? 'text-zinc-950 dark:text-white bg-zinc-100 dark:bg-zinc-900/60 font-semibold' : 'text-zinc-800 dark:text-zinc-200'
               }`}
             >
-              Directory
+              Admin Panel
             </button>
           )}
           <button
@@ -263,7 +263,7 @@ export function Navbar({
               }`}
             >
               <Lock className="w-4 h-4 text-rose-600 dark:text-rose-500" />
-              Admin Panel
+              RCS Control
             </button>
           )}
           <button

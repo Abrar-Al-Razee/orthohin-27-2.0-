@@ -42,6 +42,7 @@ import {
   createDefaultState,
   DEFAULT_HERO_IMAGE,
   DEFAULT_PROFILE_IMAGE,
+  getInitials,
   mergeHoodieConfig,
   mergeSiteConfig,
   SITE_LOGO_SRC,
@@ -56,7 +57,7 @@ const ROUTE_PATHS: Record<ViewMode, string> = {
   gallery: '/gallery',
   batchmates: '/batchmates',
   hoodie: '/hoodie',
-  directory: '/directory',
+  directory: '/admin-panel',
   notices: '/notices',
   about: '/about',
   timeline: '/timeline',
@@ -69,12 +70,12 @@ const ROUTE_TITLES: Record<ViewMode, string> = {
   gallery: "Gallery · ORTHOHIN '27",
   batchmates: "Batchmates · ORTHOHIN '27",
   hoodie: "Hoodie '26-'27 · ORTHOHIN '27",
-  directory: "Directory · ORTHOHIN '27",
+  directory: "Admin Panel · ORTHOHIN '27",
   notices: "Notices · ORTHOHIN '27",
   about: "About · ORTHOHIN '27",
   timeline: "Our Journey · ORTHOHIN '27",
   register: "Register · ORTHOHIN '27",
-  admin: "Admin Panel · ORTHOHIN '27",
+  admin: "RCS Control · ORTHOHIN '27",
 };
 
 function resolveViewFromLocation(): ViewMode {
@@ -100,6 +101,7 @@ function resolveViewFromLocation(): ViewMode {
       return 'batchmates';
     case '/hoodie':
       return 'hoodie';
+    case '/admin-panel':
     case '/directory':
       return 'directory';
     case '/notices':
@@ -256,6 +258,12 @@ export default function App() {
             : defaults.batchmates,
         notices: payload.notices.length > 0 || hasSettings ? payload.notices : defaults.notices,
         gallery: payload.gallery.length > 0 || hasSettings ? payload.gallery : defaults.gallery,
+        adminTeam:
+          Array.isArray(payload.adminTeam) && payload.adminTeam.length > 0
+            ? payload.adminTeam
+            : hasSettings
+              ? []
+              : defaults.adminTeam,
         profile: payload.settings?.profile || defaults.profile,
         hoodieConfig: mergeHoodieConfig(payload.settings?.hoodieConfig),
         siteConfig: mergeSiteConfig(payload.settings?.siteConfig),
@@ -370,6 +378,14 @@ export default function App() {
         setState((prev) => ({
           ...prev,
           gallery: gallery.length > 0 || hasSettings ? gallery : defaults.gallery,
+        }));
+      },
+      onAdminTeam: (adminTeam) => {
+        if (Date.now() - lastLocalEditAtRef.current < 1600) return;
+        const hasSettings = settingsSeededRef.current;
+        setState((prev) => ({
+          ...prev,
+          adminTeam: adminTeam.length > 0 || hasSettings ? adminTeam : defaults.adminTeam,
         }));
       },
       onSettings: (settings) => {
@@ -863,69 +879,132 @@ export default function App() {
               </section>
             )}
 
-            {/* Directory / Leadership Section */}
+            {/* Public Admin Panel / Core Organizers Section */}
             {sec.directory && (
               <section id="directory" className="py-20 bg-zinc-100 dark:bg-[#0b0b0e] border-y border-zinc-300 dark:border-zinc-900">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                   <div className="text-center max-w-2xl mx-auto mb-12 space-y-2">
-                    <p className="text-xs font-semibold text-rose-700 dark:text-rose-400">{sc.leadSectionKicker}</p>
-                    <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-zinc-950 dark:text-white">{sc.leadSectionTitle}</h2>
-                    <p className="text-sm text-zinc-700 dark:text-zinc-400">{sc.leadSectionSubtitle}</p>
+                    <p className="text-xs font-semibold text-rose-700 dark:text-rose-400">
+                      {sc.leadSectionKicker || "Core Organizers · Orthohin '27"}
+                    </p>
+                    <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-zinc-950 dark:text-white">
+                      {sc.leadSectionTitle || 'Admin Panel'}
+                    </h2>
+                    <p className="text-sm text-zinc-700 dark:text-zinc-400">
+                      {sc.leadSectionSubtitle || "The core team and organizers running Orthohin '27."}
+                    </p>
                   </div>
 
-                  <div className="max-w-md mx-auto rounded-2xl bg-white dark:bg-[#111114] border border-zinc-300 dark:border-zinc-800/80 shadow-xs dark:shadow-none p-8 text-center space-y-5">
-                    <button
-                      type="button"
-                      onClick={() => handleNavigate('directory')}
-                      className="w-32 h-32 mx-auto rounded-full overflow-hidden border-2 border-zinc-300 dark:border-zinc-700 hover:border-rose-500 transition-colors block cursor-pointer"
-                      aria-label="Open Directory Page"
-                    >
-                      <img
-                        src={
-                          state.profile &&
-                          state.profile !== '/src/assets/images/portrait_lead_abrar_1794766076468.jpg'
-                            ? state.profile
-                            : DEFAULT_PROFILE_IMAGE
-                        }
-                        alt={sc.leadName || 'Abrar Al Razee Oytizzoh'}
-                        referrerPolicy="no-referrer"
-                        className="w-full h-full object-cover object-[center_22%]"
-                      />
-                    </button>
+                  {(() => {
+                    const fallbackAvatar =
+                      state.profile &&
+                      state.profile !== '/src/assets/images/portrait_lead_abrar_1794766076468.jpg'
+                        ? state.profile
+                        : DEFAULT_PROFILE_IMAGE;
+                    const homeTeam =
+                      state.adminTeam && state.adminTeam.length > 0
+                        ? state.adminTeam
+                        : [
+                            {
+                              id: 'admin-1',
+                              name: sc.leadName || 'Abrar Al Razee Oytizzoh',
+                              role: sc.leadRole || 'Lead Developer · Head Orthohin-27',
+                              bio: sc.devNote || '',
+                              photo: fallbackAvatar,
+                              social: sc.instagramUrl,
+                            },
+                          ];
+                    const visibleHomeTeam = homeTeam.slice(0, 3);
+                    const gridCls =
+                      visibleHomeTeam.length === 1
+                        ? 'max-w-md mx-auto'
+                        : visibleHomeTeam.length === 2
+                          ? 'grid sm:grid-cols-2 gap-6 max-w-4xl mx-auto'
+                          : 'grid sm:grid-cols-2 lg:grid-cols-3 gap-6';
 
-                    <div className="space-y-1">
-                      <p className="text-xs font-semibold text-rose-700 dark:text-rose-400">{sc.leadRole}</p>
-                      <h3 className="text-xl font-bold text-zinc-950 dark:text-white">{sc.leadName}</h3>
-                    </div>
+                    return (
+                      <div className="space-y-8">
+                        <div className={gridCls}>
+                          {visibleHomeTeam.map((member) => {
+                            const rawSocial = (member.social || '').trim();
+                            const socialHref = rawSocial
+                              ? /^https?:\/\//i.test(rawSocial)
+                                ? rawSocial
+                                : `https://www.instagram.com/${encodeURIComponent(rawSocial.replace(/^@/, ''))}/`
+                              : null;
 
-                    <p className="text-sm text-zinc-700 dark:text-zinc-400 leading-relaxed">"{sc.devNote}"</p>
+                            return (
+                              <div
+                                key={member.id}
+                                className="rounded-2xl bg-white dark:bg-[#111114] border border-zinc-300 dark:border-zinc-800/80 shadow-xs dark:shadow-none p-7 text-center flex flex-col items-center space-y-4"
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => handleNavigate('directory')}
+                                  className="w-28 h-28 mx-auto rounded-full overflow-hidden border-2 border-zinc-300 dark:border-zinc-700 hover:border-rose-500 transition-colors flex items-center justify-center bg-zinc-100 dark:bg-zinc-900 cursor-pointer shrink-0"
+                                  aria-label="Open Admin Panel Page"
+                                >
+                                  {member.photo ? (
+                                    <img
+                                      src={member.photo}
+                                      alt={member.name}
+                                      referrerPolicy="no-referrer"
+                                      className="w-full h-full object-cover object-[center_22%]"
+                                    />
+                                  ) : (
+                                    <span className="text-xl font-bold text-rose-700 dark:text-rose-400">
+                                      {getInitials(member.name)}
+                                    </span>
+                                  )}
+                                </button>
 
-                    <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
-                      <a
-                        href={sc.instagramUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-white text-xs font-semibold transition-colors"
-                      >
-                        Connect on Instagram
-                        <ArrowUpRight className="w-3.5 h-3.5" />
-                      </a>
-                      <button
-                        type="button"
-                        onClick={() => handleNavigate('directory')}
-                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-200 text-xs font-medium transition-colors cursor-pointer"
-                      >
-                        Directory Page
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleNavigate('batchmates')}
-                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-200 text-xs font-medium transition-colors cursor-pointer"
-                      >
-                        View All Batchmates
-                      </button>
-                    </div>
-                  </div>
+                                <div className="space-y-1">
+                                  <p className="text-xs font-semibold text-rose-700 dark:text-rose-400">{member.role}</p>
+                                  <h3 className="text-lg font-bold text-zinc-950 dark:text-white">{member.name}</h3>
+                                </div>
+
+                                {member.bio && (
+                                  <p className="text-xs sm:text-sm text-zinc-700 dark:text-zinc-400 leading-relaxed flex-1">
+                                    "{member.bio}"
+                                  </p>
+                                )}
+
+                                {socialHref && (
+                                  <a
+                                    href={socialHref}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-white text-xs font-semibold transition-colors"
+                                  >
+                                    Connect
+                                    <ArrowUpRight className="w-3.5 h-3.5" />
+                                  </a>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        <div className="flex flex-wrap items-center justify-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => handleNavigate('directory')}
+                            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-white text-xs font-semibold transition-colors cursor-pointer"
+                          >
+                            {homeTeam.length > 3 ? `View All ${homeTeam.length} Admins` : 'Open Admin Panel Page'}
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleNavigate('batchmates')}
+                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-white hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-200 text-xs font-medium transition-colors cursor-pointer"
+                          >
+                            View All Batchmates
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               </section>
             )}
@@ -993,6 +1072,7 @@ export default function App() {
           <DirectoryPage
             siteConfig={sc}
             profileImage={state.profile}
+            adminTeam={state.adminTeam || []}
             batchmateCount={state.batchmates.length}
             onNavigate={handleNavigate}
           />
@@ -1101,7 +1181,7 @@ export default function App() {
                 onClick={() => handleNavigate('directory')}
                 className="hover:text-zinc-950 dark:hover:text-zinc-200 transition-colors cursor-pointer"
               >
-                Directory
+                Admin Panel
               </button>
             )}
             {sec.timeline && (

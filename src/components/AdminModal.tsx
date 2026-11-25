@@ -34,6 +34,7 @@ import {
   Sun,
   Trash2,
   Upload,
+  UserPlus,
   Users,
   Video,
   X,
@@ -44,11 +45,14 @@ import {
   createBatchmateInDb,
   createNoticeInDb,
   createOrderInDb,
+  deleteAdminTeamMemberInDb,
   deleteBatchmateInDb,
   deleteGalleryItemInDb,
   deleteNoticeInDb,
   deleteOrderInDb,
+  reorderAdminTeamInDb,
   reorderGalleryInDb,
+  saveAdminTeamMemberInDb,
   saveGalleryItemInDb,
   saveSettingsInDb,
   seedDefaultsIfEmptyInDb,
@@ -58,6 +62,7 @@ import {
   updateOrderStatusInDb,
 } from '../services/apiService';
 import type {
+  AdminTeamMember,
   Batchmate,
   BatchNotice,
   GalleryItem,
@@ -105,7 +110,7 @@ interface AdminModalProps {
   onToast: (text: string, tone?: 'success' | 'error' | 'info') => void;
 }
 
-type AdminTab = 'overview' | 'notices' | 'orders' | 'batchmates' | 'gallery' | 'hoodie' | 'site' | 'security';
+type AdminTab = 'overview' | 'notices' | 'orders' | 'batchmates' | 'gallery' | 'hoodie' | 'team' | 'site' | 'security';
 type SiteSubTab = 'global' | 'hero' | 'about' | 'leadership' | 'timeline';
 
 const HOODIE_SIZES: HoodieOrder['size'][] = ['S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
@@ -213,6 +218,17 @@ export function AdminModal({
   const [noticeDraft, setNoticeDraft] = useState<BatchNotice | null>(null);
   const [confirmDeleteNoticeId, setConfirmDeleteNoticeId] = useState<string | null>(null);
 
+  // Admin Team states (Public Admin Panel Organizers)
+  const [newTeamName, setNewTeamName] = useState('');
+  const [newTeamRole, setNewTeamRole] = useState('');
+  const [newTeamBio, setNewTeamBio] = useState('');
+  const [newTeamSocial, setNewTeamSocial] = useState('');
+  const [newTeamPhoto, setNewTeamPhoto] = useState('');
+  const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
+  const [teamDraft, setTeamDraft] = useState<AdminTeamMember | null>(null);
+  const [teamPhotoTargetId, setTeamPhotoTargetId] = useState<string | null>(null);
+  const [confirmDeleteTeamId, setConfirmDeleteTeamId] = useState<string | null>(null);
+
   const addPhotosInputRef = useRef<HTMLInputElement>(null);
   const replacePhotoInputRef = useRef<HTMLInputElement>(null);
   const profilePhotoInputRef = useRef<HTMLInputElement>(null);
@@ -220,6 +236,8 @@ export function AdminModal({
   const hoodiePhotoInputRef = useRef<HTMLInputElement>(null);
   const bmPhotoInputRef = useRef<HTMLInputElement>(null);
   const newBmPhotoInputRef = useRef<HTMLInputElement>(null);
+  const newTeamPhotoInputRef = useRef<HTMLInputElement>(null);
+  const editTeamPhotoInputRef = useRef<HTMLInputElement>(null);
   const importBackupInputRef = useRef<HTMLInputElement>(null);
 
   // Live auto-save timers & pending buffers
@@ -1322,9 +1340,11 @@ export function AdminModal({
       try {
         const parsed = JSON.parse(String(ev.target?.result || ''));
         if (parsed && Array.isArray(parsed.gallery) && Array.isArray(parsed.batchmates)) {
+          const defaults = createDefaultState();
           const restored: PortalState = {
-            ...createDefaultState(),
+            ...defaults,
             ...parsed,
+            adminTeam: Array.isArray(parsed.adminTeam) ? parsed.adminTeam : defaults.adminTeam,
           };
           setIsSyncing(true);
           await syncPortalStateInDb(restored, true);
@@ -1456,6 +1476,169 @@ export function AdminModal({
     }
   };
 
+  /* Public Admin Panel Team Management */
+  const currentTeamList = state.adminTeam || [];
+
+  const handleNewTeamPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const src = await compressImage(file, 650, 180000);
+      setNewTeamPhoto(src);
+      onToast('Organizer photo ready.', 'success');
+    } catch {
+      onToast('Could not process organizer photo.', 'error');
+    }
+    e.target.value = '';
+  };
+
+  const handleEditTeamPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !teamPhotoTargetId) return;
+    try {
+      const src = await compressImage(file, 650, 180000);
+      if (editingTeamId === teamPhotoTargetId && teamDraft) {
+        setTeamDraft({ ...teamDraft, photo: src });
+      }
+      const idx = currentTeamList.findIndex((m) => m.id === teamPhotoTargetId);
+      const target = idx >= 0 ? currentTeamList[idx] : null;
+      if (target) {
+        const updated = { ...target, photo: src };
+        const nextList = currentTeamList.map((m) => (m.id === target.id ? updated : m));
+        onUpdateState({ ...state, adminTeam: nextList });
+        await saveAdminTeamMemberInDb(updated, idx);
+        broadcastLiveSync();
+        void addActivityLogInDb('Admin Team Photo', `Updated photo for ${updated.name}`);
+        await onRefreshData();
+      }
+      onToast('Organizer photo updated live.', 'success');
+    } catch {
+      onToast('Could not update organizer photo.', 'error');
+    }
+    setTeamPhotoTargetId(null);
+    e.target.value = '';
+  };
+
+  const handleAddTeamMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTeamName.trim() || !newTeamRole.trim()) {
+      onToast('Organizer name and role are required.', 'error');
+      return;
+    }
+    const member: AdminTeamMember = {
+      id: `admin-${Date.now()}`,
+      name: newTeamName.trim(),
+      role: newTeamRole.trim(),
+      bio: newTeamBio.trim(),
+      photo: newTeamPhoto || undefined,
+      social: newTeamSocial.trim() || undefined,
+      sortOrder: currentTeamList.length,
+    };
+    try {
+      setIsSyncing(true);
+      setLiveSyncStatus('saving');
+      const nextList = [...currentTeamList, member];
+      onUpdateState({ ...state, adminTeam: nextList });
+      await saveAdminTeamMemberInDb(member, nextList.length - 1);
+      broadcastLiveSync();
+      void addActivityLogInDb('Organizer Added', `${member.name} (${member.role})`);
+      await onRefreshData();
+      setNewTeamName('');
+      setNewTeamRole('');
+      setNewTeamBio('');
+      setNewTeamSocial('');
+      setNewTeamPhoto('');
+      setLiveSyncStatus('saved');
+      onToast(`${member.name} added to Admin Panel page.`, 'success');
+    } catch {
+      setLiveSyncStatus('error');
+      onToast('Could not add organizer.', 'error');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleSaveTeamDraft = async () => {
+    if (!teamDraft || !teamDraft.name.trim() || !teamDraft.role.trim()) {
+      onToast('Organizer name and role are required.', 'error');
+      return;
+    }
+    const idx = Math.max(
+      0,
+      currentTeamList.findIndex((m) => m.id === teamDraft.id)
+    );
+    const cleaned: AdminTeamMember = {
+      ...teamDraft,
+      name: teamDraft.name.trim(),
+      role: teamDraft.role.trim(),
+      bio: teamDraft.bio.trim(),
+      social: teamDraft.social?.trim() || undefined,
+      sortOrder: idx,
+    };
+    try {
+      setIsSyncing(true);
+      setLiveSyncStatus('saving');
+      onUpdateState({
+        ...state,
+        adminTeam: currentTeamList.map((m) => (m.id === cleaned.id ? cleaned : m)),
+      });
+      await saveAdminTeamMemberInDb(cleaned, idx);
+      broadcastLiveSync();
+      void addActivityLogInDb('Organizer Updated', `${cleaned.name} updated`);
+      await onRefreshData();
+      setEditingTeamId(null);
+      setTeamDraft(null);
+      setLiveSyncStatus('saved');
+      onToast('Organizer info updated live.', 'success');
+    } catch {
+      setLiveSyncStatus('error');
+      onToast('Could not save organizer changes.', 'error');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleMoveTeamMember = async (index: number, dir: -1 | 1) => {
+    const target = index + dir;
+    if (target < 0 || target >= currentTeamList.length) return;
+    const next = [...currentTeamList];
+    const [moved] = next.splice(index, 1);
+    next.splice(target, 0, moved);
+    const reindexed = next.map((m, i) => ({ ...m, sortOrder: i }));
+    onUpdateState({ ...state, adminTeam: reindexed });
+    try {
+      setLiveSyncStatus('saving');
+      await reorderAdminTeamInDb(reindexed);
+      broadcastLiveSync();
+      setLiveSyncStatus('saved');
+      onToast('Admin Panel team order updated.', 'info');
+    } catch {
+      setLiveSyncStatus('error');
+      onToast('Could not reorder organizers.', 'error');
+    }
+  };
+
+  const handleDeleteTeamMember = async (id: string) => {
+    const target = currentTeamList.find((m) => m.id === id);
+    try {
+      setIsSyncing(true);
+      setLiveSyncStatus('saving');
+      onUpdateState({ ...state, adminTeam: currentTeamList.filter((m) => m.id !== id) });
+      await deleteAdminTeamMemberInDb(id);
+      broadcastLiveSync();
+      void addActivityLogInDb('Organizer Removed', `${target?.name || id} removed`);
+      await onRefreshData();
+      setConfirmDeleteTeamId(null);
+      setLiveSyncStatus('saved');
+      onToast('Organizer removed from Admin Panel page.', 'info');
+    } catch {
+      setLiveSyncStatus('error');
+      onToast('Could not remove organizer.', 'error');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const navItems: { key: AdminTab; label: string; count?: number; icon: React.ReactNode }[] = [
     { key: 'overview', label: 'Smart Overview', icon: <BarChart3 className="w-4 h-4" /> },
     { key: 'notices', label: 'Notices Board', count: (state.notices || []).length, icon: <Megaphone className="w-4 h-4" /> },
@@ -1463,6 +1646,7 @@ export function AdminModal({
     { key: 'batchmates', label: 'Batchmates', count: state.batchmates.length, icon: <Users className="w-4 h-4" /> },
     { key: 'gallery', label: 'Memory Vault', count: state.gallery.length, icon: <ImageIcon className="w-4 h-4" /> },
     { key: 'hoodie', label: 'Hoodie Page', icon: <Sliders className="w-4 h-4" /> },
+    { key: 'team', label: 'Admin Team', count: currentTeamList.length, icon: <UserPlus className="w-4 h-4" /> },
     { key: 'site', label: 'Full Site Studio', icon: <Globe className="w-4 h-4" /> },
     { key: 'security', label: 'Backup & Security', icon: <Shield className="w-4 h-4" /> },
   ];
@@ -3521,6 +3705,310 @@ export function AdminModal({
                 </div>
               )}
 
+              {/* TAB 6B: ADMIN PANEL ORGANIZER TEAM MANAGEMENT */}
+              {activeTab === 'team' && (
+                <div className="space-y-6">
+                  <form
+                    onSubmit={handleAddTeamMember}
+                    className="p-5 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none space-y-4"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <h3 className="text-sm font-bold text-zinc-950 dark:text-white flex items-center gap-2">
+                          <UserPlus className="w-4 h-4 text-rose-600 dark:text-rose-500" />
+                          Add Organizer to Public "Admin Panel" Page
+                        </h3>
+                        <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">
+                          Everyone added here appears publicly on the Admin Panel page with their photo, role, and info.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                      <div className="w-20 h-20 rounded-full overflow-hidden border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center shrink-0">
+                        {newTeamPhoto ? (
+                          <img src={newTeamPhoto} alt="New organizer preview" className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-sm font-bold text-zinc-500">
+                            {newTeamName ? getInitials(newTeamName) : 'PIC'}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => newTeamPhotoInputRef.current?.click()}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-xs font-medium text-zinc-900 dark:text-white cursor-pointer"
+                        >
+                          <Upload className="w-3.5 h-3.5" /> {newTeamPhoto ? 'Change Photo' : 'Upload Photo'}
+                        </button>
+                        {newTeamPhoto && (
+                          <button
+                            type="button"
+                            onClick={() => setNewTeamPhoto('')}
+                            className="px-3 py-2 rounded-lg text-xs text-zinc-600 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white cursor-pointer"
+                          >
+                            Remove Photo
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid sm:grid-cols-3 gap-3">
+                      <input
+                        type="text"
+                        required
+                        value={newTeamName}
+                        onChange={(e) => setNewTeamName(e.target.value)}
+                        placeholder="Full Name *"
+                        className="px-3.5 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500"
+                      />
+                      <input
+                        type="text"
+                        required
+                        value={newTeamRole}
+                        onChange={(e) => setNewTeamRole(e.target.value)}
+                        placeholder="Role (e.g. Batch Coordinator) *"
+                        className="px-3.5 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500"
+                      />
+                      <input
+                        type="text"
+                        value={newTeamSocial}
+                        onChange={(e) => setNewTeamSocial(e.target.value)}
+                        placeholder="Instagram / Social URL or @handle"
+                        className="px-3.5 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500"
+                      />
+                    </div>
+
+                    <textarea
+                      rows={2}
+                      value={newTeamBio}
+                      onChange={(e) => setNewTeamBio(e.target.value)}
+                      placeholder="Short info, responsibility, or batch message..."
+                      className="w-full px-3.5 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500 resize-none"
+                    />
+
+                    <div className="flex justify-end">
+                      <button
+                        type="submit"
+                        disabled={isSyncing}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-white text-xs font-semibold cursor-pointer disabled:opacity-50"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Add to Admin Panel
+                      </button>
+                    </div>
+                  </form>
+
+                  <div className="space-y-3">
+                    {currentTeamList.length === 0 ? (
+                      <div className="p-8 text-center rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-600 dark:text-zinc-400">
+                        No organizers added yet. Use the form above to add admins running Orthohin '27.
+                      </div>
+                    ) : (
+                      currentTeamList.map((member, idx) => {
+                        const isEditing = editingTeamId === member.id && teamDraft;
+                        return (
+                          <div
+                            key={member.id}
+                            className="p-4 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none space-y-3"
+                          >
+                            {isEditing ? (
+                              <div className="space-y-3">
+                                <div className="flex flex-wrap items-center gap-3">
+                                  <div className="w-14 h-14 rounded-full overflow-hidden border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center shrink-0">
+                                    {teamDraft.photo ? (
+                                      <img src={teamDraft.photo} alt={teamDraft.name} className="w-full h-full object-cover" />
+                                    ) : (
+                                      <span className="text-xs font-bold text-zinc-500">
+                                        {getInitials(teamDraft.name)}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setTeamPhotoTargetId(member.id);
+                                      editTeamPhotoInputRef.current?.click();
+                                    }}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-xs font-medium text-zinc-900 dark:text-white cursor-pointer"
+                                  >
+                                    <Upload className="w-3.5 h-3.5" /> Change Photo
+                                  </button>
+                                  {teamDraft.photo && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setTeamDraft({ ...teamDraft, photo: undefined })}
+                                      className="px-2.5 py-1.5 rounded-lg text-xs text-zinc-600 hover:text-rose-600 dark:text-zinc-400 cursor-pointer"
+                                    >
+                                      Remove Photo
+                                    </button>
+                                  )}
+                                </div>
+                                <div className="grid sm:grid-cols-3 gap-2.5">
+                                  <input
+                                    type="text"
+                                    value={teamDraft.name}
+                                    onChange={(e) => setTeamDraft({ ...teamDraft, name: e.target.value })}
+                                    placeholder="Full Name"
+                                    className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
+                                  />
+                                  <input
+                                    type="text"
+                                    value={teamDraft.role}
+                                    onChange={(e) => setTeamDraft({ ...teamDraft, role: e.target.value })}
+                                    placeholder="Role / Designation"
+                                    className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
+                                  />
+                                  <input
+                                    type="text"
+                                    value={teamDraft.social || ''}
+                                    onChange={(e) => setTeamDraft({ ...teamDraft, social: e.target.value })}
+                                    placeholder="Social URL or @handle"
+                                    className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
+                                  />
+                                </div>
+                                <textarea
+                                  rows={2}
+                                  value={teamDraft.bio}
+                                  onChange={(e) => setTeamDraft({ ...teamDraft, bio: e.target.value })}
+                                  placeholder="Organizer info / bio"
+                                  className="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white resize-none"
+                                />
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    disabled={isSyncing}
+                                    onClick={() => void handleSaveTeamDraft()}
+                                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold cursor-pointer"
+                                  >
+                                    <Save className="w-3.5 h-3.5" /> Save Changes
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingTeamId(null);
+                                      setTeamDraft(null);
+                                    }}
+                                    className="px-3.5 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 text-xs font-medium text-zinc-800 dark:text-zinc-200 cursor-pointer"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                <div className="flex items-start gap-3.5 min-w-0">
+                                  <div className="w-14 h-14 rounded-full overflow-hidden border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center shrink-0">
+                                    {member.photo ? (
+                                      <img
+                                        src={member.photo}
+                                        alt={member.name}
+                                        referrerPolicy="no-referrer"
+                                        className="w-full h-full object-cover object-[center_22%]"
+                                      />
+                                    ) : (
+                                      <span className="text-xs font-bold text-rose-700 dark:text-rose-400">
+                                        {getInitials(member.name)}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="min-w-0 space-y-0.5">
+                                    <p className="text-[11px] font-semibold text-rose-700 dark:text-rose-400 truncate">
+                                      {member.role}
+                                    </p>
+                                    <h4 className="text-sm font-bold text-zinc-950 dark:text-white truncate">
+                                      {member.name}
+                                    </h4>
+                                    {member.bio && (
+                                      <p className="text-xs text-zinc-700 dark:text-zinc-400 line-clamp-2">
+                                        {member.bio}
+                                      </p>
+                                    )}
+                                    {member.social && (
+                                      <p className="text-[11px] font-mono text-zinc-500 truncate">{member.social}</p>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                                  <button
+                                    type="button"
+                                    disabled={idx === 0}
+                                    onClick={() => void handleMoveTeamMember(idx, -1)}
+                                    title="Move up"
+                                    className="p-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-300 disabled:opacity-40 cursor-pointer"
+                                  >
+                                    <ArrowUp className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={idx === currentTeamList.length - 1}
+                                    onClick={() => void handleMoveTeamMember(idx, 1)}
+                                    title="Move down"
+                                    className="p-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-300 disabled:opacity-40 cursor-pointer"
+                                  >
+                                    <ArrowDown className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setTeamPhotoTargetId(member.id);
+                                      editTeamPhotoInputRef.current?.click();
+                                    }}
+                                    title="Update photo"
+                                    className="p-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-300 cursor-pointer"
+                                  >
+                                    <Camera className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingTeamId(member.id);
+                                      setTeamDraft({ ...member });
+                                    }}
+                                    title="Edit info"
+                                    className="p-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-300 cursor-pointer"
+                                  >
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                  </button>
+                                  {confirmDeleteTeamId === member.id ? (
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => void handleDeleteTeamMember(member.id)}
+                                        className="px-2.5 py-1.5 rounded-lg bg-rose-600 text-white text-[11px] font-semibold cursor-pointer"
+                                      >
+                                        Confirm
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setConfirmDeleteTeamId(null)}
+                                        className="px-2 py-1.5 rounded-lg bg-zinc-200 dark:bg-zinc-800 text-[11px] text-zinc-800 dark:text-zinc-300 cursor-pointer"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => setConfirmDeleteTeamId(member.id)}
+                                      title="Delete"
+                                      className="p-2 rounded-lg bg-zinc-100 hover:bg-rose-600 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-300 hover:text-white cursor-pointer"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* TAB 7: FULL SITE STUDIO (EVERY PART OF THE WEB) */}
               {activeTab === 'site' && (
                 <div className="space-y-6">
@@ -3532,7 +4020,7 @@ export function AdminModal({
                           { id: 'global', label: 'Global & Visibility' },
                           { id: 'hero', label: 'Hero & KPIs' },
                           { id: 'about', label: 'About & Social' },
-                          { id: 'leadership', label: 'Directory Lead' },
+                          { id: 'leadership', label: 'Admin Panel Header' },
                           { id: 'timeline', label: 'Journey Timeline' },
                         ] as const
                       ).map((sub) => (
@@ -3577,7 +4065,7 @@ export function AdminModal({
                               { key: 'notices', label: 'Notice Board Section' },
                               { key: 'about', label: 'About & Instagram Hub' },
                               { key: 'gallery', label: 'Memory Vault Gallery' },
-                              { key: 'directory', label: 'Leadership Profile' },
+                              { key: 'directory', label: 'Admin Panel Page' },
                               { key: 'timeline', label: 'Our Journey Timeline' },
                               { key: 'hoodieNav', label: "Hoodie '26-'27 Page Link" },
                             ] as const
@@ -4319,6 +4807,20 @@ export function AdminModal({
         type="file"
         accept="image/*"
         onChange={handleNewBmPhotoUpload}
+        className="hidden"
+      />
+      <input
+        ref={newTeamPhotoInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleNewTeamPhotoUpload}
+        className="hidden"
+      />
+      <input
+        ref={editTeamPhotoInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleEditTeamPhotoUpload}
         className="hidden"
       />
       <input

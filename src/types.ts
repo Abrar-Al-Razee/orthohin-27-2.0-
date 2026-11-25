@@ -12,6 +12,16 @@ export type ViewMode =
 
 export type OrderStatus = 'Pending' | 'Confirmed' | 'Delivered';
 
+export interface AdminTeamMember {
+  id: string;
+  name: string;
+  role: string;
+  bio: string;
+  photo?: string;
+  social?: string;
+  sortOrder?: number;
+}
+
 export interface Batchmate {
   id: string;
   name: string;
@@ -141,6 +151,7 @@ export interface PortalState {
   notices: BatchNotice[];
   hoodieConfig: HoodieConfig;
   siteConfig: SiteConfig;
+  adminTeam: AdminTeamMember[];
   activityLog: ActivityLogEntry[];
 }
 

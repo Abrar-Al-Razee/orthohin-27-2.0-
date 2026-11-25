@@ -4,7 +4,7 @@
 1. Only the verified administrator (`abraralraze@gmail.com` with `email_verified == true`) can read, update, or delete direct hoodie `orders` (protecting student phone numbers and social contacts as PII).
 2. Public visitors can submit a new `orders` document only with `status == 'Pending'`, valid size (`S`–`XXXL`), quantity (`1`–`5`), bounded string lengths, and server timestamp `createdAt == request.time`.
 3. Public visitors can register in `batchmates` with strict schema bounds and `createdAt == request.time`, but only the verified admin can modify or remove existing `batchmates` records.
-4. `notices`, `gallery`, `settings`, and `activityLogs` can only be created, updated, or deleted by the verified administrator (`abraralraze@gmail.com` with `email_verified == true`).
+4. `notices`, `gallery`, `settings`, `adminTeam`, and `activityLogs` can only be created, updated, or deleted by the verified administrator (`abraralraze@gmail.com` with `email_verified == true`).
 5. Every document ID must match `^[a-zA-Z0-9_\-]+$` (`<= 128` chars), and every string/list enforces explicit size boundaries to prevent resource exhaustion.
 
 ## 2. Dirty Dozen Attack Payloads (Expected: PERMISSION_DENIED)

@@ -247,6 +247,50 @@
         }
       },
       "required": ["action", "detail", "createdAt"]
+    },
+    "AdminTeamMember": {
+      "title": "AdminTeamMember",
+      "description": "An organizer or core admin running Orthohin '27 displayed on the public Admin Panel page.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "description": "Full name of the admin or organizer."
+        },
+        "role": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Role or designation in Orthohin '27."
+        },
+        "bio": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Bio or responsibility description."
+        },
+        "photo": {
+          "type": "string",
+          "maxLength": 350000,
+          "description": "Optional compressed portrait image or asset path."
+        },
+        "social": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Optional social profile URL or handle."
+        },
+        "sortOrder": {
+          "type": "number",
+          "description": "Display ordering index."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp."
+        }
+      },
+      "required": ["name", "role", "bio", "sortOrder", "updatedAt"]
     }
   },
   "firestore": {
@@ -273,6 +317,10 @@
     "/activityLogs/{logId}": {
       "schema": { "$ref": "#/entities/ActivityLogEntry" },
       "description": "Admin-only audit log entries."
+    },
+    "/adminTeam/{memberId}": {
+      "schema": { "$ref": "#/entities/AdminTeamMember" },
+      "description": "Public core leadership and organizer cards displayed on the Admin Panel page."
     }
   }
 }

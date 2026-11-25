@@ -75,6 +75,18 @@ service cloud.firestore {
         data.updatedAt is timestamp;
     }
 
+    function isValidAdminTeamMember(data) {
+      return data.keys().hasAll(['name', 'role', 'bio', 'sortOrder', 'updatedAt']) &&
+        data.keys().hasOnly(['name', 'role', 'bio', 'photo', 'social', 'sortOrder', 'updatedAt']) &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+        data.role is string && data.role.size() >= 1 && data.role.size() <= 120 &&
+        data.bio is string && data.bio.size() <= 500 &&
+        (!('photo' in data) || (data.photo is string && data.photo.size() <= 350000)) &&
+        (!('social' in data) || (data.social is string && data.social.size() <= 200)) &&
+        data.sortOrder is number && data.sortOrder >= 0 && data.sortOrder <= 10000 &&
+        data.updatedAt is timestamp;
+    }
+
     function isValidOrder(data) {
       return data.keys().hasAll(['orderCode', 'customerName', 'roll', 'size', 'quantity', 'contact', 'status', 'createdAt']) &&
         data.keys().hasOnly(['orderCode', 'customerName', 'roll', 'size', 'quantity', 'contact', 'notes', 'status', 'createdAt']) &&
@@ -201,6 +213,22 @@ service cloud.firestore {
         incoming().updatedAt == request.time &&
         incoming().diff(existing()).affectedKeys().hasOnly(['src', 'title', 'caption', 'date', 'isVideo', 'videoUrl', 'sortOrder', 'updatedAt']);
       allow delete: if isValidId(galleryId) && isAdmin();
+    }
+
+    // Public Admin Panel core team & organizers: public read, admin-only write
+    match /adminTeam/{memberId} {
+      allow get: if isValidId(memberId);
+      allow list: if true;
+      allow create: if isValidId(memberId) &&
+        isAdmin() &&
+        isValidAdminTeamMember(incoming()) &&
+        incoming().updatedAt == request.time;
+      allow update: if isValidId(memberId) &&
+        isAdmin() &&
+        isValidAdminTeamMember(incoming()) &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'role', 'bio', 'photo', 'social', 'sortOrder', 'updatedAt']);
+      allow delete: if isValidId(memberId) && isAdmin();
     }
 
     // Direct Hoodie orders: public create (Pending only), admin can create/update/read/delete

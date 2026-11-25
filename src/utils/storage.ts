@@ -1,5 +1,6 @@
 import type {
   ActivityLogEntry,
+  AdminTeamMember,
   Batchmate,
   BatchNotice,
   GalleryItem,
@@ -152,9 +153,9 @@ export const DEFAULT_SITE_CONFIG: SiteConfig = {
   visionText: 'Pursuing excellence across our disciplines while staying deeply connected as one cohort.',
   unityTitle: 'Unbreakable Unity',
   unityText: 'Supporting every member through every milestone, challenge, and victory along the way.',
-  leadSectionKicker: 'Leadership & Engineering',
-  leadSectionTitle: 'Batch Directory Lead',
-  leadSectionSubtitle: "Head organizer and developer keeping the Orthohin '27 digital portal running.",
+  leadSectionKicker: "Core Organizers · Orthohin '27",
+  leadSectionTitle: 'Admin Panel',
+  leadSectionSubtitle: "The core team and organizers running Orthohin '27.",
   leadRole: 'Lead Developer · Head Orthohin-27',
   leadName: 'Abrar Al Razee Oytizzoh',
   footerText: "© 2026 ORTHOHIN '27 — Official Batch Web Portal. Developed by Abrar Al Razee Oytizzoh.",
@@ -259,6 +260,18 @@ export const INITIAL_ACTIVITY_LOG: ActivityLogEntry[] = [
   },
 ];
 
+export const DEFAULT_ADMIN_TEAM: AdminTeamMember[] = [
+  {
+    id: 'admin-1',
+    name: 'Abrar Al Razee Oytizzoh',
+    role: 'Lead Developer · Head Orthohin-27',
+    bio: 'Designed and built this official portal as Head Orthohin-27 to preserve our batch memories and milestones. Forever united as one batch.',
+    photo: DEFAULT_PROFILE_IMAGE,
+    social: 'https://www.instagram.com/orthohin_27/',
+    sortOrder: 0,
+  },
+];
+
 export function createDefaultState(): PortalState {
   return {
     gallery: DEFAULT_GALLERY.map((item) => ({ ...item })),
@@ -268,6 +281,7 @@ export function createDefaultState(): PortalState {
     notices: DEFAULT_NOTICES.map((item) => ({ ...item })),
     hoodieConfig: mergeHoodieConfig(),
     siteConfig: mergeSiteConfig(),
+    adminTeam: DEFAULT_ADMIN_TEAM.map((item) => ({ ...item })),
     activityLog: [...INITIAL_ACTIVITY_LOG],
   };
 }
@@ -300,6 +314,10 @@ export function loadPortalState(): PortalState {
       notices: Array.isArray(parsed.notices) ? parsed.notices : defaults.notices,
       hoodieConfig: mergeHoodieConfig(parsed.hoodieConfig),
       siteConfig: mergeSiteConfig(parsed.siteConfig),
+      adminTeam:
+        Array.isArray(parsed.adminTeam) && parsed.adminTeam.length > 0
+          ? parsed.adminTeam
+          : defaults.adminTeam,
       activityLog: Array.isArray(parsed.activityLog) ? parsed.activityLog : defaults.activityLog,
     };
   } catch {
