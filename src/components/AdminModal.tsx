@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { signInWithPopup, signOut, type User } from 'firebase/auth';
 import {
   Activity,
@@ -60,11 +60,13 @@ import type {
   Batchmate,
   BatchNotice,
   GalleryItem,
+  HoodieConfig,
   HoodieOrder,
   NoticeCategory,
   OrderStatus,
   PortalState,
   SectionVisibility,
+  SiteConfig,
   TimelineMilestone,
 } from '../types';
 import {
@@ -106,6 +108,21 @@ type AdminTab = 'overview' | 'notices' | 'orders' | 'batchmates' | 'gallery' | '
 type SiteSubTab = 'global' | 'hero' | 'about' | 'leadership' | 'timeline';
 
 const HOODIE_SIZES: HoodieOrder['size'][] = ['S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
+const LIVE_SYNC_CHANNEL = 'orthohin27_live_sync';
+const LIVE_SYNC_STORAGE_KEY = 'orthohin27_live_sync_ping';
+
+function broadcastLiveSync() {
+  try {
+    if (typeof BroadcastChannel !== 'undefined') {
+      const ch = new BroadcastChannel(LIVE_SYNC_CHANNEL);
+      ch.postMessage('sync');
+      ch.close();
+    }
+    window.localStorage.setItem(LIVE_SYNC_STORAGE_KEY, String(Date.now()));
+  } catch {
+    // ignore storage/channel failures
+  }
+}
 
 export function AdminModal({
   isOpen,
@@ -132,6 +149,7 @@ export function AdminModal({
   const [loginError, setLoginError] = useState('');
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [liveSyncStatus, setLiveSyncStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   const [siteSubTab, setSiteSubTab] = useState<SiteSubTab>('global');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -203,12 +221,226 @@ export function AdminModal({
   const newBmPhotoInputRef = useRef<HTMLInputElement>(null);
   const importBackupInputRef = useRef<HTMLInputElement>(null);
 
+  // Live auto-save timers & pending buffers
+  const settingsTimerRef = useRef<number | null>(null);
+  const pendingSettingsRef = useRef<{ profile: string; hoodie: HoodieConfig; site: SiteConfig } | null>(null);
+  const bmTimersRef = useRef<Record<string, number>>({});
+  const pendingBatchmatesRef = useRef<Record<string, Batchmate>>({});
+  const galleryTimersRef = useRef<Record<string, number>>({});
+  const pendingGalleryRef = useRef<Record<string, { item: GalleryItem; idx: number }>>({});
+  const noticeTimersRef = useRef<Record<string, number>>({});
+  const pendingNoticesRef = useRef<Record<string, BatchNotice>>({});
+  const orderTimersRef = useRef<Record<string, number>>({});
+  const pendingOrdersRef = useRef<Record<string, HoodieOrder>>({});
+
   const sc = useMemo(() => mergeSiteConfig(state.siteConfig), [state.siteConfig]);
   const hc = useMemo(() => mergeHoodieConfig(state.hoodieConfig), [state.hoodieConfig]);
 
   useEffect(() => {
+    if (typeof document !== 'undefined' && document.activeElement?.id === 'lead-profile-url-input') {
+      return;
+    }
     setProfileUrlInput(state.profile);
   }, [state.profile]);
+
+  const flushSettings = useCallback(async () => {
+    if (settingsTimerRef.current) {
+      window.clearTimeout(settingsTimerRef.current);
+      settingsTimerRef.current = null;
+    }
+    const payload = pendingSettingsRef.current;
+    if (!payload) return;
+    pendingSettingsRef.current = null;
+    setLiveSyncStatus('saving');
+    try {
+      await saveSettingsInDb(payload.profile, payload.hoodie, payload.site);
+      broadcastLiveSync();
+      setLiveSyncStatus('saved');
+    } catch {
+      setLiveSyncStatus('error');
+    }
+  }, []);
+
+  const scheduleSettingsAutoSave = useCallback(
+    (nextProfile: string, nextHoodie: HoodieConfig, nextSite: SiteConfig) => {
+      pendingSettingsRef.current = { profile: nextProfile, hoodie: nextHoodie, site: nextSite };
+      setLiveSyncStatus('saving');
+      if (settingsTimerRef.current) {
+        window.clearTimeout(settingsTimerRef.current);
+      }
+      settingsTimerRef.current = window.setTimeout(() => {
+        void flushSettings();
+      }, 450);
+    },
+    [flushSettings]
+  );
+
+  const flushBatchmate = useCallback(async (id: string) => {
+    if (bmTimersRef.current[id]) {
+      window.clearTimeout(bmTimersRef.current[id]);
+      delete bmTimersRef.current[id];
+    }
+    const bm = pendingBatchmatesRef.current[id];
+    if (!bm) return;
+    delete pendingBatchmatesRef.current[id];
+    if (!bm.name.trim() || !bm.roll.trim() || !bm.group.trim()) return;
+    setLiveSyncStatus('saving');
+    try {
+      await updateBatchmateInDb(bm);
+      broadcastLiveSync();
+      setLiveSyncStatus('saved');
+    } catch {
+      setLiveSyncStatus('error');
+    }
+  }, []);
+
+  const scheduleBatchmateAutoSave = useCallback(
+    (bm: Batchmate) => {
+      pendingBatchmatesRef.current[bm.id] = bm;
+      setLiveSyncStatus('saving');
+      if (bmTimersRef.current[bm.id]) {
+        window.clearTimeout(bmTimersRef.current[bm.id]);
+      }
+      bmTimersRef.current[bm.id] = window.setTimeout(() => {
+        void flushBatchmate(bm.id);
+      }, 450);
+    },
+    [flushBatchmate]
+  );
+
+  const flushGalleryItem = useCallback(async (id: string) => {
+    if (galleryTimersRef.current[id]) {
+      window.clearTimeout(galleryTimersRef.current[id]);
+      delete galleryTimersRef.current[id];
+    }
+    const entry = pendingGalleryRef.current[id];
+    if (!entry) return;
+    delete pendingGalleryRef.current[id];
+    setLiveSyncStatus('saving');
+    try {
+      await saveGalleryItemInDb(
+        { ...entry.item, title: entry.item.title.trim() || 'Untitled Memory' },
+        entry.idx
+      );
+      broadcastLiveSync();
+      setLiveSyncStatus('saved');
+    } catch {
+      setLiveSyncStatus('error');
+    }
+  }, []);
+
+  const scheduleGalleryAutoSave = useCallback(
+    (item: GalleryItem, idx: number) => {
+      pendingGalleryRef.current[item.id] = { item, idx };
+      setLiveSyncStatus('saving');
+      if (galleryTimersRef.current[item.id]) {
+        window.clearTimeout(galleryTimersRef.current[item.id]);
+      }
+      galleryTimersRef.current[item.id] = window.setTimeout(() => {
+        void flushGalleryItem(item.id);
+      }, 450);
+    },
+    [flushGalleryItem]
+  );
+
+  const flushNotice = useCallback(async (id: string) => {
+    if (noticeTimersRef.current[id]) {
+      window.clearTimeout(noticeTimersRef.current[id]);
+      delete noticeTimersRef.current[id];
+    }
+    const notice = pendingNoticesRef.current[id];
+    if (!notice) return;
+    delete pendingNoticesRef.current[id];
+    if (!notice.title.trim() || !notice.message.trim()) return;
+    setLiveSyncStatus('saving');
+    try {
+      await updateNoticeInDb({
+        ...notice,
+        title: notice.title.trim(),
+        message: notice.message.trim(),
+      });
+      broadcastLiveSync();
+      setLiveSyncStatus('saved');
+    } catch {
+      setLiveSyncStatus('error');
+    }
+  }, []);
+
+  const scheduleNoticeAutoSave = useCallback(
+    (notice: BatchNotice) => {
+      pendingNoticesRef.current[notice.id] = notice;
+      setLiveSyncStatus('saving');
+      if (noticeTimersRef.current[notice.id]) {
+        window.clearTimeout(noticeTimersRef.current[notice.id]);
+      }
+      noticeTimersRef.current[notice.id] = window.setTimeout(() => {
+        void flushNotice(notice.id);
+      }, 450);
+    },
+    [flushNotice]
+  );
+
+  const flushOrder = useCallback(async (id: string) => {
+    if (orderTimersRef.current[id]) {
+      window.clearTimeout(orderTimersRef.current[id]);
+      delete orderTimersRef.current[id];
+    }
+    const order = pendingOrdersRef.current[id];
+    if (!order) return;
+    delete pendingOrdersRef.current[id];
+    if (!order.customerName.trim() || !order.roll.trim() || !order.contact.trim()) return;
+    setLiveSyncStatus('saving');
+    try {
+      await updateOrderStatusInDb(order.id, order.status, order.notes || '', {
+        customerName: order.customerName.trim(),
+        roll: order.roll.trim(),
+        size: order.size,
+        quantity: order.quantity,
+        contact: order.contact.trim(),
+      });
+      broadcastLiveSync();
+      setLiveSyncStatus('saved');
+    } catch {
+      setLiveSyncStatus('error');
+    }
+  }, []);
+
+  const scheduleOrderAutoSave = useCallback(
+    (order: HoodieOrder) => {
+      pendingOrdersRef.current[order.id] = order;
+      setLiveSyncStatus('saving');
+      if (orderTimersRef.current[order.id]) {
+        window.clearTimeout(orderTimersRef.current[order.id]);
+      }
+      orderTimersRef.current[order.id] = window.setTimeout(() => {
+        void flushOrder(order.id);
+      }, 450);
+    },
+    [flushOrder]
+  );
+
+  const flushAllPendingAutoSaves = useCallback(async () => {
+    const tasks: Promise<void>[] = [flushSettings()];
+    for (const id of Object.keys(pendingBatchmatesRef.current)) {
+      tasks.push(flushBatchmate(id));
+    }
+    for (const id of Object.keys(pendingGalleryRef.current)) {
+      tasks.push(flushGalleryItem(id));
+    }
+    for (const id of Object.keys(pendingNoticesRef.current)) {
+      tasks.push(flushNotice(id));
+    }
+    for (const id of Object.keys(pendingOrdersRef.current)) {
+      tasks.push(flushOrder(id));
+    }
+    await Promise.all(tasks);
+  }, [flushSettings, flushBatchmate, flushGalleryItem, flushNotice, flushOrder]);
+
+  useEffect(() => {
+    return () => {
+      void flushAllPendingAutoSaves();
+    };
+  }, [flushAllPendingAutoSaves]);
 
   useEffect(() => {
     if (!isFirebaseAdmin && unlocked) {
@@ -248,11 +480,13 @@ export function AdminModal({
   useEffect(() => {
     if (!isOpen) return;
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !isRouteAdmin) onClose();
+      if (e.key === 'Escape' && !isRouteAdmin) {
+        void flushAllPendingAutoSaves().finally(onClose);
+      }
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [isOpen, isRouteAdmin, onClose]);
+  }, [isOpen, isRouteAdmin, onClose, flushAllPendingAutoSaves]);
 
   const analytics = useMemo(() => {
     const orders = state.orders || [];
@@ -482,12 +716,20 @@ export function AdminModal({
     nextSite = sc,
     successMsg?: string
   ) => {
+    if (settingsTimerRef.current) {
+      window.clearTimeout(settingsTimerRef.current);
+      settingsTimerRef.current = null;
+    }
+    pendingSettingsRef.current = null;
     setIsSyncing(true);
+    setLiveSyncStatus('saving');
     try {
       await saveSettingsInDb(nextProfile, nextHoodie, nextSite);
-      await onRefreshData();
+      broadcastLiveSync();
+      setLiveSyncStatus('saved');
       if (successMsg) onToast(successMsg, 'success');
     } catch {
+      setLiveSyncStatus('error');
       onToast('Could not save settings.', 'error');
     } finally {
       setIsSyncing(false);
@@ -495,10 +737,21 @@ export function AdminModal({
   };
 
   const updateSiteField = <K extends keyof typeof sc>(field: K, value: (typeof sc)[K]) => {
+    const nextSite = { ...sc, [field]: value };
     onUpdateState({
       ...state,
-      siteConfig: { ...sc, [field]: value },
+      siteConfig: nextSite,
     });
+    scheduleSettingsAutoSave(state.profile, hc, nextSite);
+  };
+
+  const updateHoodieField = <K extends keyof typeof hc>(field: K, value: (typeof hc)[K]) => {
+    const nextHoodie = { ...hc, [field]: value };
+    onUpdateState({
+      ...state,
+      hoodieConfig: nextHoodie,
+    });
+    scheduleSettingsAutoSave(state.profile, nextHoodie, sc);
   };
 
   const toggleSection = async (key: keyof SectionVisibility, label: string) => {
@@ -536,6 +789,7 @@ export function AdminModal({
     };
     try {
       await createOrderInDb(order);
+      broadcastLiveSync();
       void addActivityLogInDb('Manual Order Added', `${order.id}: ${order.customerName} (${order.size} × ${order.quantity})`);
       await onRefreshData();
       setNewOrderName('');
@@ -551,14 +805,28 @@ export function AdminModal({
   };
 
   const handleOrderStatus = async (orderId: string, status: OrderStatus, notes?: string) => {
+    onUpdateState({
+      ...state,
+      orders: state.orders.map((o) => (o.id === orderId ? { ...o, status } : o)),
+    });
     try {
       await updateOrderStatusInDb(orderId, status, notes);
+      broadcastLiveSync();
       void addActivityLogInDb('Order Updated', `Order ${orderId} updated (${status})`);
-      await onRefreshData();
+      setLiveSyncStatus('saved');
       onToast(`Order ${orderId} updated.`, 'success');
     } catch {
       onToast('Could not update order.', 'error');
     }
+  };
+
+  const handleUpdateOrderDraft = (nextDraft: HoodieOrder) => {
+    setOrderDraft(nextDraft);
+    onUpdateState({
+      ...state,
+      orders: state.orders.map((o) => (o.id === nextDraft.id ? nextDraft : o)),
+    });
+    scheduleOrderAutoSave(nextDraft);
   };
 
   const handleSaveEditedOrder = async () => {
@@ -568,18 +836,12 @@ export function AdminModal({
       return;
     }
     try {
-      await updateOrderStatusInDb(orderDraft.id, orderDraft.status, orderDraft.notes || '', {
-        customerName: orderDraft.customerName.trim(),
-        roll: orderDraft.roll.trim(),
-        size: orderDraft.size,
-        quantity: orderDraft.quantity,
-        contact: orderDraft.contact.trim(),
-      });
+      pendingOrdersRef.current[orderDraft.id] = orderDraft;
+      await flushOrder(orderDraft.id);
       void addActivityLogInDb('Order Edited', `${orderDraft.id}: ${orderDraft.customerName} (${orderDraft.size})`);
-      await onRefreshData();
       setEditingOrderId(null);
       setOrderDraft(null);
-      onToast(`Order ${orderDraft.id} saved.`, 'success');
+      onToast(`Order ${orderDraft.id} synced live.`, 'success');
     } catch {
       onToast('Could not save order edits.', 'error');
     }
@@ -590,6 +852,7 @@ export function AdminModal({
     setIsSyncing(true);
     try {
       await Promise.all(selectedOrderIds.map((id) => updateOrderStatusInDb(id, status)));
+      broadcastLiveSync();
       void addActivityLogInDb(
         'Bulk Order Update',
         `${selectedOrderIds.length} order(s) marked as ${status}`
@@ -609,6 +872,7 @@ export function AdminModal({
     setIsSyncing(true);
     try {
       await Promise.all(selectedOrderIds.map((id) => deleteOrderInDb(id)));
+      broadcastLiveSync();
       void addActivityLogInDb('Bulk Order Delete', `${selectedOrderIds.length} order(s) removed`);
       await onRefreshData();
       setSelectedOrderIds([]);
@@ -629,6 +893,7 @@ export function AdminModal({
   const handleDeleteOrder = async (orderId: string) => {
     try {
       await deleteOrderInDb(orderId);
+      broadcastLiveSync();
       void addActivityLogInDb('Order Removed', `Order ${orderId} deleted by admin`);
       await onRefreshData();
       setConfirmDeleteOrderId(null);
@@ -681,6 +946,7 @@ export function AdminModal({
     };
     try {
       await createBatchmateInDb(member);
+      broadcastLiveSync();
       void addActivityLogInDb('Batchmate Added', `${member.name} (Roll ${member.roll}) added by admin`);
       await onRefreshData();
       setNewBmName('');
@@ -715,9 +981,14 @@ export function AdminModal({
       const target = state.batchmates.find((b) => b.id === bmPhotoTargetId);
       if (target) {
         const updated = { ...target, photo: src };
+        onUpdateState({
+          ...state,
+          batchmates: state.batchmates.map((b) => (b.id === updated.id ? updated : b)),
+        });
         await updateBatchmateInDb(updated);
-        await onRefreshData();
-        onToast(`${target.name}'s portrait updated.`, 'success');
+        broadcastLiveSync();
+        setLiveSyncStatus('saved');
+        onToast(`${target.name}'s portrait updated live.`, 'success');
       }
     } catch {
       onToast('Could not update batchmate portrait.', 'error');
@@ -728,10 +999,21 @@ export function AdminModal({
   };
 
   const handleUpdateBatchmateField = (id: string, field: keyof Batchmate, value: string) => {
+    let updatedBm: Batchmate | null = null;
+    const nextBatchmates = state.batchmates.map((b) => {
+      if (b.id === id) {
+        updatedBm = { ...b, [field]: value };
+        return updatedBm;
+      }
+      return b;
+    });
     onUpdateState({
       ...state,
-      batchmates: state.batchmates.map((b) => (b.id === id ? { ...b, [field]: value } : b)),
+      batchmates: nextBatchmates,
     });
+    if (updatedBm) {
+      scheduleBatchmateAutoSave(updatedBm);
+    }
   };
 
   const handleSaveBatchmate = async (bm: Batchmate) => {
@@ -740,11 +1022,11 @@ export function AdminModal({
       return;
     }
     try {
-      await updateBatchmateInDb(bm);
+      pendingBatchmatesRef.current[bm.id] = bm;
+      await flushBatchmate(bm.id);
       void addActivityLogInDb('Batchmate Updated', `${bm.name} (Roll ${bm.roll}) updated`);
-      await onRefreshData();
       setEditingBmId(null);
-      onToast(`${bm.name} saved.`, 'success');
+      onToast(`${bm.name} synced live.`, 'success');
     } catch {
       onToast('Could not save batchmate changes.', 'error');
     }
@@ -754,6 +1036,7 @@ export function AdminModal({
     const target = state.batchmates.find((b) => b.id === id);
     try {
       await deleteBatchmateInDb(id);
+      broadcastLiveSync();
       void addActivityLogInDb('Batchmate Removed', `${target?.name || id} removed from directory`);
       await onRefreshData();
       setConfirmDeleteBmId(null);
@@ -795,6 +1078,7 @@ export function AdminModal({
       const merged = [...added, ...state.gallery];
       try {
         await reorderGalleryInDb(merged);
+        broadcastLiveSync();
         void addActivityLogInDb('Gallery Updated', `${added.length} photo(s) uploaded`);
         await onRefreshData();
         onToast(`${added.length} photo(s) uploaded.`, 'success');
@@ -823,6 +1107,7 @@ export function AdminModal({
     const merged = [item, ...state.gallery];
     try {
       await reorderGalleryInDb(merged);
+      broadcastLiveSync();
       void addActivityLogInDb('Video Added', `Video "${item.title}" added to Memory Vault`);
       await onRefreshData();
       setVideoTitle('');
@@ -844,8 +1129,9 @@ export function AdminModal({
       const target = state.gallery[idx];
       if (target) {
         await saveGalleryItemInDb({ ...target, src }, Math.max(0, idx));
+        broadcastLiveSync();
         await onRefreshData();
-        onToast('Gallery photo replaced.', 'success');
+        onToast('Gallery photo replaced live.', 'success');
       }
     } catch {
       onToast('Failed to load or save replacement image.', 'error');
@@ -855,11 +1141,34 @@ export function AdminModal({
     }
   };
 
+  const handleUpdateGalleryField = (
+    id: string,
+    field: keyof GalleryItem,
+    value: string,
+    idx: number
+  ) => {
+    let updatedItem: GalleryItem | null = null;
+    const nextGallery = state.gallery.map((g) => {
+      if (g.id === id) {
+        updatedItem = { ...g, [field]: value };
+        return updatedItem;
+      }
+      return g;
+    });
+    onUpdateState({
+      ...state,
+      gallery: nextGallery,
+    });
+    if (updatedItem) {
+      scheduleGalleryAutoSave(updatedItem, idx);
+    }
+  };
+
   const handleSaveGalleryItem = async (item: GalleryItem, idx: number) => {
     try {
-      await saveGalleryItemInDb({ ...item, title: item.title.trim() || 'Untitled Memory' }, idx);
-      await onRefreshData();
-      onToast('Gallery item saved.', 'success');
+      pendingGalleryRef.current[item.id] = { item, idx };
+      await flushGalleryItem(item.id);
+      onToast('Gallery item synced live.', 'success');
     } catch {
       onToast('Could not save gallery item.', 'error');
     }
@@ -874,7 +1183,8 @@ export function AdminModal({
     onUpdateState({ ...state, gallery: copy });
     try {
       await reorderGalleryInDb(copy);
-      await onRefreshData();
+      broadcastLiveSync();
+      setLiveSyncStatus('saved');
     } catch {
       onToast('Could not reorder gallery.', 'error');
     }
@@ -883,6 +1193,7 @@ export function AdminModal({
   const handleDeleteGallery = async (id: string) => {
     try {
       await deleteGalleryItemInDb(id);
+      broadcastLiveSync();
       void addActivityLogInDb('Gallery Item Removed', `Item ${id} deleted`);
       await onRefreshData();
       setConfirmDeleteGalleryId(null);
@@ -900,13 +1211,16 @@ export function AdminModal({
       const src = await compressImage(file, 900);
       const nextHoodie = { ...hc, [hoodieSideTarget]: src };
       onUpdateState({ ...state, hoodieConfig: nextHoodie });
-      await saveSettingsInDb(state.profile, nextHoodie, sc);
+      await persistSettings(
+        state.profile,
+        nextHoodie,
+        sc,
+        `RCS Hoodie ${hoodieSideTarget === 'frontImage' ? 'Front' : 'Back'} image saved live.`
+      );
       void addActivityLogInDb(
         'Hoodie Photo Updated',
         `Updated RCS Hoodie ${hoodieSideTarget === 'frontImage' ? 'Front' : 'Back'} photo`
       );
-      await onRefreshData();
-      onToast(`RCS Hoodie ${hoodieSideTarget === 'frontImage' ? 'Front' : 'Back'} image saved.`, 'success');
     } catch {
       onToast('Failed to process or upload hoodie image.', 'error');
     }
@@ -921,10 +1235,8 @@ export function AdminModal({
       const src = await compressImage(file, 950);
       const nextSite = { ...sc, heroImage: src };
       onUpdateState({ ...state, siteConfig: nextSite });
-      await saveSettingsInDb(state.profile, hc, nextSite);
+      await persistSettings(state.profile, hc, nextSite, 'Hero showcase image saved live.');
       void addActivityLogInDb('Hero Image Updated', 'Homepage hero showcase image updated');
-      await onRefreshData();
-      onToast('Hero showcase image saved.', 'success');
     } catch {
       onToast('Failed to upload hero image.', 'error');
     }
@@ -937,10 +1249,9 @@ export function AdminModal({
     try {
       const src = await compressImage(file, 600);
       onUpdateState({ ...state, profile: src });
-      await saveSettingsInDb(src, hc, sc);
+      setProfileUrlInput(src);
+      await persistSettings(src, hc, sc, 'Leadership profile photo saved live.');
       void addActivityLogInDb('Profile Updated', 'Leadership profile photo uploaded');
-      await onRefreshData();
-      onToast('Leadership profile photo saved.', 'success');
     } catch {
       onToast('Failed to upload profile photo.', 'error');
     }
@@ -992,6 +1303,7 @@ export function AdminModal({
           };
           setIsSyncing(true);
           await syncPortalStateInDb(restored, true);
+          broadcastLiveSync();
           void addActivityLogInDb('Backup Imported', 'Portal data restored from JSON backup');
           await onRefreshData();
           onToast('Backup imported successfully.', 'success');
@@ -1037,16 +1349,26 @@ export function AdminModal({
     };
     try {
       await createNoticeInDb(newNotice);
+      broadcastLiveSync();
       void addActivityLogInDb('Notice Published', `${newNotice.category}: ${newNotice.title}`);
       await onRefreshData();
       setNoticeTitle('');
       setNoticeMessage('');
       setNoticeCategory('General');
       setNoticePinned(true);
-      onToast('Batch notice published.', 'success');
+      onToast('Batch notice published live.', 'success');
     } catch {
       onToast('Could not publish notice.', 'error');
     }
+  };
+
+  const handleUpdateNoticeDraft = (nextDraft: BatchNotice) => {
+    setNoticeDraft(nextDraft);
+    onUpdateState({
+      ...state,
+      notices: (state.notices || []).map((n) => (n.id === nextDraft.id ? nextDraft : n)),
+    });
+    scheduleNoticeAutoSave(nextDraft);
   };
 
   const handleSaveEditedNotice = async () => {
@@ -1055,34 +1377,42 @@ export function AdminModal({
       return;
     }
     try {
-      await updateNoticeInDb({
-        ...noticeDraft,
-        title: noticeDraft.title.trim(),
-        message: noticeDraft.message.trim(),
-      });
+      pendingNoticesRef.current[noticeDraft.id] = noticeDraft;
+      await flushNotice(noticeDraft.id);
       void addActivityLogInDb('Notice Updated', `${noticeDraft.category}: ${noticeDraft.title}`);
-      await onRefreshData();
       setEditingNoticeId(null);
       setNoticeDraft(null);
-      onToast('Notice updated.', 'success');
+      onToast('Notice synced live.', 'success');
     } catch {
       onToast('Could not save notice changes.', 'error');
     }
   };
 
   const handleToggleNoticePin = async (notice: BatchNotice) => {
+    const updated = { ...notice, pinned: !notice.pinned };
+    onUpdateState({
+      ...state,
+      notices: (state.notices || []).map((n) => (n.id === notice.id ? updated : n)),
+    });
     try {
-      await updateNoticeInDb({ ...notice, pinned: !notice.pinned });
-      await onRefreshData();
+      await updateNoticeInDb(updated);
+      broadcastLiveSync();
+      setLiveSyncStatus('saved');
     } catch {
       onToast('Could not update notice pin state.', 'error');
     }
   };
 
   const handleToggleNoticeActive = async (notice: BatchNotice) => {
+    const updated = { ...notice, active: !notice.active };
+    onUpdateState({
+      ...state,
+      notices: (state.notices || []).map((n) => (n.id === notice.id ? updated : n)),
+    });
     try {
-      await updateNoticeInDb({ ...notice, active: !notice.active });
-      await onRefreshData();
+      await updateNoticeInDb(updated);
+      broadcastLiveSync();
+      setLiveSyncStatus('saved');
     } catch {
       onToast('Could not toggle notice visibility.', 'error');
     }
@@ -1091,6 +1421,7 @@ export function AdminModal({
   const handleDeleteNotice = async (id: string) => {
     try {
       await deleteNoticeInDb(id);
+      broadcastLiveSync();
       void addActivityLogInDb('Notice Removed', `Notice ${id} deleted`);
       await onRefreshData();
       setConfirmDeleteNoticeId(null);
@@ -1150,7 +1481,7 @@ export function AdminModal({
               ORTHOHIN '27 · Smart Admin Control
             </h2>
             <p className="text-[11px] text-zinc-600 dark:text-zinc-400 truncate">
-              {unlocked ? `Authorized: ${authorizedAdmin}` : `Protected /admin Page · ${AUTHORIZED_ADMIN_EMAIL}`}
+              {unlocked ? `Authorized: ${authorizedAdmin}` : `Protected /rcs-admin Page · ${AUTHORIZED_ADMIN_EMAIL}`}
             </p>
           </div>
         </div>
@@ -1259,6 +1590,37 @@ export function AdminModal({
         )}
 
         <div className="flex items-center gap-2 shrink-0">
+          {unlocked && (
+            <div
+              className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] font-medium ${
+                liveSyncStatus === 'saving'
+                  ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-500/40 text-amber-800 dark:text-amber-300'
+                  : liveSyncStatus === 'error'
+                    ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-300 dark:border-rose-500/40 text-rose-800 dark:text-rose-300'
+                    : 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-500/40 text-emerald-800 dark:text-emerald-300'
+              }`}
+              title="All edits automatically sync live to the website"
+            >
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  liveSyncStatus === 'saving'
+                    ? 'bg-amber-500 animate-pulse'
+                    : liveSyncStatus === 'error'
+                      ? 'bg-rose-500'
+                      : 'bg-emerald-500'
+                }`}
+              />
+              <span>
+                {liveSyncStatus === 'saving'
+                  ? 'Syncing live...'
+                  : liveSyncStatus === 'error'
+                    ? 'Sync retrying'
+                    : liveSyncStatus === 'saved'
+                      ? 'Live synced'
+                      : 'Live edit ON'}
+              </span>
+            </div>
+          )}
           <button
             type="button"
             onClick={onToggleTheme}
@@ -1285,9 +1647,11 @@ export function AdminModal({
               <button
                 type="button"
                 onClick={() => {
-                  setUnlocked(false);
-                  setAuthorizedAdmin('');
-                  void signOut(auth);
+                  void flushAllPendingAutoSaves().finally(() => {
+                    setUnlocked(false);
+                    setAuthorizedAdmin('');
+                    void signOut(auth);
+                  });
                 }}
                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-zinc-300 dark:border-zinc-800 text-xs font-medium text-zinc-900 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white transition-colors cursor-pointer"
               >
@@ -1298,7 +1662,9 @@ export function AdminModal({
           )}
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => {
+              void flushAllPendingAutoSaves().finally(onClose);
+            }}
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-zinc-300 dark:border-zinc-800 text-xs font-medium text-zinc-900 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white transition-colors cursor-pointer"
             aria-label="Exit admin panel"
           >
@@ -1873,14 +2239,14 @@ export function AdminModal({
                                     type="text"
                                     value={noticeDraft.title}
                                     onChange={(e) =>
-                                      setNoticeDraft({ ...noticeDraft, title: e.target.value })
+                                      handleUpdateNoticeDraft({ ...noticeDraft, title: e.target.value })
                                     }
                                     className="sm:col-span-2 px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
                                   />
                                   <select
                                     value={noticeDraft.category}
                                     onChange={(e) =>
-                                      setNoticeDraft({
+                                      handleUpdateNoticeDraft({
                                         ...noticeDraft,
                                         category: e.target.value as NoticeCategory,
                                       })
@@ -1896,7 +2262,7 @@ export function AdminModal({
                                   rows={2}
                                   value={noticeDraft.message}
                                   onChange={(e) =>
-                                    setNoticeDraft({ ...noticeDraft, message: e.target.value })
+                                    handleUpdateNoticeDraft({ ...noticeDraft, message: e.target.value })
                                   }
                                   className="w-full px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white resize-none"
                                 />
@@ -2345,7 +2711,7 @@ export function AdminModal({
                                   type="text"
                                   value={orderDraft.customerName}
                                   onChange={(e) =>
-                                    setOrderDraft({ ...orderDraft, customerName: e.target.value })
+                                    handleUpdateOrderDraft({ ...orderDraft, customerName: e.target.value })
                                   }
                                   placeholder="Customer Name"
                                   className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
@@ -2353,7 +2719,9 @@ export function AdminModal({
                                 <input
                                   type="text"
                                   value={orderDraft.roll}
-                                  onChange={(e) => setOrderDraft({ ...orderDraft, roll: e.target.value })}
+                                  onChange={(e) =>
+                                    handleUpdateOrderDraft({ ...orderDraft, roll: e.target.value })
+                                  }
                                   placeholder="Roll"
                                   className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 font-mono text-xs text-zinc-950 dark:text-white"
                                 />
@@ -2361,7 +2729,7 @@ export function AdminModal({
                                   type="text"
                                   value={orderDraft.contact}
                                   onChange={(e) =>
-                                    setOrderDraft({ ...orderDraft, contact: e.target.value })
+                                    handleUpdateOrderDraft({ ...orderDraft, contact: e.target.value })
                                   }
                                   placeholder="Contact"
                                   className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
@@ -2369,7 +2737,7 @@ export function AdminModal({
                                 <select
                                   value={orderDraft.size}
                                   onChange={(e) =>
-                                    setOrderDraft({
+                                    handleUpdateOrderDraft({
                                       ...orderDraft,
                                       size: e.target.value as HoodieOrder['size'],
                                     })
@@ -2385,7 +2753,7 @@ export function AdminModal({
                                 <select
                                   value={orderDraft.quantity}
                                   onChange={(e) =>
-                                    setOrderDraft({ ...orderDraft, quantity: Number(e.target.value) })
+                                    handleUpdateOrderDraft({ ...orderDraft, quantity: Number(e.target.value) })
                                   }
                                   className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 font-mono text-xs text-zinc-950 dark:text-white"
                                 >
@@ -2398,7 +2766,9 @@ export function AdminModal({
                                 <input
                                   type="text"
                                   value={orderDraft.notes || ''}
-                                  onChange={(e) => setOrderDraft({ ...orderDraft, notes: e.target.value })}
+                                  onChange={(e) =>
+                                    handleUpdateOrderDraft({ ...orderDraft, notes: e.target.value })
+                                  }
                                   placeholder="Internal / Delivery Note"
                                   className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
                                 />
@@ -2812,14 +3182,9 @@ export function AdminModal({
                               type="text"
                               value={item.title}
                               onChange={(e) =>
-                                onUpdateState({
-                                  ...state,
-                                  gallery: state.gallery.map((g) =>
-                                    g.id === item.id ? { ...g, title: e.target.value } : g
-                                  ),
-                                })
+                                handleUpdateGalleryField(item.id, 'title', e.target.value, idx)
                               }
-                              onBlur={() => void handleSaveGalleryItem(item, idx)}
+                              onBlur={() => void flushGalleryItem(item.id)}
                               placeholder="Title"
                               className="sm:col-span-2 px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
                             />
@@ -2827,14 +3192,9 @@ export function AdminModal({
                               type="text"
                               value={item.date || ''}
                               onChange={(e) =>
-                                onUpdateState({
-                                  ...state,
-                                  gallery: state.gallery.map((g) =>
-                                    g.id === item.id ? { ...g, date: e.target.value } : g
-                                  ),
-                                })
+                                handleUpdateGalleryField(item.id, 'date', e.target.value, idx)
                               }
-                              onBlur={() => void handleSaveGalleryItem(item, idx)}
+                              onBlur={() => void flushGalleryItem(item.id)}
                               placeholder="Date"
                               className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-800 dark:text-zinc-300"
                             />
@@ -2843,14 +3203,9 @@ export function AdminModal({
                             type="text"
                             value={item.caption}
                             onChange={(e) =>
-                              onUpdateState({
-                                ...state,
-                                gallery: state.gallery.map((g) =>
-                                  g.id === item.id ? { ...g, caption: e.target.value } : g
-                                ),
-                              })
+                              handleUpdateGalleryField(item.id, 'caption', e.target.value, idx)
                             }
-                            onBlur={() => void handleSaveGalleryItem(item, idx)}
+                            onBlur={() => void flushGalleryItem(item.id)}
                             placeholder="Caption"
                             className="w-full px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-800 dark:text-zinc-300"
                           />
@@ -2973,9 +3328,7 @@ export function AdminModal({
                       <input
                         type="text"
                         value={hc.frontLabel || ''}
-                        onChange={(e) =>
-                          onUpdateState({ ...state, hoodieConfig: { ...hc, frontLabel: e.target.value } })
-                        }
+                        onChange={(e) => updateHoodieField('frontLabel', e.target.value)}
                         placeholder="Front view subtitle (e.g. RCS chest crest)"
                         className="w-full px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500"
                       />
@@ -3001,9 +3354,7 @@ export function AdminModal({
                       <input
                         type="text"
                         value={hc.backLabel || ''}
-                        onChange={(e) =>
-                          onUpdateState({ ...state, hoodieConfig: { ...hc, backLabel: e.target.value } })
-                        }
+                        onChange={(e) => updateHoodieField('backLabel', e.target.value)}
                         placeholder="Back view subtitle (e.g. Orthohin '27 print)"
                         className="w-full px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500"
                       />
@@ -3026,9 +3377,7 @@ export function AdminModal({
                       <input
                         type="text"
                         value={hc.kicker || ''}
-                        onChange={(e) =>
-                          onUpdateState({ ...state, hoodieConfig: { ...hc, kicker: e.target.value } })
-                        }
+                        onChange={(e) => updateHoodieField('kicker', e.target.value)}
                         className="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
                       />
                     </div>
@@ -3037,9 +3386,7 @@ export function AdminModal({
                       <input
                         type="text"
                         value={hc.title}
-                        onChange={(e) =>
-                          onUpdateState({ ...state, hoodieConfig: { ...hc, title: e.target.value } })
-                        }
+                        onChange={(e) => updateHoodieField('title', e.target.value)}
                         className="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
                       />
                     </div>
@@ -3048,9 +3395,7 @@ export function AdminModal({
                       <textarea
                         rows={2}
                         value={hc.subtitle}
-                        onChange={(e) =>
-                          onUpdateState({ ...state, hoodieConfig: { ...hc, subtitle: e.target.value } })
-                        }
+                        onChange={(e) => updateHoodieField('subtitle', e.target.value)}
                         className="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white resize-none"
                       />
                     </div>
@@ -3061,12 +3406,7 @@ export function AdminModal({
                         </label>
                         <button
                           type="button"
-                          onClick={() =>
-                            onUpdateState({
-                              ...state,
-                              hoodieConfig: { ...hc, specs: [...hc.specs, 'New Hoodie Specification'] },
-                            })
-                          }
+                          onClick={() => updateHoodieField('specs', [...hc.specs, 'New Hoodie Specification'])}
                           className="inline-flex items-center gap-1 text-xs text-rose-700 hover:text-rose-800 dark:text-rose-400 dark:hover:text-rose-300 font-medium cursor-pointer"
                         >
                           <Plus className="w-3.5 h-3.5" /> Add Line
@@ -3080,10 +3420,7 @@ export function AdminModal({
                             onChange={(e) => {
                               const nextSpecs = [...hc.specs];
                               nextSpecs[i] = e.target.value;
-                              onUpdateState({
-                                ...state,
-                                hoodieConfig: { ...hc, specs: nextSpecs },
-                              });
+                              updateHoodieField('specs', nextSpecs);
                             }}
                             className="flex-1 px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
                           />
@@ -3092,10 +3429,7 @@ export function AdminModal({
                               type="button"
                               onClick={() => {
                                 const nextSpecs = hc.specs.filter((_, idx) => idx !== i);
-                                onUpdateState({
-                                  ...state,
-                                  hoodieConfig: { ...hc, specs: nextSpecs },
-                                });
+                                updateHoodieField('specs', nextSpecs);
                               }}
                               className="p-1.5 rounded-lg bg-zinc-100 hover:bg-rose-600 dark:bg-zinc-800 border border-zinc-300 dark:border-transparent text-zinc-700 dark:text-zinc-400 hover:text-white hover:border-rose-600 cursor-pointer"
                             >
@@ -3105,16 +3439,16 @@ export function AdminModal({
                         </div>
                       ))}
                     </div>
-                    <div className="flex flex-wrap gap-2 pt-2">
+                    <div className="flex flex-wrap items-center gap-2 pt-2">
                       <button
                         type="button"
                         disabled={isSyncing}
                         onClick={() =>
-                          void persistSettings(state.profile, hc, sc, 'Hoodie page changes saved.')
+                          void persistSettings(state.profile, hc, sc, 'Hoodie page changes synced live.')
                         }
                         className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-xs font-semibold text-white cursor-pointer disabled:opacity-50"
                       >
-                        <Save className="w-3.5 h-3.5" /> Save Hoodie Settings
+                        <Save className="w-3.5 h-3.5" /> Sync Now
                       </button>
                       <button
                         type="button"
@@ -3172,11 +3506,11 @@ export function AdminModal({
                       type="button"
                       disabled={isSyncing}
                       onClick={() =>
-                        void persistSettings(state.profile, hc, sc, 'All website changes published live.')
+                        void persistSettings(state.profile, hc, sc, 'All website changes synced live.')
                       }
                       className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-xs font-semibold text-white cursor-pointer disabled:opacity-50"
                     >
-                      <Save className="w-3.5 h-3.5" /> Publish All Site Changes
+                      <Save className="w-3.5 h-3.5" /> Sync Now
                     </button>
                   </div>
 
@@ -3272,7 +3606,7 @@ export function AdminModal({
                           <div>
                             <h3 className="text-sm font-bold text-zinc-950 dark:text-white">Maintenance Lock Screen</h3>
                             <p className="text-xs text-zinc-600 dark:text-zinc-400">
-                              Pause public portal access during major updates (/admin-login always stays open).
+                              Pause public portal access during major updates (/rcs-admin always stays open).
                             </p>
                           </div>
                           <button
@@ -3584,9 +3918,18 @@ export function AdminModal({
                             className="w-20 h-20 rounded-xl object-cover object-[center_22%] border border-zinc-300 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-950"
                           />
                           <input
+                            id="lead-profile-url-input"
                             type="text"
                             value={profileUrlInput}
-                            onChange={(e) => setProfileUrlInput(e.target.value)}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setProfileUrlInput(val);
+                              const trimmed = val.trim();
+                              if (trimmed.length > 0) {
+                                onUpdateState({ ...state, profile: trimmed });
+                                scheduleSettingsAutoSave(trimmed, hc, sc);
+                              }
+                            }}
                             className="flex-1 px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
                           />
                         </div>
@@ -3604,7 +3947,7 @@ export function AdminModal({
                             onClick={() => {
                               const nextProf = profileUrlInput.trim() || DEFAULT_PROFILE_IMAGE;
                               onUpdateState({ ...state, profile: nextProf });
-                              void persistSettings(nextProf, hc, sc, 'Profile URL applied.');
+                              void persistSettings(nextProf, hc, sc, 'Profile URL applied live.');
                             }}
                             className="px-3.5 py-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-zinc-900 dark:text-zinc-200 text-xs font-medium cursor-pointer"
                           >
@@ -3614,6 +3957,7 @@ export function AdminModal({
                             type="button"
                             disabled={isSyncing}
                             onClick={() => {
+                              setProfileUrlInput(DEFAULT_PROFILE_IMAGE);
                               onUpdateState({ ...state, profile: DEFAULT_PROFILE_IMAGE });
                               void persistSettings(DEFAULT_PROFILE_IMAGE, hc, sc, 'Profile photo reset.');
                             }}
@@ -3771,6 +4115,7 @@ export function AdminModal({
                               try {
                                 const defaults = createDefaultState();
                                 await syncPortalStateInDb(defaults, true);
+                                broadcastLiveSync();
                                 resetAdminPassword();
                                 void addActivityLogInDb('Portal Reset', 'Portal data reset to factory defaults');
                                 await onRefreshData();

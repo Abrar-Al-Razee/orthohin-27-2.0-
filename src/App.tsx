@@ -49,6 +49,8 @@ import {
 import { useTheme } from './utils/theme';
 
 const RCS_ADMIN_REVEAL_KEY = 'orthohin_rcs_admin_revealed';
+export const LIVE_SYNC_CHANNEL = 'orthohin27_live_sync';
+export const LIVE_SYNC_STORAGE_KEY = 'orthohin27_live_sync_ping';
 
 const ROUTE_PATHS: Record<ViewMode, string> = {
   home: '/',
@@ -80,19 +82,28 @@ function isRcsAdminLocation(): boolean {
   if (typeof window === 'undefined') return false;
   const rawHash = window.location.hash.replace(/^#/, '').toLowerCase().replace(/\/+$/, '');
   const rawPath = window.location.pathname.toLowerCase().replace(/\/+$/, '') || '/';
+  const rawSearch = window.location.search.toLowerCase();
   const candidate = rawHash.startsWith('/') ? rawHash : rawPath;
-  return candidate === '/rcs-admin' || candidate.startsWith('/rcs-admin/');
+  return (
+    candidate === '/rcs-admin' ||
+    candidate.startsWith('/rcs-admin/') ||
+    rawHash === 'rcs-admin' ||
+    rawSearch.includes('rcs-admin')
+  );
 }
 
 function resolveViewFromLocation(): ViewMode {
   if (typeof window === 'undefined') return 'home';
   const rawHash = window.location.hash.replace(/^#/, '').toLowerCase().replace(/\/+$/, '');
   const rawPath = window.location.pathname.toLowerCase().replace(/\/+$/, '') || '/';
+  const rawSearch = window.location.search.toLowerCase();
   const candidate = rawHash.startsWith('/') ? rawHash : rawPath;
 
   if (
     candidate === '/rcs-admin' ||
     candidate.startsWith('/rcs-admin/') ||
+    rawHash === 'rcs-admin' ||
+    rawSearch.includes('rcs-admin') ||
     candidate === '/admin' ||
     candidate === '/admin-login' ||
     candidate.startsWith('/admin/')
@@ -150,6 +161,7 @@ export default function App() {
   const toastTimerRef = useRef<number | null>(null);
   const settingsSeededRef = useRef(false);
   const keyBufferRef = useRef('');
+  const lastLocalEditAtRef = useRef(0);
 
   const isFirebaseAdmin = Boolean(
     authUser && authUser.email?.toLowerCase() === AUTHORIZED_ADMIN_EMAIL && authUser.emailVerified
@@ -198,20 +210,32 @@ export default function App() {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (adminOpen) return;
       const target = e.target as HTMLElement | null;
-      if (
-        target &&
-        (target.tagName === 'INPUT' ||
-          target.tagName === 'TEXTAREA' ||
-          target.tagName === 'SELECT' ||
-          target.isContentEditable)
-      ) {
+      if (target && target.tagName === 'INPUT' && (target as HTMLInputElement).type === 'password') {
         return;
       }
+
+      if (e.key === 'Backspace') {
+        keyBufferRef.current = keyBufferRef.current.slice(0, -1);
+        return;
+      }
+      if (e.key === 'Escape') {
+        keyBufferRef.current = '';
+        return;
+      }
+
       if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
-        keyBufferRef.current = (keyBufferRef.current + e.key.toLowerCase()).slice(-16);
-        if (keyBufferRef.current.endsWith('/rcs-admin')) {
+        keyBufferRef.current = (keyBufferRef.current + e.key.toLowerCase()).slice(-24);
+        if (
+          keyBufferRef.current.endsWith('/rcs-admin') ||
+          keyBufferRef.current.endsWith('rcs-admin')
+        ) {
           keyBufferRef.current = '';
+          if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
+            e.preventDefault();
+            (target as HTMLInputElement).blur();
+          }
           revealAdminButton();
           if (window.location.pathname !== ROUTE_PATHS.admin) {
             window.history.pushState({}, '', ROUTE_PATHS.admin);
@@ -219,14 +243,13 @@ export default function App() {
           setIsRouteAdmin(true);
           setAdminOpen(true);
           setActiveView('admin');
+          showToast('Admin panel opened.', 'info');
         }
-      } else if (e.key === 'Escape') {
-        keyBufferRef.current = '';
       }
     };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [revealAdminButton]);
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [adminOpen, revealAdminButton, showToast]);
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (user) => {
@@ -289,15 +312,51 @@ export default function App() {
 
   useEffect(() => {
     void refreshPublicPortal();
-    const handleFocus = () => {
+    const syncFromRemoteIfIdle = () => {
+      if (Date.now() - lastLocalEditAtRef.current < 1600) return;
       void refreshPublicPortal();
       if (isFirebaseAdmin) {
         void refreshAdminData();
       }
     };
+    const handleFocus = () => {
+      syncFromRemoteIfIdle();
+    };
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === LIVE_SYNC_STORAGE_KEY) {
+        syncFromRemoteIfIdle();
+      }
+    };
+    let bc: BroadcastChannel | null = null;
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        bc = new BroadcastChannel(LIVE_SYNC_CHANNEL);
+        bc.onmessage = () => {
+          syncFromRemoteIfIdle();
+        };
+      }
+    } catch {
+      bc = null;
+    }
+
     window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('storage', handleStorage);
+      if (bc) bc.close();
+    };
   }, [refreshPublicPortal, refreshAdminData, isFirebaseAdmin]);
+
+  useEffect(() => {
+    if (firestoreRealtimeActive || adminOpen) return;
+    const id = window.setInterval(() => {
+      if (document.visibilityState === 'visible' && Date.now() - lastLocalEditAtRef.current >= 1600) {
+        void refreshPublicPortal();
+      }
+    }, 6000);
+    return () => window.clearInterval(id);
+  }, [firestoreRealtimeActive, adminOpen, refreshPublicPortal]);
 
   useEffect(() => {
     void refreshAdminData();
@@ -308,6 +367,7 @@ export default function App() {
     const defaults = createDefaultState();
     return subscribePublicPortalInFirestore({
       onBatchmates: (batchmates) => {
+        if (Date.now() - lastLocalEditAtRef.current < 1600) return;
         const hasSettings = settingsSeededRef.current;
         setState((prev) => ({
           ...prev,
@@ -320,6 +380,7 @@ export default function App() {
         }));
       },
       onNotices: (notices) => {
+        if (Date.now() - lastLocalEditAtRef.current < 1600) return;
         const hasSettings = settingsSeededRef.current;
         setState((prev) => ({
           ...prev,
@@ -327,6 +388,7 @@ export default function App() {
         }));
       },
       onGallery: (gallery) => {
+        if (Date.now() - lastLocalEditAtRef.current < 1600) return;
         const hasSettings = settingsSeededRef.current;
         setState((prev) => ({
           ...prev,
@@ -334,6 +396,7 @@ export default function App() {
         }));
       },
       onSettings: (settings) => {
+        if (Date.now() - lastLocalEditAtRef.current < 1600) return;
         if (settings !== null) {
           settingsSeededRef.current = true;
           setState((prev) => ({
@@ -351,6 +414,7 @@ export default function App() {
     if (!firestoreRealtimeActive || !isFirebaseAdmin) return;
     return subscribeAdminDataInFirestore({
       onOrders: (orders) => {
+        if (Date.now() - lastLocalEditAtRef.current < 1600) return;
         setState((prev) => ({ ...prev, orders }));
       },
       onActivityLogs: (activityLog) => {
@@ -360,6 +424,7 @@ export default function App() {
   }, [firestoreRealtimeActive, isFirebaseAdmin]);
 
   const updateState = useCallback((next: PortalState) => {
+    lastLocalEditAtRef.current = Date.now();
     setState(next);
   }, []);
 
