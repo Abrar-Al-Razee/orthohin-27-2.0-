@@ -25,6 +25,7 @@ import {
   type CardEditionId,
 } from '../utils/batchCardGenerator';
 import { getInitials } from '../utils/storage';
+import { Reveal3D, TiltStage3D } from './Spatial3D';
 
 interface BatchmatesViewProps {
   batchmates: Batchmate[];
@@ -273,13 +274,14 @@ export function BatchmatesView({
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filtered.map((person) => {
+          {filtered.map((person, idx) => {
             const isFlipped = Boolean(flippedIds[person.id]);
             const isHighlighted = highlightedId === person.id;
 
             return (
-              <div key={person.id} className="flex flex-col">
-                {/* 3D Flip Stage */}
+              <Reveal3D key={person.id} delay={Math.min(idx * 0.04, 0.24)} className="flex flex-col">
+                {/* 3D Flip + Cursor-Tracked Tilt Stage */}
+                <TiltStage3D maxTilt={6} glare={false} scaleOnHover={1.01}>
                 <div className="perspective-1200 w-full h-[360px]">
                   <div
                     role="button"
@@ -458,6 +460,7 @@ export function BatchmatesView({
                     </div>
                   </div>
                 </div>
+                </TiltStage3D>
 
                 {/* Action Strip Directly Below Profile Card */}
                 <div className="mt-2.5 flex items-center justify-between gap-2 px-1">
@@ -490,7 +493,7 @@ export function BatchmatesView({
                     </button>
                   </div>
                 </div>
-              </div>
+              </Reveal3D>
             );
           })}
         </div>
@@ -646,22 +649,24 @@ export function BatchmatesView({
             </div>
 
             <div className="grid md:grid-cols-12 gap-6 p-6 items-start">
-              {/* Live Rendered High-Res Card Preview */}
+              {/* Live Rendered 3D High-Res Card Preview */}
               <div className="md:col-span-6 flex items-center justify-center">
-                <div className="w-full max-w-[330px] aspect-[1080/1520] rounded-2xl overflow-hidden border border-zinc-300 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-950 flex items-center justify-center shadow-lg">
-                  {isRenderingCard || !cardPreviewUrl ? (
-                    <div className="p-6 text-center space-y-2">
-                      <Sparkles className="w-6 h-6 text-rose-600 dark:text-rose-400 mx-auto animate-pulse" />
-                      <p className="text-xs text-zinc-600 dark:text-zinc-400">Crafting collectible card...</p>
-                    </div>
-                  ) : (
-                    <img
-                      src={cardPreviewUrl}
-                      alt={`${cardStudioMember.name} collectible card preview`}
-                      className="w-full h-full object-contain"
-                    />
-                  )}
-                </div>
+                <TiltStage3D maxTilt={10} scaleOnHover={1.02} className="w-full max-w-[330px]">
+                  <div className="w-full aspect-[1080/1520] rounded-2xl overflow-hidden border border-zinc-300 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-950 flex items-center justify-center shadow-xl">
+                    {isRenderingCard || !cardPreviewUrl ? (
+                      <div className="p-6 text-center space-y-2">
+                        <Sparkles className="w-6 h-6 text-rose-600 dark:text-rose-400 mx-auto animate-pulse" />
+                        <p className="text-xs text-zinc-600 dark:text-zinc-400">Crafting collectible card...</p>
+                      </div>
+                    ) : (
+                      <img
+                        src={cardPreviewUrl}
+                        alt={`${cardStudioMember.name} collectible card preview`}
+                        className="w-full h-full object-contain"
+                      />
+                    )}
+                  </div>
+                </TiltStage3D>
               </div>
 
               {/* Edition Switcher & Download Controls */}

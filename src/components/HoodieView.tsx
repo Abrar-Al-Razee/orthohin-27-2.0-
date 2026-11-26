@@ -20,6 +20,7 @@ import {
   getOrderFinancials,
 } from '../utils/invoice';
 import { getInitials, HOODIE_UNIT_PRICE } from '../utils/storage';
+import { Hoodie3DStage, Reveal3D, TiltStage3D } from './Spatial3D';
 
 interface HoodieViewProps {
   config: HoodieConfig;
@@ -181,21 +182,16 @@ export function HoodieView({
         </div>
 
         <div className="grid md:grid-cols-2 gap-8 items-start">
-          {/* Left Column: Front & Back RCS Hoodie Pictures */}
+          {/* Left Column: Interactive 3D Front & Back RCS Hoodie Showcase */}
           <div className="space-y-4">
-            <div className="rounded-2xl overflow-hidden border border-zinc-300 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-950 aspect-[4/3] relative">
-              <img
-                src={activeSide === 'front' ? config.frontImage : config.backImage}
-                alt={`RCS Hoodie — ${activeSide === 'front' ? 'Front View' : 'Back View'}`}
-                referrerPolicy="no-referrer"
-                className="w-full h-full object-cover"
-              />
-              <div className="absolute bottom-3 left-3 px-3 py-1.5 rounded-lg bg-zinc-950/85 border border-zinc-800 text-xs font-semibold text-white">
-                {activeSide === 'front'
-                  ? `Front View · ${config.frontLabel || 'RCS Crest'}`
-                  : `Back View · ${config.backLabel || "Orthohin '27"}`}
-              </div>
-            </div>
+            <Hoodie3DStage
+              activeSide={activeSide}
+              frontImage={config.frontImage}
+              backImage={config.backImage}
+              frontLabel={config.frontLabel}
+              backLabel={config.backLabel}
+              onToggleSide={() => setActiveSide((prev) => (prev === 'front' ? 'back' : 'front'))}
+            />
 
             <div className="grid grid-cols-2 gap-3">
               <button
@@ -585,20 +581,21 @@ export function HoodieView({
           </div>
         ) : (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {filteredPublicOrders.map((order) => {
+            {filteredPublicOrders.map((order, idx) => {
               const financials = getOrderFinancials(order);
               const matchedPhoto = batchmateAvatarByRoll.get(order.roll.trim().toLowerCase());
               const isHighlighted = lastOrder?.id === order.id;
 
               return (
-                <article
-                  key={order.id}
-                  className={`rounded-2xl bg-white dark:bg-[#111114] border p-5 flex flex-col justify-between gap-4 shadow-xs dark:shadow-none transition-all ${
-                    isHighlighted
-                      ? 'border-rose-500 ring-2 ring-rose-500/25'
-                      : 'border-zinc-300 dark:border-zinc-800/90 hover:border-zinc-400 dark:hover:border-zinc-700'
-                  }`}
-                >
+                <Reveal3D key={order.id} delay={Math.min(idx * 0.04, 0.2)}>
+                  <TiltStage3D maxTilt={5.5} className="h-full">
+                    <article
+                      className={`h-full rounded-2xl bg-white/95 dark:bg-[#111114]/95 backdrop-blur-sm border p-5 flex flex-col justify-between gap-4 shadow-sm dark:shadow-lg transition-all ${
+                        isHighlighted
+                          ? 'border-rose-500 ring-2 ring-rose-500/25'
+                          : 'border-zinc-300 dark:border-zinc-800/90 hover:border-zinc-400 dark:hover:border-zinc-700'
+                      }`}
+                    >
                   <div className="space-y-4">
                     {/* Top Row: Avatar + Name + Roll + Order ID */}
                     <div className="flex items-start gap-3.5">
@@ -699,6 +696,8 @@ export function HoodieView({
                     </button>
                   </div>
                 </article>
+                  </TiltStage3D>
+                </Reveal3D>
               );
             })}
           </div>

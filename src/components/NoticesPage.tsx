@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ArrowLeft, Megaphone, Search } from 'lucide-react';
 import type { BatchNotice, NoticeCategory, ViewMode } from '../types';
+import { Reveal3D, TiltStage3D } from './Spatial3D';
 
 interface NoticesPageProps {
   notices: BatchNotice[];
@@ -99,35 +100,36 @@ export function NoticesPage({ notices, onNavigate }: NoticesPageProps) {
         </div>
       ) : (
         <div className="space-y-4">
-          {filtered.map((notice) => (
-            <article
-              key={notice.id}
-              className="p-6 rounded-2xl bg-white dark:bg-[#111114] border border-zinc-300 dark:border-zinc-800/80 shadow-xs dark:shadow-none space-y-2.5"
-            >
-              <div className="flex flex-wrap items-center gap-2 text-xs">
-                <span
-                  className={`font-semibold ${
-                    notice.category === 'Urgent'
-                      ? 'text-rose-700 dark:text-rose-400'
-                      : notice.category === 'Event'
-                        ? 'text-amber-700 dark:text-amber-400'
-                        : 'text-emerald-700 dark:text-emerald-400'
-                  }`}
-                >
-                  {notice.category}
-                </span>
-                <span className="text-zinc-400 dark:text-zinc-600" aria-hidden="true">·</span>
-                <span className="font-mono tabular-nums text-zinc-600 dark:text-zinc-500">{notice.createdAt}</span>
-                {notice.pinned && (
-                  <>
+          {filtered.map((notice, idx) => (
+            <Reveal3D key={notice.id} delay={Math.min(idx * 0.04, 0.2)}>
+              <TiltStage3D maxTilt={4} scaleOnHover={1.008}>
+                <article className="p-6 rounded-2xl bg-white/95 dark:bg-[#111114]/95 backdrop-blur-sm border border-zinc-300 dark:border-zinc-800/80 shadow-sm dark:shadow-lg space-y-2.5">
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <span
+                      className={`font-semibold ${
+                        notice.category === 'Urgent'
+                          ? 'text-rose-700 dark:text-rose-400'
+                          : notice.category === 'Event'
+                            ? 'text-amber-700 dark:text-amber-400'
+                            : 'text-emerald-700 dark:text-emerald-400'
+                      }`}
+                    >
+                      {notice.category}
+                    </span>
                     <span className="text-zinc-400 dark:text-zinc-600" aria-hidden="true">·</span>
-                    <span className="text-rose-700 dark:text-rose-400 font-semibold">Pinned</span>
-                  </>
-                )}
-              </div>
-              <h2 className="text-lg font-semibold text-zinc-950 dark:text-white">{notice.title}</h2>
-              <p className="text-sm text-zinc-700 dark:text-zinc-400 leading-relaxed">{notice.message}</p>
-            </article>
+                    <span className="font-mono tabular-nums text-zinc-600 dark:text-zinc-500">{notice.createdAt}</span>
+                    {notice.pinned && (
+                      <>
+                        <span className="text-zinc-400 dark:text-zinc-600" aria-hidden="true">·</span>
+                        <span className="text-rose-700 dark:text-rose-400 font-semibold">Pinned</span>
+                      </>
+                    )}
+                  </div>
+                  <h2 className="text-lg font-semibold text-zinc-950 dark:text-white">{notice.title}</h2>
+                  <p className="text-sm text-zinc-700 dark:text-zinc-400 leading-relaxed">{notice.message}</p>
+                </article>
+              </TiltStage3D>
+            </Reveal3D>
           ))}
         </div>
       )}

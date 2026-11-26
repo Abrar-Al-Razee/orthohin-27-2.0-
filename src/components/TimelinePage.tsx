@@ -1,5 +1,6 @@
 import { ArrowLeft, Camera, UserPlus } from 'lucide-react';
 import type { SiteConfig, ViewMode } from '../types';
+import { Reveal3D, TiltStage3D } from './Spatial3D';
 
 interface TimelinePageProps {
   siteConfig: SiteConfig;
@@ -64,17 +65,21 @@ export function TimelinePage({ siteConfig, onNavigate }: TimelinePageProps) {
                   idx === milestones.length - 1 ? 'bg-zinc-500 dark:bg-zinc-600' : 'bg-rose-600 dark:bg-rose-500'
                 }`}
               />
-              <div className="p-6 rounded-2xl bg-white dark:bg-[#111114] border border-zinc-300 dark:border-zinc-800/80 shadow-xs dark:shadow-none space-y-1.5">
-                <p
-                  className={`text-xs font-mono font-semibold ${
-                    idx === milestones.length - 1 ? 'text-zinc-600 dark:text-zinc-400' : 'text-rose-700 dark:text-rose-400'
-                  }`}
-                >
-                  {item.tag}
-                </p>
-                <h2 className="text-lg font-semibold text-zinc-950 dark:text-white">{item.title}</h2>
-                <p className="text-sm text-zinc-700 dark:text-zinc-400 leading-relaxed">{item.description}</p>
-              </div>
+              <Reveal3D delay={Math.min(idx * 0.05, 0.25)}>
+                <TiltStage3D maxTilt={4.5} scaleOnHover={1.01}>
+                  <div className="p-6 rounded-2xl bg-white/95 dark:bg-[#111114]/95 backdrop-blur-sm border border-zinc-300 dark:border-zinc-800/80 shadow-sm dark:shadow-lg space-y-1.5">
+                    <p
+                      className={`text-xs font-mono font-semibold ${
+                        idx === milestones.length - 1 ? 'text-zinc-600 dark:text-zinc-400' : 'text-rose-700 dark:text-rose-400'
+                      }`}
+                    >
+                      {item.tag}
+                    </p>
+                    <h2 className="text-lg font-semibold text-zinc-950 dark:text-white">{item.title}</h2>
+                    <p className="text-sm text-zinc-700 dark:text-zinc-400 leading-relaxed">{item.description}</p>
+                  </div>
+                </TiltStage3D>
+              </Reveal3D>
             </li>
           ))}
         </ol>

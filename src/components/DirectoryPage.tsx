@@ -1,6 +1,7 @@
 import { ArrowLeft, ArrowUpRight, Shield, UserPlus, Users } from 'lucide-react';
 import type { AdminTeamMember, SiteConfig, ViewMode } from '../types';
 import { DEFAULT_PROFILE_IMAGE, getInitials } from '../utils/storage';
+import { Reveal3D, TiltStage3D } from './Spatial3D';
 
 interface DirectoryPageProps {
   siteConfig: SiteConfig;
@@ -86,51 +87,55 @@ export function DirectoryPage({
       </div>
 
       <div className={gridClass}>
-        {teamMembers.map((member) => {
+        {teamMembers.map((member, idx) => {
           const socialLink = resolveSocialLink(member.social);
           return (
-            <article
-              key={member.id}
-              className="rounded-2xl bg-white dark:bg-[#111114] border border-zinc-300 dark:border-zinc-800/80 shadow-xs dark:shadow-none p-7 sm:p-8 flex flex-col items-center text-center space-y-5"
-            >
-              <div className="w-32 h-32 rounded-full overflow-hidden border-2 border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center shrink-0">
-                {member.photo ? (
-                  <img
-                    src={member.photo}
-                    alt={member.name}
-                    referrerPolicy="no-referrer"
-                    className="w-full h-full object-cover object-[center_22%]"
-                  />
-                ) : (
-                  <span className="text-2xl font-bold text-rose-700 dark:text-rose-400">
-                    {getInitials(member.name)}
-                  </span>
-                )}
-              </div>
+            <Reveal3D key={member.id} delay={Math.min(idx * 0.05, 0.25)}>
+              <TiltStage3D maxTilt={7} className="h-full">
+                <article className="h-full rounded-2xl bg-white/95 dark:bg-[#111114]/95 backdrop-blur-sm border border-zinc-300 dark:border-zinc-800/80 shadow-sm dark:shadow-xl p-7 sm:p-8 flex flex-col items-center text-center space-y-5">
+                  <div
+                    style={{ transform: 'translateZ(24px)' }}
+                    className="w-32 h-32 rounded-full overflow-hidden border-2 border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center shrink-0 shadow-md"
+                  >
+                    {member.photo ? (
+                      <img
+                        src={member.photo}
+                        alt={member.name}
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-cover object-[center_22%]"
+                      />
+                    ) : (
+                      <span className="text-2xl font-bold text-rose-700 dark:text-rose-400">
+                        {getInitials(member.name)}
+                      </span>
+                    )}
+                  </div>
 
-              <div className="space-y-1.5">
-                <p className="text-xs font-semibold text-rose-700 dark:text-rose-400">{member.role}</p>
-                <h2 className="text-xl font-bold text-zinc-950 dark:text-white">{member.name}</h2>
-              </div>
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-semibold text-rose-700 dark:text-rose-400">{member.role}</p>
+                    <h2 className="text-xl font-bold text-zinc-950 dark:text-white">{member.name}</h2>
+                  </div>
 
-              {member.bio && (
-                <p className="text-sm text-zinc-700 dark:text-zinc-400 leading-relaxed flex-1">
-                  "{member.bio}"
-                </p>
-              )}
+                  {member.bio && (
+                    <p className="text-sm text-zinc-700 dark:text-zinc-400 leading-relaxed flex-1">
+                      "{member.bio}"
+                    </p>
+                  )}
 
-              {socialLink && (
-                <a
-                  href={socialLink.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-white text-xs font-semibold transition-colors"
-                >
-                  {socialLink.label}
-                  <ArrowUpRight className="w-3.5 h-3.5" />
-                </a>
-              )}
-            </article>
+                  {socialLink && (
+                    <a
+                      href={socialLink.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-white text-xs font-semibold transition-colors"
+                    >
+                      {socialLink.label}
+                      <ArrowUpRight className="w-3.5 h-3.5" />
+                    </a>
+                  )}
+                </article>
+              </TiltStage3D>
+            </Reveal3D>
           );
         })}
       </div>

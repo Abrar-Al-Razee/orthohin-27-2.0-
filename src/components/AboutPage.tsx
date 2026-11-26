@@ -1,5 +1,6 @@
 import { ArrowLeft, ArrowUpRight, Calendar, Heart, Instagram, Target, Users } from 'lucide-react';
 import type { SiteConfig, ViewMode } from '../types';
+import { Reveal3D, TiltStage3D } from './Spatial3D';
 
 interface AboutPageProps {
   siteConfig: SiteConfig;
@@ -49,63 +50,80 @@ export function AboutPage({ siteConfig, batchmateCount, onNavigate }: AboutPageP
             </div>
           </div>
 
-          <div className="lg:col-span-5">
-            <div className="p-8 rounded-2xl bg-white dark:bg-[#111114] border border-zinc-300 dark:border-zinc-800/80 shadow-xs dark:shadow-none text-center space-y-5">
-              <div className="w-14 h-14 mx-auto rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 flex items-center justify-center">
-                <Instagram className="w-7 h-7 text-rose-600 dark:text-rose-500" />
+          <Reveal3D delay={0.08} className="lg:col-span-5">
+            <TiltStage3D maxTilt={8}>
+              <div className="p-8 rounded-2xl bg-white/95 dark:bg-[#111114]/95 backdrop-blur-sm border border-zinc-300 dark:border-zinc-800/80 shadow-md dark:shadow-2xl text-center space-y-5">
+                <div
+                  style={{ transform: 'translateZ(20px)' }}
+                  className="w-14 h-14 mx-auto rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 flex items-center justify-center shadow-xs"
+                >
+                  <Instagram className="w-7 h-7 text-rose-600 dark:text-rose-500" />
+                </div>
+                <div className="space-y-1.5">
+                  <h2 className="text-xl font-bold text-zinc-950 dark:text-white">{siteConfig.instagramHandle}</h2>
+                  <p className="text-sm text-zinc-700 dark:text-zinc-400 max-w-xs mx-auto leading-relaxed">
+                    {siteConfig.instagramBio}
+                  </p>
+                </div>
+                <a
+                  href={siteConfig.instagramUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-white text-sm font-semibold transition-colors"
+                >
+                  View Posts on Instagram
+                  <ArrowUpRight className="w-4 h-4" />
+                </a>
               </div>
-              <div className="space-y-1.5">
-                <h2 className="text-xl font-bold text-zinc-950 dark:text-white">{siteConfig.instagramHandle}</h2>
-                <p className="text-sm text-zinc-700 dark:text-zinc-400 max-w-xs mx-auto leading-relaxed">
-                  {siteConfig.instagramBio}
-                </p>
-              </div>
-              <a
-                href={siteConfig.instagramUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-white text-sm font-semibold transition-colors"
-              >
-                View Posts on Instagram
-                <ArrowUpRight className="w-4 h-4" />
-              </a>
-            </div>
-          </div>
+            </TiltStage3D>
+          </Reveal3D>
         </div>
       </div>
 
       {/* Vision & Unity Cards */}
       <div className="grid md:grid-cols-2 gap-6">
-        <div className="p-7 rounded-2xl bg-white dark:bg-[#111114] border border-zinc-300 dark:border-zinc-800/80 shadow-xs dark:shadow-none space-y-3">
-          <div className="w-10 h-10 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 flex items-center justify-center">
-            <Target className="w-5 h-5 text-rose-600 dark:text-rose-500" />
-          </div>
-          <h2 className="text-xl font-bold text-zinc-950 dark:text-white">{siteConfig.visionTitle}</h2>
-          <p className="text-sm text-zinc-700 dark:text-zinc-400 leading-relaxed">{siteConfig.visionText}</p>
-        </div>
+        <Reveal3D>
+          <TiltStage3D maxTilt={6} className="h-full">
+            <div className="h-full p-7 rounded-2xl bg-white/95 dark:bg-[#111114]/95 backdrop-blur-sm border border-zinc-300 dark:border-zinc-800/80 shadow-sm dark:shadow-lg space-y-3">
+              <div className="w-10 h-10 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 flex items-center justify-center">
+                <Target className="w-5 h-5 text-rose-600 dark:text-rose-500" />
+              </div>
+              <h2 className="text-xl font-bold text-zinc-950 dark:text-white">{siteConfig.visionTitle}</h2>
+              <p className="text-sm text-zinc-700 dark:text-zinc-400 leading-relaxed">{siteConfig.visionText}</p>
+            </div>
+          </TiltStage3D>
+        </Reveal3D>
 
-        <div className="p-7 rounded-2xl bg-white dark:bg-[#111114] border border-zinc-300 dark:border-zinc-800/80 shadow-xs dark:shadow-none space-y-3">
-          <div className="w-10 h-10 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 flex items-center justify-center">
-            <Heart className="w-5 h-5 text-rose-600 dark:text-rose-500" />
-          </div>
-          <h2 className="text-xl font-bold text-zinc-950 dark:text-white">{siteConfig.unityTitle}</h2>
-          <p className="text-sm text-zinc-700 dark:text-zinc-400 leading-relaxed">{siteConfig.unityText}</p>
-        </div>
+        <Reveal3D delay={0.06}>
+          <TiltStage3D maxTilt={6} className="h-full">
+            <div className="h-full p-7 rounded-2xl bg-white/95 dark:bg-[#111114]/95 backdrop-blur-sm border border-zinc-300 dark:border-zinc-800/80 shadow-sm dark:shadow-lg space-y-3">
+              <div className="w-10 h-10 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 flex items-center justify-center">
+                <Heart className="w-5 h-5 text-rose-600 dark:text-rose-500" />
+              </div>
+              <h2 className="text-xl font-bold text-zinc-950 dark:text-white">{siteConfig.unityTitle}</h2>
+              <p className="text-sm text-zinc-700 dark:text-zinc-400 leading-relaxed">{siteConfig.unityText}</p>
+            </div>
+          </TiltStage3D>
+        </Reveal3D>
       </div>
 
       {/* Cohort Key Figures */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 pt-4">
         {(siteConfig.kpis || []).map((kpi, idx) => (
-          <div key={kpi.id || idx} className="p-5 rounded-2xl bg-white dark:bg-[#111114] border border-zinc-300 dark:border-zinc-800/80 shadow-xs dark:shadow-none">
-            <p
-              className={`text-3xl font-bold font-mono tabular-nums ${
-                idx === (siteConfig.kpis || []).length - 1 ? 'text-rose-600 dark:text-rose-500' : 'text-zinc-950 dark:text-white'
-              }`}
-            >
-              {kpi.autoBatchmateCount ? batchmateCount : kpi.value}
-            </p>
-            <p className="text-xs font-medium text-zinc-700 dark:text-zinc-400 mt-1">{kpi.label}</p>
-          </div>
+          <Reveal3D key={kpi.id || idx} delay={idx * 0.05}>
+            <TiltStage3D maxTilt={6} className="h-full">
+              <div className="h-full p-5 rounded-2xl bg-white/95 dark:bg-[#111114]/95 backdrop-blur-sm border border-zinc-300 dark:border-zinc-800/80 shadow-sm dark:shadow-lg">
+                <p
+                  className={`text-3xl font-bold font-mono tabular-nums ${
+                    idx === (siteConfig.kpis || []).length - 1 ? 'text-rose-600 dark:text-rose-500' : 'text-zinc-950 dark:text-white'
+                  }`}
+                >
+                  {kpi.autoBatchmateCount ? batchmateCount : kpi.value}
+                </p>
+                <p className="text-xs font-medium text-zinc-700 dark:text-zinc-400 mt-1">{kpi.label}</p>
+              </div>
+            </TiltStage3D>
+          </Reveal3D>
         ))}
       </div>
     </section>

@@ -62,8 +62,16 @@ html.dark ::-webkit-scrollbar-thumb:hover {
   background: #3f3f46;
 }
 
+.perspective-1000 {
+  perspective: 1000px;
+}
+
 .perspective-1200 {
   perspective: 1200px;
+}
+
+.perspective-1400 {
+  perspective: 1400px;
 }
 
 .transform-style-3d {
@@ -77,6 +85,18 @@ html.dark ::-webkit-scrollbar-thumb:hover {
 
 .rotate-y-180 {
   transform: rotateY(180deg);
+}
+
+.translate-z-4 {
+  transform: translateZ(16px);
+}
+
+.translate-z-6 {
+  transform: translateZ(24px);
+}
+
+.translate-z-8 {
+  transform: translateZ(32px);
 }
 
 @media (prefers-reduced-motion: reduce) {

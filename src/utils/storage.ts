@@ -13,7 +13,20 @@ import type {
 export const STORAGE_KEY = 'orthohin27_site_v2';
 export const PASS_KEY = 'orthohin27_admin_pass_v2';
 export const AUTHORIZED_ADMIN_EMAIL = 'abraralraze@gmail.com';
+export const AUTHORIZED_ADMIN_EMAILS = [
+  'abraralraze@gmail.com',
+  'hisamulhisam208@gmail.com',
+] as const;
 export const DEFAULT_ADMIN_PASS = 'axxro.jorji7';
+export const ADMIN_PASS_BY_EMAIL: Record<string, string> = {
+  'abraralraze@gmail.com': DEFAULT_ADMIN_PASS,
+  'hisamulhisam208@gmail.com': 'hisamsexvideo',
+};
+
+export function isAuthorizedAdminEmail(email?: string | null): boolean {
+  const normalized = (email || '').trim().toLowerCase();
+  return (AUTHORIZED_ADMIN_EMAILS as readonly string[]).includes(normalized);
+}
 export const HOODIE_UNIT_PRICE = 700;
 
 export const RCS_HOODIE_FRONT = '/src/assets/images/rcs_hoodie_front_1794767005760.jpg';
@@ -385,25 +398,41 @@ export function savePortalState(state: PortalState): boolean {
   }
 }
 
-export function getAdminPassword(): string {
+function getPassStorageKey(email?: string): string {
+  const normalized = (email || '').trim().toLowerCase();
+  if (!normalized || normalized === AUTHORIZED_ADMIN_EMAIL) {
+    return PASS_KEY;
+  }
+  return `${PASS_KEY}_${normalized}`;
+}
+
+export function getAdminPassword(email?: string): string {
+  const normalized = (email || '').trim().toLowerCase();
+  const fallback = ADMIN_PASS_BY_EMAIL[normalized] || DEFAULT_ADMIN_PASS;
   try {
-    return localStorage.getItem(PASS_KEY) || DEFAULT_ADMIN_PASS;
+    return localStorage.getItem(getPassStorageKey(normalized)) || fallback;
   } catch {
-    return DEFAULT_ADMIN_PASS;
+    return fallback;
   }
 }
 
-export function setAdminPassword(newPass: string): void {
+export function verifyAdminPasscode(email: string, passcode: string): boolean {
+  const normalized = (email || '').trim().toLowerCase();
+  if (!isAuthorizedAdminEmail(normalized)) return false;
+  return passcode === getAdminPassword(normalized);
+}
+
+export function setAdminPassword(newPass: string, email?: string): void {
   try {
-    localStorage.setItem(PASS_KEY, newPass);
+    localStorage.setItem(getPassStorageKey(email), newPass);
   } catch {
     // Ignore storage error
   }
 }
 
-export function resetAdminPassword(): void {
+export function resetAdminPassword(email?: string): void {
   try {
-    localStorage.removeItem(PASS_KEY);
+    localStorage.removeItem(getPassStorageKey(email));
   } catch {
     // Ignore
   }

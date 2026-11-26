@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Lock, Menu, Moon, Sun, X } from 'lucide-react';
+import { motion } from 'motion/react';
+import { Menu, Moon, Sun, X } from 'lucide-react';
 import type { SiteConfig, ViewMode } from '../types';
 import type { ThemeMode } from '../utils/theme';
 import { SITE_LOGO_SRC } from '../utils/storage';
@@ -8,7 +9,6 @@ interface NavbarProps {
   activeView: ViewMode;
   siteConfig?: SiteConfig;
   theme: ThemeMode;
-  showAdminButton?: boolean;
   onToggleTheme: () => void;
   onNavigate: (view: ViewMode, sectionId?: string) => void;
   onOpenRegister: () => void;
@@ -18,7 +18,6 @@ export function Navbar({
   activeView,
   siteConfig,
   theme,
-  showAdminButton = false,
   onToggleTheme,
   onNavigate,
   onOpenRegister,
@@ -42,19 +41,24 @@ export function Navbar({
     onOpenRegister();
   };
 
+  const navLinkClass = (isActive: boolean) =>
+    `relative py-1 whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer hover:text-zinc-950 dark:hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 rounded ${
+      isActive ? 'text-zinc-950 dark:text-white font-semibold' : ''
+    }`;
+
   return (
-    <header className="fixed top-0 inset-x-0 z-40 bg-white/95 dark:bg-[#070709]/90 backdrop-blur-md border-b border-zinc-300 dark:border-zinc-800/80 transition-colors duration-150">
+    <header className="fixed top-0 inset-x-0 z-40 bg-white/90 dark:bg-[#070709]/85 backdrop-blur-xl border-b border-zinc-300/90 dark:border-zinc-800/80 transition-colors duration-150">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4 lg:gap-8">
         {/* Zone 1: Site logo & wordmark */}
         <button
           type="button"
           onClick={() => handleNav('home')}
-          className="inline-flex items-center gap-2.5 text-lg font-bold tracking-tight text-zinc-950 dark:text-white whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 rounded-lg"
+          className="group inline-flex items-center gap-2.5 text-lg font-bold tracking-tight text-zinc-950 dark:text-white whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 rounded-lg"
         >
           <img
             src={SITE_LOGO_SRC}
             alt={`${brandName} ${brandAccent} logo`}
-            className="w-9 h-9 rounded-lg object-cover border border-zinc-300 dark:border-zinc-700/80 shadow-xs shrink-0 bg-black"
+            className="w-9 h-9 rounded-lg object-cover border border-zinc-300 dark:border-zinc-700/80 shadow-xs shrink-0 bg-black transition-transform duration-200 group-hover:[transform:perspective(500px)_rotateX(10deg)_rotateY(-10deg)_scale(1.06)]"
           />
           <span>
             {brandName} <span className="text-rose-600 dark:text-rose-500">{brandAccent}</span>
@@ -63,67 +67,55 @@ export function Navbar({
 
         {/* Zone 2: Concise single-line nav links */}
         <nav className="hidden md:flex items-center gap-4 lg:gap-7 text-xs lg:text-sm font-medium text-zinc-700 dark:text-zinc-400">
-          <button
-            type="button"
-            onClick={() => handleNav('home')}
-            className={`whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer hover:text-zinc-950 dark:hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 rounded ${
-              activeView === 'home' ? 'text-zinc-950 dark:text-white font-semibold' : ''
-            }`}
-          >
+          <button type="button" onClick={() => handleNav('home')} className={navLinkClass(activeView === 'home')}>
             Home
+            {activeView === 'home' && (
+              <motion.span
+                layoutId="navbar-active-indicator"
+                className="absolute inset-x-0 -bottom-0.5 h-0.5 bg-rose-600 dark:bg-rose-500 rounded-full"
+              />
+            )}
           </button>
           {showGallery && (
-            <button
-              type="button"
-              onClick={() => handleNav('gallery')}
-              className={`whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer hover:text-zinc-950 dark:hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 rounded ${
-                activeView === 'gallery' ? 'text-zinc-950 dark:text-white font-semibold' : ''
-              }`}
-            >
+            <button type="button" onClick={() => handleNav('gallery')} className={navLinkClass(activeView === 'gallery')}>
               Gallery
+              {activeView === 'gallery' && (
+                <motion.span
+                  layoutId="navbar-active-indicator"
+                  className="absolute inset-x-0 -bottom-0.5 h-0.5 bg-rose-600 dark:bg-rose-500 rounded-full"
+                />
+              )}
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => handleNav('batchmates')}
-            className={`whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer hover:text-zinc-950 dark:hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 rounded ${
-              activeView === 'batchmates' ? 'text-zinc-950 dark:text-white font-semibold' : ''
-            }`}
-          >
+          <button type="button" onClick={() => handleNav('batchmates')} className={navLinkClass(activeView === 'batchmates')}>
             Batchmates
+            {activeView === 'batchmates' && (
+              <motion.span
+                layoutId="navbar-active-indicator"
+                className="absolute inset-x-0 -bottom-0.5 h-0.5 bg-rose-600 dark:bg-rose-500 rounded-full"
+              />
+            )}
           </button>
           {showHoodieNav && (
-            <button
-              type="button"
-              onClick={() => handleNav('hoodie')}
-              className={`whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer hover:text-zinc-950 dark:hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 rounded ${
-                activeView === 'hoodie' ? 'text-zinc-950 dark:text-white font-semibold' : ''
-              }`}
-            >
+            <button type="button" onClick={() => handleNav('hoodie')} className={navLinkClass(activeView === 'hoodie')}>
               Hoodie '26-'27
+              {activeView === 'hoodie' && (
+                <motion.span
+                  layoutId="navbar-active-indicator"
+                  className="absolute inset-x-0 -bottom-0.5 h-0.5 bg-rose-600 dark:bg-rose-500 rounded-full"
+                />
+              )}
             </button>
           )}
           {showDirectory && (
-            <button
-              type="button"
-              onClick={() => handleNav('directory')}
-              className={`whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer hover:text-zinc-950 dark:hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 rounded ${
-                activeView === 'directory' ? 'text-zinc-950 dark:text-white font-semibold' : ''
-              }`}
-            >
+            <button type="button" onClick={() => handleNav('directory')} className={navLinkClass(activeView === 'directory')}>
               Admin Panel
-            </button>
-          )}
-          {showAdminButton && (
-            <button
-              type="button"
-              onClick={() => handleNav('admin')}
-              className={`inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer hover:text-rose-700 dark:hover:text-rose-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 rounded ${
-                activeView === 'admin' ? 'text-rose-700 dark:text-rose-400 font-semibold' : 'text-zinc-800 dark:text-zinc-300'
-              }`}
-            >
-              <Lock className="w-3.5 h-3.5 text-rose-600 dark:text-rose-500" />
-              RCS Control
+              {activeView === 'directory' && (
+                <motion.span
+                  layoutId="navbar-active-indicator"
+                  className="absolute inset-x-0 -bottom-0.5 h-0.5 bg-rose-600 dark:bg-rose-500 rounded-full"
+                />
+              )}
             </button>
           )}
         </nav>
@@ -254,18 +246,6 @@ export function Navbar({
           >
             Our Journey
           </button>
-          {showAdminButton && (
-            <button
-              type="button"
-              onClick={() => handleNav('admin')}
-              className={`w-full text-left px-3 py-3 rounded-lg text-sm font-medium hover:bg-zinc-100 dark:hover:bg-zinc-900 flex items-center gap-2 ${
-                activeView === 'admin' ? 'text-rose-700 dark:text-rose-400 bg-zinc-100 dark:bg-zinc-900/60 font-semibold' : 'text-zinc-800 dark:text-zinc-200'
-              }`}
-            >
-              <Lock className="w-4 h-4 text-rose-600 dark:text-rose-500" />
-              RCS Control
-            </button>
-          )}
           <button
             type="button"
             onClick={onToggleTheme}

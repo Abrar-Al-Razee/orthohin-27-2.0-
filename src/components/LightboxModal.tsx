@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { motion } from 'motion/react';
 import { ArrowUpRight, Play, X } from 'lucide-react';
 import type { GalleryItem } from '../types';
 
@@ -38,8 +39,14 @@ export function LightboxModal({ item, onClose }: LightboxModalProps) {
         <X className="w-5 h-5" />
       </button>
 
-      <div className="w-full max-w-4xl space-y-4">
-        <div className="relative rounded-2xl overflow-hidden bg-zinc-950 border border-zinc-800">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96, y: 12, rotateX: 4 }}
+        animate={{ opacity: 1, scale: 1, y: 0, rotateX: 0 }}
+        transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+        style={{ transformPerspective: 1200 }}
+        className="w-full max-w-4xl space-y-4"
+      >
+        <div className="relative rounded-2xl overflow-hidden bg-zinc-950 border border-zinc-800 shadow-2xl">
           {item.src ? (
             <img
               src={item.src}
@@ -89,7 +96,7 @@ export function LightboxModal({ item, onClose }: LightboxModalProps) {
           </div>
           {item.date && <p className="text-xs font-mono text-zinc-400 shrink-0">{item.date}</p>}
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

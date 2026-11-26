@@ -92,6 +92,7 @@ import type {
 } from '../types';
 import {
   AUTHORIZED_ADMIN_EMAIL,
+  AUTHORIZED_ADMIN_EMAILS,
   compressImage,
   createDefaultState,
   DEFAULT_HERO_IMAGE,
@@ -99,14 +100,15 @@ import {
   DEFAULT_PROFILE_IMAGE,
   DEFAULT_SITE_CONFIG,
   downloadCsv,
-  getAdminPassword,
   getInitials,
   HOODIE_UNIT_PRICE,
+  isAuthorizedAdminEmail,
   mergeHoodieConfig,
   mergeSiteConfig,
   resetAdminPassword,
   setAdminPassword,
   SITE_LOGO_SRC,
+  verifyAdminPasscode,
 } from '../utils/storage';
 import {
   downloadOrderInvoiceHtml,
@@ -375,7 +377,9 @@ export function AdminModal({
 }: AdminModalProps) {
   const [unlocked, setUnlocked] = useState(false);
   const [authorizedAdmin, setAuthorizedAdmin] = useState('');
-  const [emailInput, setEmailInput] = useState(AUTHORIZED_ADMIN_EMAIL);
+  const [emailInput, setEmailInput] = useState(() =>
+    authUser?.email && isAuthorizedAdminEmail(authUser.email) ? authUser.email.toLowerCase() : ''
+  );
   const [passwordInput, setPasswordInput] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [failedAttempts, setFailedAttempts] = useState(0);
@@ -736,7 +740,10 @@ export function AdminModal({
       setUnlocked(false);
       setAuthorizedAdmin('');
     }
-  }, [isFirebaseAdmin, unlocked]);
+    if (isFirebaseAdmin && authUser?.email) {
+      setEmailInput((prev) => prev || authUser.email!.toLowerCase());
+    }
+  }, [isFirebaseAdmin, authUser, unlocked]);
 
   useEffect(() => {
     if (!lockUntil) return;
@@ -1243,10 +1250,10 @@ export function AdminModal({
     try {
       const cred = await signInWithPopup(auth, googleProvider);
       const signedEmail = cred.user.email?.toLowerCase() || '';
-      if (signedEmail !== AUTHORIZED_ADMIN_EMAIL || !cred.user.emailVerified) {
+      if (!isAuthorizedAdminEmail(signedEmail) || !cred.user.emailVerified) {
         await signOut(auth);
         setLoginError(
-          `Unauthorized Google account (${signedEmail || 'unknown'}). Sign in strictly with ${AUTHORIZED_ADMIN_EMAIL}.`
+          `Unauthorized Google account (${signedEmail || 'unknown'}). Sign in with an authorized admin account.`
         );
         return null;
       }
@@ -1284,7 +1291,7 @@ export function AdminModal({
         );
       } else {
         setLoginError(
-          `Google verification failed (${code || 'unknown'}). Please confirm your account (${AUTHORIZED_ADMIN_EMAIL}) and try again.`
+          `Google verification failed (${code || 'unknown'}). Please confirm your authorized admin Google account and try again.`
         );
       }
       return null;
@@ -1298,11 +1305,11 @@ export function AdminModal({
     if (isAuthenticating || lockSecondsLeft > 0) return;
 
     const normalizedEmail = emailInput.trim().toLowerCase();
-    if (normalizedEmail !== AUTHORIZED_ADMIN_EMAIL) {
-      setLoginError(`Unauthorized email. Access is strictly restricted to ${AUTHORIZED_ADMIN_EMAIL}.`);
+    if (!isAuthorizedAdminEmail(normalizedEmail)) {
+      setLoginError(`Unauthorized email. Access is restricted to ${AUTHORIZED_ADMIN_EMAILS.join(' or ')}.`);
       return;
     }
-    if (passwordInput !== getAdminPassword()) {
+    if (!verifyAdminPasscode(normalizedEmail, passwordInput)) {
       const nextAttempts = failedAttempts + 1;
       setFailedAttempts(nextAttempts);
       if (nextAttempts >= 5) {
@@ -1314,7 +1321,7 @@ export function AdminModal({
       return;
     }
 
-    if (isFirebaseAdmin && authUser?.email) {
+    if (isFirebaseAdmin && authUser?.email?.toLowerCase() === normalizedEmail) {
       setIsAuthenticating(true);
       await completeUnlock(authUser.email.toLowerCase());
       setIsAuthenticating(false);
@@ -2254,9 +2261,9 @@ export function AdminModal({
       onToast('Password must be at least 6 characters.', 'error');
       return;
     }
-    setAdminPassword(newPassword);
+    setAdminPassword(newPassword, authorizedAdmin || AUTHORIZED_ADMIN_EMAIL);
     setNewPassword('');
-    void addActivityLogInDb('Password Changed', 'Admin passcode updated');
+    void addActivityLogInDb('Password Changed', `Admin passcode updated for ${authorizedAdmin || AUTHORIZED_ADMIN_EMAIL}`);
     onToast('Admin passcode updated.', 'success');
   };
 
@@ -2574,7 +2581,7 @@ export function AdminModal({
               ORTHOHIN '27 · Smart Admin Control
             </h2>
             <p className="text-[11px] text-zinc-600 dark:text-zinc-400 truncate">
-              {unlocked ? `Authorized: ${authorizedAdmin}` : `Protected /rcs-admin Page · ${AUTHORIZED_ADMIN_EMAIL}`}
+              {unlocked ? `Authorized: ${authorizedAdmin}` : 'Protected /rcs-admin Page · Authorized Admins Only'}
             </p>
           </div>
         </div>
@@ -2788,8 +2795,8 @@ export function AdminModal({
               </div>
               <h3 className="text-2xl font-bold tracking-tight text-zinc-950 dark:text-white">Sign in to Admin Control</h3>
               <p className="text-xs text-zinc-700 dark:text-zinc-400 leading-relaxed">
-                Access is strictly restricted to <span className="font-mono text-zinc-950 dark:text-zinc-200">{AUTHORIZED_ADMIN_EMAIL}</span>{' '}
-                with verified account credentials and admin passcode.
+                Access is restricted to authorized <span className="font-mono text-zinc-950 dark:text-zinc-200">Orthohin '27</span>{' '}
+                admins with verified Google credentials and admin passcode.
               </p>
             </div>
 
@@ -2824,7 +2831,7 @@ export function AdminModal({
                     onClick={() => void handleGoogleSignIn()}
                     className="w-full py-2 px-3 rounded-lg bg-white hover:bg-zinc-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-zinc-700 text-xs font-semibold text-zinc-950 dark:text-white transition-colors cursor-pointer disabled:opacity-50"
                   >
-                    {isAuthenticating ? 'Verifying Google account...' : `Sign in with Google (${AUTHORIZED_ADMIN_EMAIL})`}
+                    {isAuthenticating ? 'Verifying Google account...' : 'Sign in with Authorized Google Account'}
                   </button>
                   {typeof window !== 'undefined' && window.self !== window.top && (
                     <a
@@ -2852,7 +2859,7 @@ export function AdminModal({
                   required
                   value={emailInput}
                   onChange={(e) => setEmailInput(e.target.value)}
-                  placeholder="abraralraze@gmail.com"
+                  placeholder="Enter authorized admin email"
                   autoComplete="email"
                   className="w-full px-3.5 py-2.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 text-sm text-zinc-950 dark:text-white placeholder:text-zinc-500 focus:outline-none focus:border-rose-600 dark:focus:border-rose-500"
                 />
@@ -6897,7 +6904,9 @@ export function AdminModal({
                   <div className="space-y-3 p-4 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none">
                     <div className="flex items-center justify-between">
                       <h3 className="text-sm font-bold text-zinc-950 dark:text-white">Authorization & Passcode</h3>
-                      <span className="text-[11px] font-mono text-zinc-600 dark:text-zinc-400">{AUTHORIZED_ADMIN_EMAIL}</span>
+                      <span className="text-[11px] font-mono text-zinc-600 dark:text-zinc-400">
+                        {authorizedAdmin || AUTHORIZED_ADMIN_EMAIL}
+                      </span>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-2">
                       <input
@@ -6917,7 +6926,7 @@ export function AdminModal({
                       <button
                         type="button"
                         onClick={() => {
-                          resetAdminPassword();
+                          resetAdminPassword(authorizedAdmin || AUTHORIZED_ADMIN_EMAIL);
                           onToast('Admin passcode reset to default.', 'info');
                         }}
                         className="px-3.5 py-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-zinc-900 dark:text-zinc-200 text-xs font-medium cursor-pointer"

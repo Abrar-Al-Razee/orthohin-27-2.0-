@@ -3,6 +3,10 @@ import type { DecodedIdToken } from 'firebase-admin/auth';
 import { adminAuth } from '../lib/firebase-admin.ts';
 
 export const AUTHORIZED_ADMIN_EMAIL = 'abraralraze@gmail.com';
+export const AUTHORIZED_ADMIN_EMAILS = [
+  'abraralraze@gmail.com',
+  'hisamulhisam208@gmail.com',
+] as const;
 
 export interface AuthRequest extends Request {
   user?: DecodedIdToken;
@@ -28,7 +32,7 @@ export const requireAuth = async (req: AuthRequest, res: Response, next: NextFun
 
 export const requireAdmin = (req: AuthRequest, res: Response, next: NextFunction) => {
   const email = req.user?.email?.toLowerCase();
-  if (!req.user || email !== AUTHORIZED_ADMIN_EMAIL || !req.user.email_verified) {
+  if (!req.user || !email || !(AUTHORIZED_ADMIN_EMAILS as readonly string[]).includes(email) || !req.user.email_verified) {
     res.status(403).json({ error: 'Forbidden: Authorized admin privileges required' });
     return;
   }
