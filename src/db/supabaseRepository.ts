@@ -3,11 +3,13 @@ import type {
   ActivityLogEntry,
   AdminTeamMember,
   Batchmate,
+  BatchmateContact,
   BatchNotice,
   GalleryItem,
   HoodieConfig,
   HoodieOrder,
   OrderStatus,
+  PaymentStatus,
   PortalState,
   SiteConfig,
 } from '../types.ts';
@@ -105,11 +107,19 @@ export async function getPublicPortalData() {
   const batchmates: Batchmate[] = (bmRes.data || []).map((row) => ({
     id: String(row.id),
     name: String(row.name || ''),
+    nickname: row.nickname ? String(row.nickname) : undefined,
     roll: String(row.roll || ''),
     group: String(row.group || 'Batchmate'),
     social: row.social ? String(row.social) : undefined,
     quote: row.quote ? String(row.quote) : undefined,
     photo: row.photo ? String(row.photo) : undefined,
+    hobbies: row.hobbies ? String(row.hobbies) : undefined,
+    bloodGroup: row.blood_group ? String(row.blood_group) : undefined,
+    dreamGoal: row.dream_goal ? String(row.dream_goal) : undefined,
+    favoriteMemory: row.favorite_memory ? String(row.favorite_memory) : undefined,
+    hangoutSpot: row.hangout_spot ? String(row.hangout_spot) : undefined,
+    birthday: row.birthday ? String(row.birthday) : undefined,
+    superpower: row.superpower ? String(row.superpower) : undefined,
     registeredAt: row.registered_at ? String(row.registered_at) : undefined,
   }));
 
@@ -149,11 +159,32 @@ export async function getPublicPortalData() {
     }));
   }
 
+  let publicOrders: HoodieOrder[] = [];
+  const publicOrdersRes = await supabase
+    .from('hoodie_orders')
+    .select('id, customer_name, roll, size, quantity, notes, status, payment_status, created_at')
+    .order('created_at', { ascending: false });
+  if (!publicOrdersRes.error && Array.isArray(publicOrdersRes.data)) {
+    publicOrders = publicOrdersRes.data.map((row) => ({
+      id: String(row.id),
+      customerName: String(row.customer_name || ''),
+      roll: String(row.roll || ''),
+      size: (row.size as HoodieOrder['size']) || 'L',
+      quantity: Number(row.quantity || 1),
+      contact: '',
+      notes: row.notes ? String(row.notes) : undefined,
+      status: (row.status as OrderStatus) || 'Pending',
+      paymentStatus: row.payment_status === 'Paid' ? 'Paid' : 'Due',
+      createdAt: String(row.created_at || new Date().toISOString()),
+    }));
+  }
+
   return {
     batchmates,
     notices,
     gallery,
     adminTeam,
+    publicOrders,
     settings: settingsRow
       ? {
           profile: String(settingsRow.profile || ''),
@@ -166,9 +197,10 @@ export async function getPublicPortalData() {
 
 export async function getAdminPortalData() {
   assertSupabaseReady();
-  const [orderRes, logRes] = await Promise.all([
+  const [orderRes, logRes, contactRes] = await Promise.all([
     supabase.from('hoodie_orders').select('*').order('created_at', { ascending: false }),
     supabase.from('activity_logs').select('*').order('created_at', { ascending: false }).limit(50),
+    supabase.from('batchmates').select('id, email, phone'),
   ]);
 
   throwIfSupabaseError(orderRes.error, 'Failed to load hoodie orders from Supabase.');
@@ -181,8 +213,10 @@ export async function getAdminPortalData() {
     size: (row.size as HoodieOrder['size']) || 'L',
     quantity: Number(row.quantity || 1),
     contact: String(row.contact || ''),
+    email: row.email ? String(row.email) : undefined,
     notes: row.notes ? String(row.notes) : undefined,
     status: (row.status as OrderStatus) || 'Pending',
+    paymentStatus: row.payment_status === 'Paid' ? 'Paid' : 'Due',
     createdAt: String(row.created_at || new Date().toISOString()),
   }));
 
@@ -193,29 +227,56 @@ export async function getAdminPortalData() {
     timestamp: String(row.created_at || new Date().toISOString()),
   }));
 
-  return { orders, activityLog };
+  const batchmateContacts: BatchmateContact[] = (!contactRes.error && Array.isArray(contactRes.data) ? contactRes.data : []).map((row) => ({
+    id: String(row.id),
+    batchmateId: String(row.id),
+    email: row.email ? String(row.email) : undefined,
+    phone: row.phone ? String(row.phone) : undefined,
+  }));
+
+  return { orders, activityLog, batchmateContacts };
 }
 
 export async function createBatchmate(bm: Batchmate): Promise<Batchmate> {
   assertSupabaseReady();
   const id = sanitizeId(bm.id, 'bm');
   const name = clampStr(bm.name, 100) || 'Batchmate';
+  const nickname = bm.nickname?.trim() ? clampStr(bm.nickname, 60) : null;
   const roll = clampStr(bm.roll, 32) || '2700';
   const group = clampStr(bm.group, 60) || 'Batchmate';
   const social = bm.social?.trim() ? clampStr(bm.social, 100) : null;
   const quote = bm.quote?.trim() ? clampStr(bm.quote, 400) : null;
   const photo = bm.photo?.trim() && bm.photo.length <= 350000 ? bm.photo.trim() : null;
+  const hobbies = bm.hobbies?.trim() ? clampStr(bm.hobbies, 240) : null;
+  const bloodGroup = bm.bloodGroup?.trim() ? clampStr(bm.bloodGroup, 20) : null;
+  const dreamGoal = bm.dreamGoal?.trim() ? clampStr(bm.dreamGoal, 200) : null;
+  const favoriteMemory = bm.favoriteMemory?.trim() ? clampStr(bm.favoriteMemory, 400) : null;
+  const hangoutSpot = bm.hangoutSpot?.trim() ? clampStr(bm.hangoutSpot, 140) : null;
+  const birthday = bm.birthday?.trim() ? clampStr(bm.birthday, 40) : null;
+  const superpower = bm.superpower?.trim() ? clampStr(bm.superpower, 140) : null;
+  const email = bm.email?.trim() ? clampStr(bm.email, 160) : null;
+  const phone = bm.phone?.trim() ? clampStr(bm.phone, 40) : null;
   const registeredAt = clampStr(bm.registeredAt || new Date().toISOString().slice(0, 10), 32);
 
   const { error } = await supabase.from('batchmates').upsert(
     {
       id,
       name,
+      nickname,
       roll,
       group,
       social,
       quote,
       photo,
+      hobbies,
+      blood_group: bloodGroup,
+      dream_goal: dreamGoal,
+      favorite_memory: favoriteMemory,
+      hangout_spot: hangoutSpot,
+      birthday,
+      superpower,
+      email,
+      phone,
       registered_at: registeredAt,
     },
     { onConflict: 'id' }
@@ -226,11 +287,19 @@ export async function createBatchmate(bm: Batchmate): Promise<Batchmate> {
   return {
     id,
     name,
+    nickname: nickname || undefined,
     roll,
     group,
     social: social || undefined,
     quote: quote || undefined,
     photo: photo || undefined,
+    hobbies: hobbies || undefined,
+    bloodGroup: bloodGroup || undefined,
+    dreamGoal: dreamGoal || undefined,
+    favoriteMemory: favoriteMemory || undefined,
+    hangoutSpot: hangoutSpot || undefined,
+    birthday: birthday || undefined,
+    superpower: superpower || undefined,
     registeredAt,
   };
 }
@@ -240,13 +309,27 @@ export async function updateBatchmate(id: string, bm: Partial<Batchmate>): Promi
   const docId = sanitizeId(id, 'bm');
   const patch: Record<string, unknown> = {
     name: clampStr(bm.name, 100),
+    nickname: bm.nickname?.trim() ? clampStr(bm.nickname, 60) : null,
     roll: clampStr(bm.roll, 32),
     group: clampStr(bm.group, 60) || 'Batchmate',
     social: bm.social?.trim() ? clampStr(bm.social, 100) : null,
     quote: bm.quote?.trim() ? clampStr(bm.quote, 400) : null,
+    hobbies: bm.hobbies?.trim() ? clampStr(bm.hobbies, 240) : null,
+    blood_group: bm.bloodGroup?.trim() ? clampStr(bm.bloodGroup, 20) : null,
+    dream_goal: bm.dreamGoal?.trim() ? clampStr(bm.dreamGoal, 200) : null,
+    favorite_memory: bm.favoriteMemory?.trim() ? clampStr(bm.favoriteMemory, 400) : null,
+    hangout_spot: bm.hangoutSpot?.trim() ? clampStr(bm.hangoutSpot, 140) : null,
+    birthday: bm.birthday?.trim() ? clampStr(bm.birthday, 40) : null,
+    superpower: bm.superpower?.trim() ? clampStr(bm.superpower, 140) : null,
   };
   if (bm.photo !== undefined) {
     patch.photo = bm.photo.trim() && bm.photo.length <= 350000 ? bm.photo.trim() : null;
+  }
+  if (bm.email !== undefined) {
+    patch.email = bm.email?.trim() ? clampStr(bm.email, 160) : null;
+  }
+  if (bm.phone !== undefined) {
+    patch.phone = bm.phone?.trim() ? clampStr(bm.phone, 40) : null;
   }
 
   const { error } = await supabase.from('batchmates').update(patch).eq('id', docId);
@@ -262,16 +345,18 @@ export async function deleteBatchmate(id: string): Promise<void> {
 
 export async function createOrder(order: HoodieOrder): Promise<HoodieOrder> {
   assertSupabaseReady();
-  const id = sanitizeId(order.id, 'RCS');
+  const id = sanitizeId(order.id, 'RCS').slice(0, 32);
   const customerName = clampStr(order.customerName, 100) || 'Student';
   const roll = clampStr(order.roll, 32) || '0000';
   const allowedSizes: HoodieOrder['size'][] = ['S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
   const size = allowedSizes.includes(order.size) ? order.size : 'L';
   const quantity = Math.min(5, Math.max(1, Math.round(Number(order.quantity) || 1)));
   const contact = clampStr(order.contact, 100) || 'N/A';
+  const email = order.email?.trim() ? clampStr(order.email, 160) : null;
   const notes = order.notes?.trim() ? clampStr(order.notes, 300) : null;
   const allowedStatuses: OrderStatus[] = ['Pending', 'Confirmed', 'Delivered'];
   const status: OrderStatus = allowedStatuses.includes(order.status) ? order.status : 'Pending';
+  const paymentStatus: PaymentStatus = order.paymentStatus === 'Paid' ? 'Paid' : 'Due';
 
   const { data, error } = await supabase
     .from('hoodie_orders')
@@ -282,8 +367,10 @@ export async function createOrder(order: HoodieOrder): Promise<HoodieOrder> {
       size,
       quantity,
       contact,
+      email,
       notes,
       status,
+      payment_status: paymentStatus,
     })
     .select()
     .single();
@@ -297,8 +384,10 @@ export async function createOrder(order: HoodieOrder): Promise<HoodieOrder> {
     size: (data?.size as HoodieOrder['size']) || size,
     quantity: Number(data?.quantity || quantity),
     contact: String(data?.contact || contact),
+    email: data?.email ? String(data.email) : undefined,
     notes: data?.notes ? String(data.notes) : undefined,
     status: (data?.status as OrderStatus) || status,
+    paymentStatus: data?.payment_status === 'Paid' ? 'Paid' : 'Due',
     createdAt: String(data?.created_at || new Date().toISOString()),
   };
 }
@@ -307,7 +396,7 @@ export async function updateOrderStatus(
   id: string,
   status: OrderStatus,
   notes?: string,
-  extra?: Partial<Pick<HoodieOrder, 'customerName' | 'roll' | 'size' | 'quantity' | 'contact'>>
+  extra?: Partial<Pick<HoodieOrder, 'customerName' | 'roll' | 'size' | 'quantity' | 'contact' | 'email' | 'paymentStatus'>>
 ): Promise<void> {
   assertSupabaseReady();
   const docId = sanitizeId(id, 'RCS');
@@ -324,6 +413,10 @@ export async function updateOrderStatus(
     patch.quantity = Math.min(5, Math.max(1, Math.round(Number(extra.quantity) || 1)));
   }
   if (extra?.contact?.trim()) patch.contact = clampStr(extra.contact, 100);
+  if (extra?.email !== undefined) patch.email = extra.email?.trim() ? clampStr(extra.email, 160) : null;
+  if (extra?.paymentStatus === 'Paid' || extra?.paymentStatus === 'Due') {
+    patch.payment_status = extra.paymentStatus;
+  }
 
   const { error } = await supabase.from('hoodie_orders').update(patch).eq('id', docId);
   throwIfSupabaseError(error, 'Failed to update order.');

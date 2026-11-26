@@ -12,6 +12,7 @@ import {
   setDoc,
   Timestamp,
   updateDoc,
+  writeBatch,
   type QueryDocumentSnapshot,
 } from 'firebase/firestore';
 import { auth, db } from '../firebase';
@@ -19,11 +20,13 @@ import type {
   ActivityLogEntry,
   AdminTeamMember,
   Batchmate,
+  BatchmateContact,
   BatchNotice,
   GalleryItem,
   HoodieConfig,
   HoodieOrder,
   OrderStatus,
+  PaymentStatus,
   PortalState,
   SiteConfig,
 } from '../types';
@@ -98,12 +101,30 @@ function mapBatchmateDoc(d: QueryDocumentSnapshot): Batchmate {
   return {
     id: d.id,
     name: String(data.name || ''),
+    nickname: data.nickname ? String(data.nickname) : undefined,
     roll: String(data.roll || ''),
     group: String(data.group || 'Batchmate'),
     social: data.social ? String(data.social) : undefined,
     quote: data.quote ? String(data.quote) : undefined,
     photo: data.photo ? String(data.photo) : undefined,
+    hobbies: data.hobbies ? String(data.hobbies) : undefined,
+    bloodGroup: data.bloodGroup ? String(data.bloodGroup) : undefined,
+    dreamGoal: data.dreamGoal ? String(data.dreamGoal) : undefined,
+    favoriteMemory: data.favoriteMemory ? String(data.favoriteMemory) : undefined,
+    hangoutSpot: data.hangoutSpot ? String(data.hangoutSpot) : undefined,
+    birthday: data.birthday ? String(data.birthday) : undefined,
+    superpower: data.superpower ? String(data.superpower) : undefined,
     registeredAt: data.registeredAt ? String(data.registeredAt) : undefined,
+  };
+}
+
+function mapBatchmateContactDoc(d: QueryDocumentSnapshot): BatchmateContact {
+  const data = d.data();
+  return {
+    id: d.id,
+    batchmateId: String(data.batchmateId || d.id),
+    email: data.email ? String(data.email) : undefined,
+    phone: data.phone ? String(data.phone) : undefined,
   };
 }
 
@@ -142,8 +163,26 @@ function mapOrderDoc(d: QueryDocumentSnapshot): HoodieOrder {
     size: (data.size as HoodieOrder['size']) || 'L',
     quantity: Number(data.quantity || 1),
     contact: String(data.contact || ''),
+    email: data.email ? String(data.email) : undefined,
     notes: data.notes ? String(data.notes) : undefined,
     status: (data.status as OrderStatus) || 'Pending',
+    paymentStatus: data.paymentStatus === 'Paid' ? 'Paid' : 'Due',
+    createdAt: toIsoString(data.createdAt),
+  };
+}
+
+function mapPublicOrderDoc(d: QueryDocumentSnapshot): HoodieOrder {
+  const data = d.data();
+  return {
+    id: String(data.orderCode || d.id),
+    customerName: String(data.customerName || ''),
+    roll: String(data.roll || ''),
+    size: (data.size as HoodieOrder['size']) || 'L',
+    quantity: Number(data.quantity || 1),
+    contact: '',
+    notes: data.notes ? String(data.notes) : undefined,
+    status: (data.status as OrderStatus) || 'Pending',
+    paymentStatus: data.paymentStatus === 'Paid' ? 'Paid' : 'Due',
     createdAt: toIsoString(data.createdAt),
   };
 }
@@ -176,6 +215,7 @@ export interface PublicFirestoreCallbacks {
   onNotices: (notices: BatchNotice[]) => void;
   onGallery: (gallery: GalleryItem[]) => void;
   onAdminTeam: (adminTeam: AdminTeamMember[]) => void;
+  onPublicOrders?: (orders: HoodieOrder[]) => void;
   onSettings: (
     settings: {
       profile: string;
@@ -188,6 +228,7 @@ export interface PublicFirestoreCallbacks {
 export interface AdminFirestoreCallbacks {
   onOrders: (orders: HoodieOrder[]) => void;
   onActivityLogs: (logs: ActivityLogEntry[]) => void;
+  onBatchmateContacts?: (contacts: BatchmateContact[]) => void;
 }
 
 function reportListenerError(err: unknown, operationType: OperationType, path: string): void {
@@ -223,6 +264,14 @@ export function subscribePublicPortalFromFirestore(callbacks: PublicFirestoreCal
     (err) => reportListenerError(err, OperationType.LIST, 'adminTeam')
   );
 
+  const unsubPublicOrders = callbacks.onPublicOrders
+    ? onSnapshot(
+        query(collection(db, 'publicHoodieOrders'), orderBy('createdAt', 'desc')),
+        (snap) => callbacks.onPublicOrders?.(snap.docs.map(mapPublicOrderDoc)),
+        (err) => reportListenerError(err, OperationType.LIST, 'publicHoodieOrders')
+      )
+    : () => {};
+
   const unsubSettings = onSnapshot(
     doc(db, 'settings', 'main'),
     (snap) => {
@@ -245,6 +294,7 @@ export function subscribePublicPortalFromFirestore(callbacks: PublicFirestoreCal
     unsubNotices();
     unsubGallery();
     unsubAdminTeam();
+    unsubPublicOrders();
     unsubSettings();
   };
 }
@@ -262,14 +312,23 @@ export function subscribeAdminDataFromFirestore(callbacks: AdminFirestoreCallbac
     (err) => reportListenerError(err, OperationType.LIST, 'activityLogs')
   );
 
+  const unsubContacts = callbacks.onBatchmateContacts
+    ? onSnapshot(
+        collection(db, 'batchmateContacts'),
+        (snap) => callbacks.onBatchmateContacts?.(snap.docs.map(mapBatchmateContactDoc)),
+        (err) => reportListenerError(err, OperationType.LIST, 'batchmateContacts')
+      )
+    : () => {};
+
   return () => {
     unsubOrders();
     unsubLogs();
+    unsubContacts();
   };
 }
 
 export async function fetchPublicPortalFromFirestore() {
-  const [bmSnap, noticeSnap, gallerySnap, adminTeamSnap, settingsSnap] = await Promise.all([
+  const [bmSnap, noticeSnap, gallerySnap, adminTeamSnap, publicOrdersSnap, settingsSnap] = await Promise.all([
     getDocs(query(collection(db, 'batchmates'), orderBy('createdAt', 'desc'))).catch((err) =>
       handleFirestoreError(err, OperationType.LIST, 'batchmates')
     ),
@@ -282,6 +341,7 @@ export async function fetchPublicPortalFromFirestore() {
     getDocs(query(collection(db, 'adminTeam'), orderBy('sortOrder', 'asc'))).catch((err) =>
       handleFirestoreError(err, OperationType.LIST, 'adminTeam')
     ),
+    getDocs(query(collection(db, 'publicHoodieOrders'), orderBy('createdAt', 'desc'))).catch(() => null),
     getDoc(doc(db, 'settings', 'main')).catch((err) =>
       handleFirestoreError(err, OperationType.GET, 'settings/main')
     ),
@@ -291,6 +351,7 @@ export async function fetchPublicPortalFromFirestore() {
   const notices: BatchNotice[] = noticeSnap.docs.map(mapNoticeDoc);
   const gallery: GalleryItem[] = gallerySnap.docs.map(mapGalleryDoc);
   const adminTeam: AdminTeamMember[] = adminTeamSnap.docs.map(mapAdminTeamDoc);
+  const publicOrders: HoodieOrder[] = publicOrdersSnap ? publicOrdersSnap.docs.map(mapPublicOrderDoc) : [];
   const settingsData = settingsSnap.exists() ? settingsSnap.data() : null;
 
   return {
@@ -298,6 +359,7 @@ export async function fetchPublicPortalFromFirestore() {
     notices,
     gallery,
     adminTeam,
+    publicOrders,
     settings: settingsData
       ? {
           profile: String(settingsData.profile || ''),
@@ -309,39 +371,62 @@ export async function fetchPublicPortalFromFirestore() {
 }
 
 export async function fetchAdminDataFromFirestore() {
-  const [orderSnap, logSnap] = await Promise.all([
+  const [orderSnap, logSnap, contactSnap] = await Promise.all([
     getDocs(query(collection(db, 'orders'), orderBy('createdAt', 'desc'))).catch((err) =>
       handleFirestoreError(err, OperationType.LIST, 'orders')
     ),
     getDocs(query(collection(db, 'activityLogs'), orderBy('createdAt', 'desc'), limit(50))).catch((err) =>
       handleFirestoreError(err, OperationType.LIST, 'activityLogs')
     ),
+    getDocs(collection(db, 'batchmateContacts')).catch((err) =>
+      handleFirestoreError(err, OperationType.LIST, 'batchmateContacts')
+    ),
   ]);
 
   const orders: HoodieOrder[] = orderSnap.docs.map(mapOrderDoc);
   const activityLog: ActivityLogEntry[] = logSnap.docs.map(mapActivityLogDoc);
+  const batchmateContacts: BatchmateContact[] = contactSnap.docs.map(mapBatchmateContactDoc);
 
-  return { orders, activityLog };
+  return { orders, activityLog, batchmateContacts };
 }
 
 export async function createBatchmateInFirestore(bm: Batchmate): Promise<Batchmate> {
   const id = sanitizeId(bm.id, 'bm');
   const name = clampStr(bm.name, 100) || 'Batchmate';
+  const nickname = clampStr(bm.nickname, 60);
   const roll = clampStr(bm.roll, 32) || '2700';
   const group = clampStr(bm.group, 60) || 'Batchmate';
   const social = clampStr(bm.social, 100);
   const quote = clampStr(bm.quote, 400);
   const photo = bm.photo?.trim() && bm.photo.length <= 350000 ? bm.photo.trim() : '';
+  const hobbies = clampStr(bm.hobbies, 240);
+  const bloodGroup = clampStr(bm.bloodGroup, 20);
+  const dreamGoal = clampStr(bm.dreamGoal, 200);
+  const favoriteMemory = clampStr(bm.favoriteMemory, 400);
+  const hangoutSpot = clampStr(bm.hangoutSpot, 140);
+  const birthday = clampStr(bm.birthday, 40);
+  const superpower = clampStr(bm.superpower, 140);
+  const email = clampStr(bm.email, 160);
+  const phone = clampStr(bm.phone, 40);
   const registeredAt = clampStr(bm.registeredAt || new Date().toISOString().slice(0, 10), 32);
 
   const ref = doc(db, 'batchmates', id);
+  const contactRef = doc(db, 'batchmateContacts', id);
   const fields: Record<string, unknown> = {
     name,
     roll,
     group,
+    ...(nickname ? { nickname } : {}),
     ...(social ? { social } : {}),
     ...(quote ? { quote } : {}),
     ...(photo ? { photo } : {}),
+    ...(hobbies ? { hobbies } : {}),
+    ...(bloodGroup ? { bloodGroup } : {}),
+    ...(dreamGoal ? { dreamGoal } : {}),
+    ...(favoriteMemory ? { favoriteMemory } : {}),
+    ...(hangoutSpot ? { hangoutSpot } : {}),
+    ...(birthday ? { birthday } : {}),
+    ...(superpower ? { superpower } : {}),
     ...(registeredAt ? { registeredAt } : {}),
   };
 
@@ -352,6 +437,27 @@ export async function createBatchmateInFirestore(bm: Batchmate): Promise<Batchma
     } else {
       await setDoc(ref, { ...fields, createdAt: serverTimestamp() });
     }
+
+    if (email || phone) {
+      const contactFields: Record<string, unknown> = {
+        batchmateId: id,
+        name,
+        roll,
+        group,
+        ...(email ? { email } : {}),
+        ...(phone ? { phone } : {}),
+      };
+      if (snap.exists() && auth.currentUser) {
+        const contactSnap = await getDoc(contactRef);
+        if (contactSnap.exists()) {
+          await updateDoc(contactRef, contactFields);
+        } else {
+          await setDoc(contactRef, { ...contactFields, createdAt: serverTimestamp() });
+        }
+      } else if (!snap.exists()) {
+        await setDoc(contactRef, { ...contactFields, createdAt: serverTimestamp() });
+      }
+    }
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, `batchmates/${id}`);
   }
@@ -359,23 +465,42 @@ export async function createBatchmateInFirestore(bm: Batchmate): Promise<Batchma
   return {
     id,
     name,
+    nickname: nickname || undefined,
     roll,
     group,
     social: social || undefined,
     quote: quote || undefined,
     photo: photo || undefined,
+    hobbies: hobbies || undefined,
+    bloodGroup: bloodGroup || undefined,
+    dreamGoal: dreamGoal || undefined,
+    favoriteMemory: favoriteMemory || undefined,
+    hangoutSpot: hangoutSpot || undefined,
+    birthday: birthday || undefined,
+    superpower: superpower || undefined,
     registeredAt: registeredAt || undefined,
   };
 }
 
 export async function updateBatchmateInFirestore(bm: Batchmate): Promise<void> {
   const id = sanitizeId(bm.id, 'bm');
+  const name = clampStr(bm.name, 100) || 'Batchmate';
+  const roll = clampStr(bm.roll, 32) || '2700';
+  const group = clampStr(bm.group, 60) || 'Batchmate';
   const payload: Record<string, unknown> = {
-    name: clampStr(bm.name, 100) || 'Batchmate',
-    roll: clampStr(bm.roll, 32) || '2700',
-    group: clampStr(bm.group, 60) || 'Batchmate',
+    name,
+    nickname: clampStr(bm.nickname, 60),
+    roll,
+    group,
     social: clampStr(bm.social, 100),
     quote: clampStr(bm.quote, 400),
+    hobbies: clampStr(bm.hobbies, 240),
+    bloodGroup: clampStr(bm.bloodGroup, 20),
+    dreamGoal: clampStr(bm.dreamGoal, 200),
+    favoriteMemory: clampStr(bm.favoriteMemory, 400),
+    hangoutSpot: clampStr(bm.hangoutSpot, 140),
+    birthday: clampStr(bm.birthday, 40),
+    superpower: clampStr(bm.superpower, 140),
   };
   if (bm.photo !== undefined) {
     payload.photo = bm.photo.trim() && bm.photo.length <= 350000 ? bm.photo.trim() : '';
@@ -385,6 +510,7 @@ export async function updateBatchmateInFirestore(bm: Batchmate): Promise<void> {
   }
 
   const ref = doc(db, 'batchmates', id);
+  const contactRef = doc(db, 'batchmateContacts', id);
   try {
     const snap = await getDoc(ref);
     if (snap.exists()) {
@@ -396,6 +522,23 @@ export async function updateBatchmateInFirestore(bm: Batchmate): Promise<void> {
         createdAt: serverTimestamp(),
       });
     }
+
+    if (bm.email !== undefined || bm.phone !== undefined) {
+      const contactPayload: Record<string, unknown> = {
+        batchmateId: id,
+        name,
+        roll,
+        group,
+        email: clampStr(bm.email, 160),
+        phone: clampStr(bm.phone, 40),
+      };
+      const contactSnap = await getDoc(contactRef);
+      if (contactSnap.exists()) {
+        await updateDoc(contactRef, contactPayload);
+      } else if (contactPayload.email || contactPayload.phone) {
+        await setDoc(contactRef, { ...contactPayload, createdAt: serverTimestamp() });
+      }
+    }
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, `batchmates/${id}`);
   }
@@ -405,35 +548,57 @@ export async function deleteBatchmateInFirestore(id: string): Promise<void> {
   const docId = sanitizeId(id, 'bm');
   try {
     await deleteDoc(doc(db, 'batchmates', docId));
+    await deleteDoc(doc(db, 'batchmateContacts', docId)).catch(() => {
+      // Ignore missing private contact document
+    });
   } catch (err) {
     handleFirestoreError(err, OperationType.DELETE, `batchmates/${docId}`);
   }
 }
 
 export async function createOrderInFirestore(order: HoodieOrder): Promise<HoodieOrder> {
-  const id = sanitizeId(order.id, 'RCS');
+  const id = sanitizeId(order.id, 'RCS').slice(0, 32);
   const customerName = clampStr(order.customerName, 100) || 'Student';
   const roll = clampStr(order.roll, 32) || '0000';
   const allowedSizes: HoodieOrder['size'][] = ['S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
   const size = allowedSizes.includes(order.size) ? order.size : 'L';
   const quantity = Math.min(5, Math.max(1, Math.round(Number(order.quantity) || 1)));
   const contact = clampStr(order.contact, 100) || 'N/A';
+  const email = clampStr(order.email, 160);
   const notes = clampStr(order.notes, 300);
   const allowedStatuses: OrderStatus[] = ['Pending', 'Confirmed', 'Delivered'];
   const status: OrderStatus = allowedStatuses.includes(order.status) ? order.status : 'Pending';
+  const paymentStatus: PaymentStatus = order.paymentStatus === 'Paid' ? 'Paid' : 'Due';
+
+  const nowTs = serverTimestamp();
 
   try {
-    await setDoc(doc(db, 'orders', id), {
-      orderCode: id.slice(0, 32),
+    const batch = writeBatch(db);
+    batch.set(doc(db, 'orders', id), {
+      orderCode: id,
       customerName,
       roll,
       size,
       quantity,
       contact,
+      ...(email ? { email } : {}),
       ...(notes ? { notes } : {}),
       status,
-      createdAt: serverTimestamp(),
+      paymentStatus,
+      createdAt: nowTs,
     });
+    batch.set(doc(db, 'publicHoodieOrders', id), {
+      orderCode: id,
+      customerName,
+      roll,
+      size,
+      quantity,
+      ...(notes ? { notes } : {}),
+      status,
+      paymentStatus,
+      createdAt: nowTs,
+    });
+    await batch.commit();
   } catch (err) {
     handleFirestoreError(err, OperationType.CREATE, `orders/${id}`);
   }
@@ -445,8 +610,10 @@ export async function createOrderInFirestore(order: HoodieOrder): Promise<Hoodie
     size,
     quantity,
     contact,
+    email: email || undefined,
     notes: notes || undefined,
     status,
+    paymentStatus,
     createdAt: order.createdAt || new Date().toISOString(),
   };
 }
@@ -455,7 +622,7 @@ export async function updateOrderStatusInFirestore(
   id: string,
   status: OrderStatus,
   notes?: string,
-  extra?: Partial<Pick<HoodieOrder, 'customerName' | 'roll' | 'size' | 'quantity' | 'contact'>>
+  extra?: Partial<Pick<HoodieOrder, 'customerName' | 'roll' | 'size' | 'quantity' | 'contact' | 'email' | 'paymentStatus'>>
 ): Promise<void> {
   const docId = sanitizeId(id, 'RCS');
   const allowedStatuses: OrderStatus[] = ['Pending', 'Confirmed', 'Delivered'];
@@ -463,17 +630,78 @@ export async function updateOrderStatusInFirestore(
   const allowedSizes: HoodieOrder['size'][] = ['S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
 
   const payload: Record<string, unknown> = { status: safeStatus };
-  if (notes !== undefined) payload.notes = clampStr(notes, 300);
-  if (extra?.customerName?.trim()) payload.customerName = clampStr(extra.customerName, 100);
-  if (extra?.roll?.trim()) payload.roll = clampStr(extra.roll, 32);
-  if (extra?.size && allowedSizes.includes(extra.size)) payload.size = extra.size;
-  if (extra?.quantity !== undefined) {
-    payload.quantity = Math.min(5, Math.max(1, Math.round(Number(extra.quantity) || 1)));
+  const publicPayload: Record<string, unknown> = { status: safeStatus };
+
+  if (notes !== undefined) {
+    const cleanNote = clampStr(notes, 300);
+    payload.notes = cleanNote;
+    publicPayload.notes = cleanNote;
   }
-  if (extra?.contact?.trim()) payload.contact = clampStr(extra.contact, 100);
+  if (extra?.customerName?.trim()) {
+    const cleanName = clampStr(extra.customerName, 100);
+    payload.customerName = cleanName;
+    publicPayload.customerName = cleanName;
+  }
+  if (extra?.roll?.trim()) {
+    const cleanRoll = clampStr(extra.roll, 32);
+    payload.roll = cleanRoll;
+    publicPayload.roll = cleanRoll;
+  }
+  if (extra?.size && allowedSizes.includes(extra.size)) {
+    payload.size = extra.size;
+    publicPayload.size = extra.size;
+  }
+  if (extra?.quantity !== undefined) {
+    const cleanQty = Math.min(5, Math.max(1, Math.round(Number(extra.quantity) || 1)));
+    payload.quantity = cleanQty;
+    publicPayload.quantity = cleanQty;
+  }
+  if (extra?.contact?.trim()) {
+    payload.contact = clampStr(extra.contact, 100);
+  }
+  if (extra?.email !== undefined) {
+    payload.email = clampStr(extra.email, 160);
+  }
+  if (extra?.paymentStatus === 'Paid' || extra?.paymentStatus === 'Due') {
+    payload.paymentStatus = extra.paymentStatus;
+    publicPayload.paymentStatus = extra.paymentStatus;
+  }
 
   try {
-    await updateDoc(doc(db, 'orders', docId), payload);
+    const orderRef = doc(db, 'orders', docId);
+    const pubRef = doc(db, 'publicHoodieOrders', docId);
+    const pubSnap = await getDoc(pubRef);
+
+    const batch = writeBatch(db);
+    batch.update(orderRef, payload);
+
+    if (pubSnap.exists()) {
+      batch.update(pubRef, publicPayload);
+    } else {
+      const orderSnap = await getDoc(orderRef);
+      if (orderSnap.exists()) {
+        const base = orderSnap.data();
+        const mergedNotes =
+          publicPayload.notes !== undefined
+            ? String(publicPayload.notes)
+            : base.notes
+              ? String(base.notes)
+              : '';
+        batch.set(pubRef, {
+          orderCode: String(base.orderCode || docId).slice(0, 32),
+          customerName: String(publicPayload.customerName || base.customerName || 'Student').slice(0, 100),
+          roll: String(publicPayload.roll || base.roll || '0000').slice(0, 32),
+          size: (publicPayload.size || base.size || 'L') as HoodieOrder['size'],
+          quantity: Number(publicPayload.quantity || base.quantity || 1),
+          ...(mergedNotes ? { notes: mergedNotes } : {}),
+          status: safeStatus,
+          paymentStatus: (publicPayload.paymentStatus || base.paymentStatus || 'Due') as PaymentStatus,
+          createdAt: serverTimestamp(),
+        });
+      }
+    }
+
+    await batch.commit();
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, `orders/${docId}`);
   }
@@ -483,6 +711,9 @@ export async function deleteOrderInFirestore(id: string): Promise<void> {
   const docId = sanitizeId(id, 'RCS');
   try {
     await deleteDoc(doc(db, 'orders', docId));
+    await deleteDoc(doc(db, 'publicHoodieOrders', docId)).catch(() => {
+      // Ignore if public mirror did not exist
+    });
   } catch (err) {
     handleFirestoreError(err, OperationType.DELETE, `orders/${docId}`);
   }
@@ -767,14 +998,16 @@ export async function seedDefaultsIfEmptyInFirestore(defaults: PortalState): Pro
 
 export async function syncPortalStateInFirestore(nextState: PortalState, replaceCollections: boolean): Promise<void> {
   if (replaceCollections) {
-    const [bmSnap, noticeSnap, gallerySnap, adminTeamSnap] = await Promise.all([
+    const [bmSnap, contactSnap, noticeSnap, gallerySnap, adminTeamSnap] = await Promise.all([
       getDocs(collection(db, 'batchmates')),
+      getDocs(collection(db, 'batchmateContacts')),
       getDocs(collection(db, 'notices')),
       getDocs(collection(db, 'gallery')),
       getDocs(collection(db, 'adminTeam')),
     ]);
     await Promise.all([
       ...bmSnap.docs.map((d) => deleteDoc(d.ref)),
+      ...contactSnap.docs.map((d) => deleteDoc(d.ref)),
       ...noticeSnap.docs.map((d) => deleteDoc(d.ref)),
       ...gallerySnap.docs.map((d) => deleteDoc(d.ref)),
       ...adminTeamSnap.docs.map((d) => deleteDoc(d.ref)),

@@ -36,7 +36,15 @@ import {
   subscribeAdminDataInFirestore,
   subscribePublicPortalInFirestore,
 } from './services/apiService';
-import type { Batchmate, GalleryItem, HoodieOrder, PortalState, ToastMessage, ViewMode } from './types';
+import type {
+  Batchmate,
+  BatchmateContact,
+  GalleryItem,
+  HoodieOrder,
+  PortalState,
+  ToastMessage,
+  ViewMode,
+} from './types';
 import {
   AUTHORIZED_ADMIN_EMAIL,
   createDefaultState,
@@ -126,6 +134,7 @@ export default function App() {
   const [isRouteAdmin, setIsRouteAdmin] = useState<boolean>(initialView === 'admin');
   const [adminOpen, setAdminOpen] = useState<boolean>(initialView === 'admin');
   const [lightboxItem, setLightboxItem] = useState<GalleryItem | null>(null);
+  const [highlightedBatchmateId, setHighlightedBatchmateId] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [firestoreRealtimeActive, setFirestoreRealtimeActive] = useState(false);
   const { theme, toggleTheme } = useTheme();
@@ -134,9 +143,29 @@ export default function App() {
   const settingsSeededRef = useRef(false);
   const keyBufferRef = useRef('');
   const lastLocalEditAtRef = useRef(0);
+  const batchmateContactsRef = useRef<Record<string, BatchmateContact>>({});
 
   const isFirebaseAdmin = Boolean(
     authUser && authUser.email?.toLowerCase() === AUTHORIZED_ADMIN_EMAIL && authUser.emailVerified
+  );
+
+  const hydrateBatchmatesWithContacts = useCallback(
+    (items: Batchmate[], adminActive: boolean): Batchmate[] => {
+      if (!adminActive) {
+        return items.map(({ email: _email, phone: _phone, ...publicFields }) => publicFields);
+      }
+      const contactMap = batchmateContactsRef.current;
+      return items.map((item) => {
+        const contact = contactMap[item.id];
+        if (!contact) return item;
+        return {
+          ...item,
+          email: contact.email ?? item.email,
+          phone: contact.phone ?? item.phone,
+        };
+      });
+    },
+    []
   );
 
   const showToast = useCallback((text: string, tone: ToastMessage['tone'] = 'success') => {
@@ -241,13 +270,11 @@ export default function App() {
     try {
       const defaults = createDefaultState();
       const payload = await fetchPublicPortal();
-      setFirestoreRealtimeActive(isUsingFirestoreBackend());
       const hasSettings = payload.settings !== null;
       if (hasSettings) settingsSeededRef.current = true;
 
-      setState((prev) => ({
-        ...prev,
-        batchmates:
+      setState((prev) => {
+        const rawBatchmates =
           payload.batchmates.length > 0 || hasSettings
             ? hasSettings
               ? payload.batchmates
@@ -255,41 +282,63 @@ export default function App() {
                   ...payload.batchmates,
                   ...defaults.batchmates.filter((d) => !payload.batchmates.some((i) => i.id === d.id)),
                 ]
-            : defaults.batchmates,
-        notices: payload.notices.length > 0 || hasSettings ? payload.notices : defaults.notices,
-        gallery: payload.gallery.length > 0 || hasSettings ? payload.gallery : defaults.gallery,
-        adminTeam:
-          Array.isArray(payload.adminTeam) && payload.adminTeam.length > 0
-            ? payload.adminTeam
-            : hasSettings
-              ? []
-              : defaults.adminTeam,
-        profile: payload.settings?.profile || defaults.profile,
-        hoodieConfig: mergeHoodieConfig(payload.settings?.hoodieConfig),
-        siteConfig: mergeSiteConfig(payload.settings?.siteConfig),
-      }));
+            : defaults.batchmates;
+
+        return {
+          ...prev,
+          batchmates: hydrateBatchmatesWithContacts(rawBatchmates, isFirebaseAdmin),
+          notices: payload.notices.length > 0 || hasSettings ? payload.notices : defaults.notices,
+          gallery: payload.gallery.length > 0 || hasSettings ? payload.gallery : defaults.gallery,
+          adminTeam:
+            Array.isArray(payload.adminTeam) && payload.adminTeam.length > 0
+              ? payload.adminTeam
+              : hasSettings
+                ? []
+                : defaults.adminTeam,
+          publicOrders: Array.isArray(payload.publicOrders) ? payload.publicOrders : prev.publicOrders || [],
+          profile: payload.settings?.profile || defaults.profile,
+          hoodieConfig: mergeHoodieConfig(payload.settings?.hoodieConfig),
+          siteConfig: mergeSiteConfig(payload.settings?.siteConfig),
+        };
+      });
     } catch {
       // Keep current/default state smoothly without exposing backend details
+    } finally {
+      setFirestoreRealtimeActive(isUsingFirestoreBackend());
     }
-  }, []);
+  }, [hydrateBatchmatesWithContacts, isFirebaseAdmin]);
 
   const refreshAdminData = useCallback(async () => {
     if (!isFirebaseAdmin) {
-      setState((prev) => ({ ...prev, orders: [], activityLog: [] }));
+      batchmateContactsRef.current = {};
+      setState((prev) => ({
+        ...prev,
+        orders: [],
+        activityLog: [],
+        batchmates: hydrateBatchmatesWithContacts(prev.batchmates, false),
+      }));
       return;
     }
     try {
       const adminPayload = await fetchAdminData();
       setFirestoreRealtimeActive(isUsingFirestoreBackend());
+      if (Array.isArray(adminPayload.batchmateContacts)) {
+        const nextMap: Record<string, BatchmateContact> = {};
+        for (const c of adminPayload.batchmateContacts) {
+          nextMap[c.batchmateId] = c;
+        }
+        batchmateContactsRef.current = nextMap;
+      }
       setState((prev) => ({
         ...prev,
         orders: adminPayload.orders,
         activityLog: adminPayload.activityLog,
+        batchmates: hydrateBatchmatesWithContacts(prev.batchmates, true),
       }));
     } catch {
       // Handled gracefully
     }
-  }, [isFirebaseAdmin]);
+  }, [hydrateBatchmatesWithContacts, isFirebaseAdmin]);
 
   const refreshAllData = useCallback(async () => {
     await Promise.all([refreshPublicPortal(), refreshAdminData()]);
@@ -354,14 +403,15 @@ export default function App() {
       onBatchmates: (batchmates) => {
         if (Date.now() - lastLocalEditAtRef.current < 1600) return;
         const hasSettings = settingsSeededRef.current;
+        const resolved =
+          batchmates.length > 0 || hasSettings
+            ? hasSettings
+              ? batchmates
+              : [...batchmates, ...defaults.batchmates.filter((d) => !batchmates.some((i) => i.id === d.id))]
+            : defaults.batchmates;
         setState((prev) => ({
           ...prev,
-          batchmates:
-            batchmates.length > 0 || hasSettings
-              ? hasSettings
-                ? batchmates
-                : [...batchmates, ...defaults.batchmates.filter((d) => !batchmates.some((i) => i.id === d.id))]
-              : defaults.batchmates,
+          batchmates: hydrateBatchmatesWithContacts(resolved, isFirebaseAdmin),
         }));
       },
       onNotices: (notices) => {
@@ -388,6 +438,13 @@ export default function App() {
           adminTeam: adminTeam.length > 0 || hasSettings ? adminTeam : defaults.adminTeam,
         }));
       },
+      onPublicOrders: (publicOrders) => {
+        if (Date.now() - lastLocalEditAtRef.current < 1600) return;
+        setState((prev) => ({
+          ...prev,
+          publicOrders,
+        }));
+      },
       onSettings: (settings) => {
         if (Date.now() - lastLocalEditAtRef.current < 1600) return;
         if (settings !== null) {
@@ -401,7 +458,7 @@ export default function App() {
         }
       },
     });
-  }, [firestoreRealtimeActive]);
+  }, [firestoreRealtimeActive, hydrateBatchmatesWithContacts, isFirebaseAdmin]);
 
   useEffect(() => {
     if (!firestoreRealtimeActive || !isFirebaseAdmin) return;
@@ -413,8 +470,19 @@ export default function App() {
       onActivityLogs: (activityLog) => {
         setState((prev) => ({ ...prev, activityLog }));
       },
+      onBatchmateContacts: (contacts) => {
+        const nextMap: Record<string, BatchmateContact> = {};
+        for (const c of contacts) {
+          nextMap[c.batchmateId] = c;
+        }
+        batchmateContactsRef.current = nextMap;
+        setState((prev) => ({
+          ...prev,
+          batchmates: hydrateBatchmatesWithContacts(prev.batchmates, true),
+        }));
+      },
     });
-  }, [firestoreRealtimeActive, isFirebaseAdmin]);
+  }, [firestoreRealtimeActive, isFirebaseAdmin, hydrateBatchmatesWithContacts]);
 
   const updateState = useCallback((next: PortalState) => {
     lastLocalEditAtRef.current = Date.now();
@@ -453,35 +521,72 @@ export default function App() {
       try {
         await createBatchmateInDb(newBatchmate);
         if (isFirebaseAdmin) {
+          if (newBatchmate.email || newBatchmate.phone) {
+            batchmateContactsRef.current[newBatchmate.id] = {
+              id: newBatchmate.id,
+              batchmateId: newBatchmate.id,
+              email: newBatchmate.email,
+              phone: newBatchmate.phone,
+            };
+          }
           void addActivityLogInDb(
             'New Registration',
             `${newBatchmate.name} (Roll ${newBatchmate.roll}) registered`
           );
         }
+        lastLocalEditAtRef.current = Date.now();
+        setState((prev) => ({
+          ...prev,
+          batchmates: [
+            ...hydrateBatchmatesWithContacts([newBatchmate], isFirebaseAdmin),
+            ...prev.batchmates.filter((b) => b.id !== newBatchmate.id),
+          ],
+        }));
+        setHighlightedBatchmateId(newBatchmate.id);
         await refreshAllData();
         setRegisterOpen(false);
         handleNavigate('batchmates');
-        showToast(`Welcome to Orthohin '27, ${newBatchmate.name}! Your profile is now live.`, 'success');
+        showToast(`Welcome to Orthohin '27, ${newBatchmate.name}! Your profile card is now live.`, 'success');
       } catch (error) {
         showToast('Could not save your registration right now. Please retry.', 'error');
         throw error;
       }
     },
-    [handleNavigate, isFirebaseAdmin, refreshAllData, showToast]
+    [handleNavigate, hydrateBatchmatesWithContacts, isFirebaseAdmin, refreshAllData, showToast]
   );
 
   const handlePlaceOrder = useCallback(
     async (order: HoodieOrder) => {
       try {
-        await createOrderInDb(order);
+        const savedOrder = await createOrderInDb(order);
+        const publicMirror: HoodieOrder = {
+          id: savedOrder.id,
+          customerName: savedOrder.customerName,
+          roll: savedOrder.roll,
+          size: savedOrder.size,
+          quantity: savedOrder.quantity,
+          contact: '',
+          notes: savedOrder.notes,
+          status: savedOrder.status,
+          paymentStatus: savedOrder.paymentStatus || 'Due',
+          createdAt: savedOrder.createdAt,
+        };
         if (isFirebaseAdmin) {
           void addActivityLogInDb(
             'Direct Hoodie Order',
-            `${order.id}: ${order.customerName} (Size ${order.size} × ${order.quantity})`
+            `${savedOrder.id}: ${savedOrder.customerName} (Size ${savedOrder.size} × ${savedOrder.quantity})`
           );
         }
+        lastLocalEditAtRef.current = Date.now();
+        setState((prev) => ({
+          ...prev,
+          publicOrders: [publicMirror, ...(prev.publicOrders || []).filter((o) => o.id !== publicMirror.id)],
+          orders: isFirebaseAdmin
+            ? [savedOrder, ...(prev.orders || []).filter((o) => o.id !== savedOrder.id)]
+            : prev.orders,
+        }));
         await refreshAllData();
-        showToast(`Direct order ${order.id} placed for Size ${order.size}!`, 'success');
+        showToast(`Order ${savedOrder.id} registered! Your live profile card and invoice are ready.`, 'success');
       } catch (error) {
         showToast('Could not place your direct order right now. Please retry.', 'error');
         throw error;
@@ -1091,6 +1196,8 @@ export default function App() {
         {activeView === 'batchmates' && (
           <BatchmatesView
             batchmates={state.batchmates}
+            highlightedId={highlightedBatchmateId}
+            onClearHighlight={() => setHighlightedBatchmateId(null)}
             onBackHome={() => handleNavigate('home')}
             onOpenRegister={() => {
               if (sc.registrationOpen !== false) {
@@ -1106,6 +1213,8 @@ export default function App() {
           <HoodieView
             config={state.hoodieConfig}
             instagramUrl={sc.instagramUrl}
+            publicOrders={state.publicOrders || []}
+            batchmates={state.batchmates}
             onPlaceOrder={handlePlaceOrder}
             onViewBatchmates={() => handleNavigate('batchmates')}
             onBackHome={() => handleNavigate('home')}

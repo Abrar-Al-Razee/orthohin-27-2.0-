@@ -39,14 +39,38 @@ service cloud.firestore {
     // Entity validation blueprints
     function isValidBatchmate(data) {
       return data.keys().hasAll(['name', 'roll', 'group', 'createdAt']) &&
-        data.keys().hasOnly(['name', 'roll', 'group', 'social', 'quote', 'photo', 'registeredAt', 'createdAt']) &&
+        data.keys().hasOnly([
+          'name', 'nickname', 'roll', 'group', 'social', 'quote', 'photo',
+          'hobbies', 'bloodGroup', 'dreamGoal', 'favoriteMemory', 'hangoutSpot',
+          'birthday', 'superpower', 'registeredAt', 'createdAt'
+        ]) &&
         data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+        (!('nickname' in data) || (data.nickname is string && data.nickname.size() <= 60)) &&
         data.roll is string && data.roll.size() >= 1 && data.roll.size() <= 32 &&
         data.group is string && data.group.size() >= 1 && data.group.size() <= 60 &&
         (!('social' in data) || (data.social is string && data.social.size() <= 100)) &&
         (!('quote' in data) || (data.quote is string && data.quote.size() <= 400)) &&
         (!('photo' in data) || (data.photo is string && data.photo.size() <= 350000)) &&
+        (!('hobbies' in data) || (data.hobbies is string && data.hobbies.size() <= 240)) &&
+        (!('bloodGroup' in data) || (data.bloodGroup is string && data.bloodGroup.size() <= 20)) &&
+        (!('dreamGoal' in data) || (data.dreamGoal is string && data.dreamGoal.size() <= 200)) &&
+        (!('favoriteMemory' in data) || (data.favoriteMemory is string && data.favoriteMemory.size() <= 400)) &&
+        (!('hangoutSpot' in data) || (data.hangoutSpot is string && data.hangoutSpot.size() <= 140)) &&
+        (!('birthday' in data) || (data.birthday is string && data.birthday.size() <= 40)) &&
+        (!('superpower' in data) || (data.superpower is string && data.superpower.size() <= 140)) &&
         (!('registeredAt' in data) || (data.registeredAt is string && data.registeredAt.size() <= 32)) &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidBatchmateContact(data) {
+      return data.keys().hasAll(['batchmateId', 'name', 'roll', 'group', 'createdAt']) &&
+        data.keys().hasOnly(['batchmateId', 'name', 'roll', 'group', 'email', 'phone', 'createdAt']) &&
+        data.batchmateId is string && data.batchmateId.size() >= 1 && data.batchmateId.size() <= 128 &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+        data.roll is string && data.roll.size() >= 1 && data.roll.size() <= 32 &&
+        data.group is string && data.group.size() >= 1 && data.group.size() <= 60 &&
+        (!('email' in data) || (data.email is string && data.email.size() <= 160)) &&
+        (!('phone' in data) || (data.phone is string && data.phone.size() <= 40)) &&
         data.createdAt is timestamp;
     }
 
@@ -89,15 +113,31 @@ service cloud.firestore {
 
     function isValidOrder(data) {
       return data.keys().hasAll(['orderCode', 'customerName', 'roll', 'size', 'quantity', 'contact', 'status', 'createdAt']) &&
-        data.keys().hasOnly(['orderCode', 'customerName', 'roll', 'size', 'quantity', 'contact', 'notes', 'status', 'createdAt']) &&
+        data.keys().hasOnly(['orderCode', 'customerName', 'roll', 'size', 'quantity', 'contact', 'email', 'notes', 'status', 'paymentStatus', 'createdAt']) &&
         data.orderCode is string && data.orderCode.size() >= 3 && data.orderCode.size() <= 32 &&
         data.customerName is string && data.customerName.size() >= 1 && data.customerName.size() <= 100 &&
         data.roll is string && data.roll.size() >= 1 && data.roll.size() <= 32 &&
         data.size in ['S', 'M', 'L', 'XL', 'XXL', 'XXXL'] &&
         data.quantity is int && data.quantity >= 1 && data.quantity <= 5 &&
         data.contact is string && data.contact.size() >= 1 && data.contact.size() <= 100 &&
+        (!('email' in data) || (data.email is string && data.email.size() <= 160)) &&
         (!('notes' in data) || (data.notes is string && data.notes.size() <= 300)) &&
         data.status in ['Pending', 'Confirmed', 'Delivered'] &&
+        (!('paymentStatus' in data) || data.paymentStatus in ['Due', 'Paid']) &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidPublicHoodieOrder(data) {
+      return data.keys().hasAll(['orderCode', 'customerName', 'roll', 'size', 'quantity', 'status', 'paymentStatus', 'createdAt']) &&
+        data.keys().hasOnly(['orderCode', 'customerName', 'roll', 'size', 'quantity', 'notes', 'status', 'paymentStatus', 'createdAt']) &&
+        data.orderCode is string && data.orderCode.size() >= 3 && data.orderCode.size() <= 32 &&
+        data.customerName is string && data.customerName.size() >= 1 && data.customerName.size() <= 100 &&
+        data.roll is string && data.roll.size() >= 1 && data.roll.size() <= 32 &&
+        data.size in ['S', 'M', 'L', 'XL', 'XXL', 'XXXL'] &&
+        data.quantity is int && data.quantity >= 1 && data.quantity <= 5 &&
+        (!('notes' in data) || (data.notes is string && data.notes.size() <= 300)) &&
+        data.status in ['Pending', 'Confirmed', 'Delivered'] &&
+        data.paymentStatus in ['Due', 'Paid'] &&
         data.createdAt is timestamp;
     }
 
@@ -167,7 +207,7 @@ service cloud.firestore {
         data.createdAt is timestamp;
     }
 
-    // Public cohort directory; anyone may register with valid schema, admin manages edits/deletes
+    // Public cohort directory; anyone may register instantly without approval, admin manages edits/deletes
     match /batchmates/{batchmateId} {
       allow get: if isValidId(batchmateId);
       allow list: if true;
@@ -178,8 +218,30 @@ service cloud.firestore {
         isAdmin() &&
         isValidBatchmate(incoming()) &&
         incoming().createdAt == existing().createdAt &&
-        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'roll', 'group', 'social', 'quote', 'photo', 'registeredAt']);
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'name', 'nickname', 'roll', 'group', 'social', 'quote', 'photo',
+          'hobbies', 'bloodGroup', 'dreamGoal', 'favoriteMemory', 'hangoutSpot',
+          'birthday', 'superpower', 'registeredAt'
+        ]);
       allow delete: if isValidId(batchmateId) && isAdmin();
+    }
+
+    // Private admin-only batchmate contact PII (email/phone): public create on registration, admin-only read/update/delete
+    match /batchmateContacts/{contactId} {
+      allow get: if isValidId(contactId) && isAdmin();
+      allow list: if isAdmin();
+      allow create: if isValidId(contactId) &&
+        isValidBatchmateContact(incoming()) &&
+        incoming().batchmateId == contactId &&
+        incoming().createdAt == request.time;
+      allow update: if isValidId(contactId) &&
+        isAdmin() &&
+        isValidBatchmateContact(incoming()) &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'batchmateId', 'name', 'roll', 'group', 'email', 'phone'
+        ]);
+      allow delete: if isValidId(contactId) && isAdmin();
     }
 
     // Official notices: public read, admin-only write
@@ -231,20 +293,41 @@ service cloud.firestore {
       allow delete: if isValidId(memberId) && isAdmin();
     }
 
-    // Direct Hoodie orders: public create (Pending only), admin can create/update/read/delete
+    // Direct Hoodie orders (contains PII email/contact): public create (Pending & Due only), admin can read/update/delete
     match /orders/{orderId} {
       allow get: if isValidId(orderId) && isAdmin();
       allow list: if isAdmin();
       allow create: if isValidId(orderId) &&
         isValidOrder(incoming()) &&
         incoming().createdAt == request.time &&
-        (incoming().status == 'Pending' || isAdmin());
+        ((incoming().status == 'Pending' && (!('paymentStatus' in incoming()) || incoming().paymentStatus == 'Due')) || isAdmin());
       allow update: if isValidId(orderId) &&
         isAdmin() &&
         isValidOrder(incoming()) &&
         incoming().orderCode == existing().orderCode &&
         incoming().createdAt == existing().createdAt &&
-        incoming().diff(existing()).affectedKeys().hasOnly(['customerName', 'roll', 'size', 'quantity', 'contact', 'notes', 'status']);
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'customerName', 'roll', 'size', 'quantity', 'contact', 'email', 'notes', 'status', 'paymentStatus'
+        ]);
+      allow delete: if isValidId(orderId) && isAdmin();
+    }
+
+    // Public Hoodie Order profile cards (non-PII): public read & instant create without approval, admin updates payment/status
+    match /publicHoodieOrders/{orderId} {
+      allow get: if isValidId(orderId);
+      allow list: if true;
+      allow create: if isValidId(orderId) &&
+        isValidPublicHoodieOrder(incoming()) &&
+        incoming().createdAt == request.time &&
+        ((incoming().status == 'Pending' && incoming().paymentStatus == 'Due') || isAdmin());
+      allow update: if isValidId(orderId) &&
+        isAdmin() &&
+        isValidPublicHoodieOrder(incoming()) &&
+        incoming().orderCode == existing().orderCode &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'customerName', 'roll', 'size', 'quantity', 'notes', 'status', 'paymentStatus'
+        ]);
       allow delete: if isValidId(orderId) && isAdmin();
     }
 

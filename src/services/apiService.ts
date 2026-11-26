@@ -3,6 +3,7 @@ import type {
   ActivityLogEntry,
   AdminTeamMember,
   Batchmate,
+  BatchmateContact,
   BatchNotice,
   GalleryItem,
   HoodieConfig,
@@ -133,6 +134,7 @@ export interface PublicPortalPayload {
   notices: BatchNotice[];
   gallery: GalleryItem[];
   adminTeam?: AdminTeamMember[];
+  publicOrders?: HoodieOrder[];
   settings: {
     profile: string;
     hoodieConfig: HoodieConfig;
@@ -143,6 +145,7 @@ export interface PublicPortalPayload {
 export interface AdminPortalPayload {
   orders: HoodieOrder[];
   activityLog: ActivityLogEntry[];
+  batchmateContacts?: BatchmateContact[];
 }
 
 export async function fetchPublicPortal(): Promise<PublicPortalPayload> {
@@ -212,7 +215,9 @@ export async function deleteBatchmateInDb(id: string): Promise<void> {
 export async function createOrderInDb(order: HoodieOrder): Promise<HoodieOrder> {
   return withSupabaseOrFallback(
     async () => {
-      const useAdminEndpoint = Boolean(auth.currentUser && order.status !== 'Pending');
+      const useAdminEndpoint = Boolean(
+        auth.currentUser && (order.status !== 'Pending' || order.paymentStatus === 'Paid')
+      );
       const endpoint = useAdminEndpoint ? '/api/admin/orders' : '/api/orders';
       const headers = useAdminEndpoint ? await getAuthHeaders() : { 'Content-Type': 'application/json' };
       const res = await fetch(endpoint, {
@@ -230,7 +235,7 @@ export async function updateOrderStatusInDb(
   id: string,
   status: OrderStatus,
   notes?: string,
-  extra?: Partial<Pick<HoodieOrder, 'customerName' | 'roll' | 'size' | 'quantity' | 'contact'>>
+  extra?: Partial<Pick<HoodieOrder, 'customerName' | 'roll' | 'size' | 'quantity' | 'contact' | 'email' | 'paymentStatus'>>
 ): Promise<void> {
   return withSupabaseOrFallback(
     async () => {

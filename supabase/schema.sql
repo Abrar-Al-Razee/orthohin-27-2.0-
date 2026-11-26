@@ -5,13 +5,45 @@
 create table if not exists public.batchmates (
   id text primary key,
   name text not null,
+  nickname text,
   roll text not null,
   "group" text not null default 'Batchmate',
   social text,
   quote text,
   photo text,
+  hobbies text,
+  blood_group text,
+  dream_goal text,
+  favorite_memory text,
+  hangout_spot text,
+  birthday text,
+  superpower text,
+  email text,
+  phone text,
   registered_at text not null,
   created_at timestamptz not null default now()
+);
+
+alter table public.batchmates add column if not exists nickname text;
+alter table public.batchmates add column if not exists hobbies text;
+alter table public.batchmates add column if not exists blood_group text;
+alter table public.batchmates add column if not exists dream_goal text;
+alter table public.batchmates add column if not exists favorite_memory text;
+alter table public.batchmates add column if not exists hangout_spot text;
+alter table public.batchmates add column if not exists birthday text;
+alter table public.batchmates add column if not exists superpower text;
+alter table public.batchmates add column if not exists email text;
+alter table public.batchmates add column if not exists phone text;
+
+create table if not exists public.admin_team (
+  id text primary key,
+  name text not null,
+  role text not null,
+  bio text not null default '',
+  photo text,
+  social text,
+  sort_order integer not null default 0,
+  updated_at timestamptz not null default now()
 );
 
 create index if not exists idx_batchmates_created_at on public.batchmates (created_at desc);
@@ -50,10 +82,15 @@ create table if not exists public.hoodie_orders (
   size text not null default 'L',
   quantity integer not null default 1,
   contact text not null,
+  email text,
   notes text,
   status text not null default 'Pending',
+  payment_status text not null default 'Due',
   created_at timestamptz not null default now()
 );
+
+alter table public.hoodie_orders add column if not exists email text;
+alter table public.hoodie_orders add column if not exists payment_status text not null default 'Due';
 
 create index if not exists idx_hoodie_orders_created_at on public.hoodie_orders (created_at desc);
 

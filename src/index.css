@@ -62,6 +62,23 @@ html.dark ::-webkit-scrollbar-thumb:hover {
   background: #3f3f46;
 }
 
+.perspective-1200 {
+  perspective: 1200px;
+}
+
+.transform-style-3d {
+  transform-style: preserve-3d;
+}
+
+.backface-hidden {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.rotate-y-180 {
+  transform: rotateY(180deg);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

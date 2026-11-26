@@ -11,6 +11,11 @@
           "maxLength": 100,
           "description": "Full name of the batchmate."
         },
+        "nickname": {
+          "type": "string",
+          "maxLength": 60,
+          "description": "Optional nickname or dak nam."
+        },
         "roll": {
           "type": "string",
           "minLength": 1,
@@ -35,8 +40,43 @@
         },
         "photo": {
           "type": "string",
-          "maxLength": 300000,
+          "maxLength": 350000,
           "description": "Optional compressed portrait data URL or asset path."
+        },
+        "hobbies": {
+          "type": "string",
+          "maxLength": 240,
+          "description": "Hobbies and personal interests displayed on card back."
+        },
+        "bloodGroup": {
+          "type": "string",
+          "maxLength": 20,
+          "description": "Optional blood group."
+        },
+        "dreamGoal": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Future ambition or career goal."
+        },
+        "favoriteMemory": {
+          "type": "string",
+          "maxLength": 400,
+          "description": "Favorite campus or batch memory."
+        },
+        "hangoutSpot": {
+          "type": "string",
+          "maxLength": 140,
+          "description": "Favorite school hangout spot."
+        },
+        "birthday": {
+          "type": "string",
+          "maxLength": 40,
+          "description": "Birthday month and day."
+        },
+        "superpower": {
+          "type": "string",
+          "maxLength": 140,
+          "description": "Batch nickname trait, talent, or known-for superpower."
         },
         "registeredAt": {
           "type": "string",
@@ -50,6 +90,53 @@
         }
       },
       "required": ["name", "roll", "group", "createdAt"]
+    },
+    "BatchmateContact": {
+      "title": "BatchmateContact",
+      "description": "Private admin-only contact details (email and phone) for a registered batchmate.",
+      "type": "object",
+      "properties": {
+        "batchmateId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Matching batchmate document ID."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "description": "Batchmate full name."
+        },
+        "roll": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "description": "Roll number."
+        },
+        "group": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60,
+          "description": "Academic group."
+        },
+        "email": {
+          "type": "string",
+          "maxLength": 160,
+          "description": "Email address for admin communication."
+        },
+        "phone": {
+          "type": "string",
+          "maxLength": 40,
+          "description": "Optional phone or WhatsApp number."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        }
+      },
+      "required": ["batchmateId", "name", "roll", "group", "createdAt"]
     },
     "BatchNotice": {
       "title": "BatchNotice",
@@ -179,6 +266,11 @@
           "maxLength": 100,
           "description": "Phone number or social handle."
         },
+        "email": {
+          "type": "string",
+          "maxLength": 160,
+          "description": "Optional customer email for invoice and payment notices (admin-only)."
+        },
         "notes": {
           "type": "string",
           "maxLength": 300,
@@ -189,6 +281,11 @@
           "enum": ["Pending", "Confirmed", "Delivered"],
           "description": "Fulfillment status."
         },
+        "paymentStatus": {
+          "type": "string",
+          "enum": ["Due", "Paid"],
+          "description": "Payment verification status (Due 700 BDT/pc vs Paid)."
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time",
@@ -196,6 +293,61 @@
         }
       },
       "required": ["orderCode", "customerName", "roll", "size", "quantity", "contact", "status", "createdAt"]
+    },
+    "PublicHoodieOrder": {
+      "title": "PublicHoodieOrder",
+      "description": "Public non-PII live order profile card shown below the Hoodie order form (excludes email and phone contact).",
+      "type": "object",
+      "properties": {
+        "orderCode": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 32,
+          "description": "Exact order reference code matching /orders/{orderId}."
+        },
+        "customerName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "description": "Ordering student name."
+        },
+        "roll": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "description": "Student roll or batch ID."
+        },
+        "size": {
+          "type": "string",
+          "enum": ["S", "M", "L", "XL", "XXL", "XXXL"],
+          "description": "Hoodie size."
+        },
+        "quantity": {
+          "type": "integer",
+          "description": "Number of hoodies ordered (1-5)."
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "Optional delivery or section note."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["Pending", "Confirmed", "Delivered"],
+          "description": "Fulfillment status."
+        },
+        "paymentStatus": {
+          "type": "string",
+          "enum": ["Due", "Paid"],
+          "description": "Payment verification status (Due vs Paid)."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        }
+      },
+      "required": ["orderCode", "customerName", "roll", "size", "quantity", "status", "paymentStatus", "createdAt"]
     },
     "PortalSettings": {
       "title": "PortalSettings",
@@ -298,6 +450,10 @@
       "schema": { "$ref": "#/entities/Batchmate" },
       "description": "Public directory of registered Orthohin '27 batchmates."
     },
+    "/batchmateContacts/{contactId}": {
+      "schema": { "$ref": "#/entities/BatchmateContact" },
+      "description": "Private admin-only email and phone directory for registered batchmates."
+    },
     "/notices/{noticeId}": {
       "schema": { "$ref": "#/entities/BatchNotice" },
       "description": "Official batch notices managed by admin."
@@ -308,7 +464,11 @@
     },
     "/orders/{orderId}": {
       "schema": { "$ref": "#/entities/HoodieOrder" },
-      "description": "Direct RCS Hoodie orders (admin-readable only; public create)."
+      "description": "Direct RCS Hoodie orders including PII email/contact (admin-readable only; public create)."
+    },
+    "/publicHoodieOrders/{orderId}": {
+      "schema": { "$ref": "#/entities/PublicHoodieOrder" },
+      "description": "Public non-PII hoodie order cards shown live below the Hoodie form."
     },
     "/settings/{settingId}": {
       "schema": { "$ref": "#/entities/PortalSettings" },

@@ -6,31 +6,45 @@ import {
   ArrowDown,
   ArrowUp,
   BarChart3,
+  Cake,
   Camera,
   Check,
+  CheckCircle2,
   CheckSquare,
+  Clock,
+  Compass,
   Copy,
   Download,
+  Droplets,
   Edit3,
   ExternalLink,
   Eye,
   EyeOff,
   FileSpreadsheet,
+  FileText,
+  Filter,
   Globe,
+  Heart,
   Image as ImageIcon,
   Lock,
+  Mail,
+  MapPin,
   Megaphone,
   Menu,
   Moon,
+  Phone,
   Pin,
   Plus,
   RefreshCw,
   RotateCcw,
   Save,
   Search,
+  Send,
   Shield,
   Shirt,
   Sliders,
+  Sparkles,
+  Square,
   Sun,
   Trash2,
   Upload,
@@ -70,6 +84,7 @@ import type {
   HoodieOrder,
   NoticeCategory,
   OrderStatus,
+  PaymentStatus,
   PortalState,
   SectionVisibility,
   SiteConfig,
@@ -86,13 +101,18 @@ import {
   downloadCsv,
   getAdminPassword,
   getInitials,
+  HOODIE_UNIT_PRICE,
   mergeHoodieConfig,
   mergeSiteConfig,
   resetAdminPassword,
   setAdminPassword,
   SITE_LOGO_SRC,
 } from '../utils/storage';
-import { downloadOrderInvoicePng } from '../utils/invoice';
+import {
+  downloadOrderInvoiceHtml,
+  downloadOrderInvoicePng,
+  getOrderFinancials,
+} from '../utils/invoice';
 import type { ThemeMode } from '../utils/theme';
 
 interface AdminModalProps {
@@ -114,8 +134,217 @@ type AdminTab = 'overview' | 'notices' | 'orders' | 'batchmates' | 'gallery' | '
 type SiteSubTab = 'global' | 'hero' | 'about' | 'leadership' | 'timeline';
 
 const HOODIE_SIZES: HoodieOrder['size'][] = ['S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
+const BLOOD_GROUP_OPTIONS = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
 const LIVE_SYNC_CHANNEL = 'orthohin27_live_sync';
 const LIVE_SYNC_STORAGE_KEY = 'orthohin27_live_sync_ping';
+
+interface AdminMailTemplate {
+  id: string;
+  label: string;
+  tag: string;
+  subject: string;
+  body: string;
+}
+
+const ADMIN_MAIL_TEMPLATES: AdminMailTemplate[] = [
+  {
+    id: 'welcome',
+    label: 'Welcome to Batch Portal',
+    tag: 'Onboarding',
+    subject: "Welcome to ORTHOHIN '27 · Official RCS Batch Portal",
+    body: `Assalamu Alaikum {name},
+
+Welcome to the official ORTHOHIN '27 (Rajshahi Collegiate School · Class of 2027) batch portal! Your profile card (Roll {roll}, {group}) is now live in the Batchmates directory.
+
+Visit the portal anytime to flip and download your collectible Class of '27 card, browse memories, and stay updated with official batch notices.
+
+Warm regards,
+Orthohin '27 Core Admin Team
+Rajshahi Collegiate School`,
+  },
+  {
+    id: 'hoodie',
+    label: "Hoodie '26-'27 Update",
+    tag: 'Merch',
+    subject: "RCS Hoodie '26-'27 · Sizing, Confirmation & Dispatch Update",
+    body: `Hello {name},
+
+This is an official update regarding the ORTHOHIN '27 Winter Hoodie ('26-'27 Edition).
+
+Please double-check your size confirmation and order status on the Hoodie portal page. If you need any size adjustments or pickup coordination, reply directly to this email with your Roll ({roll}).
+
+Best regards,
+Orthohin '27 Hoodie & Merch Team`,
+  },
+  {
+    id: 'reunion',
+    label: 'Batch Meetup / Reunion',
+    tag: 'Event',
+    subject: "Invitation · ORTHOHIN '27 Batch Meetup & Adda Session",
+    body: `Dear {name},
+
+We are planning an upcoming ORTHOHIN '27 batch meetup for everyone from Rajshahi Collegiate School (Class of 2027)!
+
+• Event: Orthohin '27 Batch Meetup & Photo Session
+• Date & Time: [Insert Date & Time]
+• Venue: [Insert Venue / RCS Campus]
+
+Let us know your availability by replying to this email so we can finalize the headcount. Hope to see Roll {roll} ({group}) there!
+
+Cheers,
+Orthohin '27 Admin Panel`,
+  },
+  {
+    id: 'notice',
+    label: 'Official Batch Notice',
+    tag: 'Urgent',
+    subject: "Important Notice · ORTHOHIN '27 (Class of 2027)",
+    body: `Dear {name},
+
+An important announcement has been posted on the ORTHOHIN '27 official notice board:
+
+[Write your key announcement details here]
+
+Please review it on the portal and share with fellow {group} classmates so nobody misses out.
+
+Regards,
+Orthohin '27 Administration`,
+  },
+  {
+    id: 'yearbook',
+    label: 'Yearbook & Photo Drive',
+    tag: 'Archive',
+    subject: "Share Your RCS Memories · ORTHOHIN '27 Archive Drive",
+    body: `Hey {name},
+
+We are curating photos, short clips, and memorable campus stories for the ORTHOHIN '27 digital memory vault and yearbook archive.
+
+If you have candid photos from RCS classrooms, sports days, or field addas, reply to this email or submit your updated profile quote and favorite memory.
+
+With nostalgia,
+Orthohin '27 Archive Team`,
+  },
+  {
+    id: 'birthday',
+    label: 'Birthday Warm Wishes',
+    tag: 'Celebration',
+    subject: "Happy Birthday {name}! · Wishes from ORTHOHIN '27",
+    body: `Happy Birthday {name}!
+
+Wishing you health, joy, and big milestones ahead from your entire ORTHOHIN '27 family at Rajshahi Collegiate School. May your year ahead be unforgettable!
+
+Celebrate well!
+Orthohin '27 Batchmates`,
+  },
+  {
+    id: 'custom',
+    label: 'Custom Email',
+    tag: 'Blank',
+    subject: "Message from ORTHOHIN '27 Admin Panel",
+    body: `Hello {name},
+
+[Write your message here]
+
+Best regards,
+Orthohin '27 Admin Team`,
+  },
+];
+
+const ORDER_MAIL_TEMPLATES: AdminMailTemplate[] = [
+  {
+    id: 'due_700',
+    label: 'Payment Due · 700 Taka Invoice',
+    tag: 'Due Invoice',
+    subject: "RCS Hoodie '26-'27 Invoice ({orderId}) · Payment Due {dueAmount} Taka",
+    body: `Assalamu Alaikum {name},
+
+Thank you for registering your ORTHOHIN '27 RCS Hoodie order!
+
+• Order ID: {orderId}
+• Batchmate: {name} (Roll {roll})
+• Hoodie Size & Qty: {size} × {qty}
+• Total Payable: {amount} Taka (700 Taka per hoodie)
+• Payment Status: {paymentStatus} ({dueAmount} Taka Due)
+
+Your payment has not been received yet. Please clear {dueAmount} Taka and verify with the batch admin team so we can lock your order for production.
+
+You can download your official Due Invoice ({orderId}) directly from the Hoodie Order Roster:
+{portalUrl}/hoodie
+
+Best regards,
+Orthohin '27 Hoodie & Finance Team`,
+  },
+  {
+    id: 'paid_confirmed',
+    label: 'Payment Confirmed · Paid Invoice',
+    tag: 'Paid Receipt',
+    subject: "Payment Received · RCS Hoodie Order {orderId} (PAID)",
+    body: `Assalamu Alaikum {name},
+
+Great news! Your payment of {amount} Taka for the ORTHOHIN '27 RCS Hoodie ('26-'27 Edition) has been confirmed.
+
+• Order ID: {orderId}
+• Batchmate: {name} (Roll {roll})
+• Hoodie Size & Qty: {size} × {qty}
+• Amount Paid: {amount} Taka
+• Payment Status: PAID IN FULL (0 Taka Due)
+
+Your official Paid Invoice ({orderId}) is now live! Download or print your updated PAID receipt anytime from:
+{portalUrl}/hoodie
+
+Thank you,
+Orthohin '27 Hoodie & Finance Team`,
+  },
+  {
+    id: 'pickup_ready',
+    label: 'Hoodie Ready / Pickup Notice',
+    tag: 'Distribution',
+    subject: "Your RCS Hoodie is Ready · Order {orderId} ({name})",
+    body: `Hello {name},
+
+Your ORTHOHIN '27 RCS Hoodie (Order ID: {orderId}, Size {size} × {qty}) is ready for collection!
+
+• Current Payment Status: {paymentStatus} ({dueAmount} Taka Due)
+• Pickup Location & Time: [Insert Campus Spot / Date & Time]
+
+Please bring or show your downloaded invoice ({orderId}) from {portalUrl}/hoodie at the pickup desk.
+
+Cheers,
+Orthohin '27 Admin Team`,
+  },
+  {
+    id: 'final_reminder',
+    label: 'Final Payment Reminder (700 Taka)',
+    tag: 'Urgent',
+    subject: "Final Reminder: Payment Due {dueAmount} Taka for Order {orderId}",
+    body: `Dear {name},
+
+This is a gentle final reminder regarding your pending hoodie payment before we close the print batch:
+
+• Order ID: {orderId}
+• Size × Qty: {size} × {qty} (Roll {roll})
+• Balance Due: {dueAmount} Taka
+
+Please submit your payment today so your hoodie can be included in this batch. Download your invoice ({orderId}) anytime at {portalUrl}/hoodie.
+
+Regards,
+Orthohin '27 Hoodie Team`,
+  },
+  {
+    id: 'order_custom',
+    label: 'Custom Order Email',
+    tag: 'Custom',
+    subject: "Regarding Your RCS Hoodie Order {orderId} · ORTHOHIN '27",
+    body: `Hello {name},
+
+Order ID: {orderId} (Size {size} × {qty} · {paymentStatus})
+
+[Write your message here]
+
+Best regards,
+Orthohin '27 Admin Panel`,
+  },
+];
 
 function broadcastLiveSync() {
   try {
@@ -161,35 +390,74 @@ export function AdminModal({
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [globalQuery, setGlobalQuery] = useState('');
 
-  // Orders filters, add & full edit
+  // Orders filters, add, full edit, payment & mail studio
   const [orderStatusFilter, setOrderStatusFilter] = useState<'All' | OrderStatus>('All');
+  const [orderPaymentFilter, setOrderPaymentFilter] = useState<'All' | PaymentStatus>('All');
   const [orderSizeFilter, setOrderSizeFilter] = useState<'All' | HoodieOrder['size']>('All');
+  const [orderEmailFilter, setOrderEmailFilter] = useState<'all' | 'has_email' | 'missing_email'>('all');
   const [orderSearch, setOrderSearch] = useState('');
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+  const [copiedOrderEmailId, setCopiedOrderEmailId] = useState<string | null>(null);
+  const [copiedOrderBulkMode, setCopiedOrderBulkMode] = useState<string | null>(null);
   const [showAddOrder, setShowAddOrder] = useState(false);
   const [newOrderName, setNewOrderName] = useState('');
   const [newOrderRoll, setNewOrderRoll] = useState('');
   const [newOrderSize, setNewOrderSize] = useState<HoodieOrder['size']>('L');
   const [newOrderQty, setNewOrderQty] = useState(1);
   const [newOrderContact, setNewOrderContact] = useState('');
+  const [newOrderEmail, setNewOrderEmail] = useState('');
+  const [newOrderPaymentStatus, setNewOrderPaymentStatus] = useState<PaymentStatus>('Due');
   const [newOrderNotes, setNewOrderNotes] = useState('');
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [orderDraft, setOrderDraft] = useState<HoodieOrder | null>(null);
   const [confirmDeleteOrderId, setConfirmDeleteOrderId] = useState<string | null>(null);
 
-  // Batchmates filters, add & full edit
+  // Order Send Mail & Invoice Studio
+  const [orderMailRecipientMode, setOrderMailRecipientMode] = useState<
+    'due' | 'paid' | 'filtered' | 'selected' | 'custom'
+  >('due');
+  const [customOrderMailIds, setCustomOrderMailIds] = useState<string[]>([]);
+  const [orderMailAddressField, setOrderMailAddressField] = useState<'bcc' | 'to'>('bcc');
+  const [selectedOrderMailTemplateId, setSelectedOrderMailTemplateId] = useState<string>('due_700');
+  const [orderMailSubject, setOrderMailSubject] = useState<string>(ORDER_MAIL_TEMPLATES[0].subject);
+  const [orderMailBody, setOrderMailBody] = useState<string>(ORDER_MAIL_TEMPLATES[0].body);
+
+  // Batchmates filters, add, copy & mail studio
   const [bmSearch, setBmSearch] = useState('');
   const [bmGroupFilter, setBmGroupFilter] = useState('All');
+  const [bmBloodFilter, setBmBloodFilter] = useState('All');
+  const [bmEmailFilter, setBmEmailFilter] = useState<'all' | 'has_email' | 'missing_email'>('all');
+  const [selectedBmIds, setSelectedBmIds] = useState<string[]>([]);
+  const [copiedBmEmailId, setCopiedBmEmailId] = useState<string | null>(null);
+  const [copiedBulkEmailsMode, setCopiedBulkEmailsMode] = useState<string | null>(null);
   const [showAddBm, setShowAddBm] = useState(false);
   const [newBmName, setNewBmName] = useState('');
+  const [newBmNickname, setNewBmNickname] = useState('');
   const [newBmRoll, setNewBmRoll] = useState('');
   const [newBmGroup, setNewBmGroup] = useState('Science');
+  const [newBmEmail, setNewBmEmail] = useState('');
+  const [newBmPhone, setNewBmPhone] = useState('');
   const [newBmSocial, setNewBmSocial] = useState('');
+  const [newBmHobbies, setNewBmHobbies] = useState('');
+  const [newBmBloodGroup, setNewBmBloodGroup] = useState('');
+  const [newBmBirthday, setNewBmBirthday] = useState('');
+  const [newBmDreamGoal, setNewBmDreamGoal] = useState('');
+  const [newBmHangoutSpot, setNewBmHangoutSpot] = useState('');
+  const [newBmSuperpower, setNewBmSuperpower] = useState('');
+  const [newBmFavoriteMemory, setNewBmFavoriteMemory] = useState('');
   const [newBmQuote, setNewBmQuote] = useState('');
   const [newBmPhoto, setNewBmPhoto] = useState('');
   const [editingBmId, setEditingBmId] = useState<string | null>(null);
   const [bmPhotoTargetId, setBmPhotoTargetId] = useState<string | null>(null);
   const [confirmDeleteBmId, setConfirmDeleteBmId] = useState<string | null>(null);
+
+  // Admin Send Mail Studio
+  const [mailRecipientMode, setMailRecipientMode] = useState<'filtered' | 'selected' | 'custom'>('filtered');
+  const [customMailIds, setCustomMailIds] = useState<string[]>([]);
+  const [mailAddressField, setMailAddressField] = useState<'bcc' | 'to'>('bcc');
+  const [selectedMailTemplateId, setSelectedMailTemplateId] = useState<string>('welcome');
+  const [mailSubject, setMailSubject] = useState<string>(ADMIN_MAIL_TEMPLATES[0].subject);
+  const [mailBody, setMailBody] = useState<string>(ADMIN_MAIL_TEMPLATES[0].body);
 
   // Gallery states
   const [confirmDeleteGalleryId, setConfirmDeleteGalleryId] = useState<string | null>(null);
@@ -416,6 +684,8 @@ export function AdminModal({
         size: order.size,
         quantity: order.quantity,
         contact: order.contact.trim(),
+        email: (order.email || '').trim(),
+        paymentStatus: order.paymentStatus === 'Paid' ? 'Paid' : 'Due',
       });
       broadcastLiveSync();
       setLiveSyncStatus('saved');
@@ -493,6 +763,9 @@ export function AdminModal({
       setConfirmDeleteOrderId(null);
       setConfirmDeleteNoticeId(null);
       setSelectedOrderIds([]);
+      setSelectedBmIds([]);
+      setCustomMailIds([]);
+      setCustomOrderMailIds([]);
     }
   }, [isOpen]);
 
@@ -558,35 +831,365 @@ export function AdminModal({
     };
   }, [state]);
 
+  const batchmateEmailByRoll = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const bm of state.batchmates) {
+      const email = (bm.email || '').trim();
+      const r = bm.roll.trim().toLowerCase();
+      if (email && r && !map.has(r)) {
+        map.set(r, email);
+      }
+    }
+    return map;
+  }, [state.batchmates]);
+
+  const resolveOrderEmail = useCallback(
+    (order: HoodieOrder): string => {
+      const direct = (order.email || '').trim();
+      if (direct) return direct;
+      return batchmateEmailByRoll.get(order.roll.trim().toLowerCase()) || '';
+    },
+    [batchmateEmailByRoll]
+  );
+
   const filteredOrders = useMemo(() => {
     const q = orderSearch.trim().toLowerCase();
     return (state.orders || []).filter((o) => {
+      const payment: PaymentStatus = o.paymentStatus === 'Paid' ? 'Paid' : 'Due';
+      const resolvedEmail = resolveOrderEmail(o);
       const matchesStatus = orderStatusFilter === 'All' || o.status === orderStatusFilter;
+      const matchesPayment = orderPaymentFilter === 'All' || payment === orderPaymentFilter;
       const matchesSize = orderSizeFilter === 'All' || o.size === orderSizeFilter;
+      const matchesEmail =
+        orderEmailFilter === 'all' ||
+        (orderEmailFilter === 'has_email' && Boolean(resolvedEmail)) ||
+        (orderEmailFilter === 'missing_email' && !resolvedEmail);
       const matchesQuery =
         !q ||
         o.customerName.toLowerCase().includes(q) ||
         o.roll.toLowerCase().includes(q) ||
         o.id.toLowerCase().includes(q) ||
         o.contact.toLowerCase().includes(q) ||
+        resolvedEmail.toLowerCase().includes(q) ||
         (o.notes && o.notes.toLowerCase().includes(q));
-      return matchesStatus && matchesSize && matchesQuery;
+      return matchesStatus && matchesPayment && matchesSize && matchesEmail && matchesQuery;
     });
-  }, [state.orders, orderStatusFilter, orderSizeFilter, orderSearch]);
+  }, [
+    state.orders,
+    orderStatusFilter,
+    orderPaymentFilter,
+    orderSizeFilter,
+    orderEmailFilter,
+    orderSearch,
+    resolveOrderEmail,
+  ]);
+
+  const orderEmailStats = useMemo(() => {
+    const allOrders = state.orders || [];
+    const dueOrdersWithEmail = allOrders.filter(
+      (o) => o.paymentStatus !== 'Paid' && Boolean(resolveOrderEmail(o))
+    );
+    const paidOrdersWithEmail = allOrders.filter(
+      (o) => o.paymentStatus === 'Paid' && Boolean(resolveOrderEmail(o))
+    );
+    const allOrdersWithEmail = allOrders.filter((o) => Boolean(resolveOrderEmail(o)));
+
+    const dedupeEmails = (list: HoodieOrder[]) => {
+      const seen = new Set<string>();
+      const out: string[] = [];
+      for (const o of list) {
+        const em = resolveOrderEmail(o);
+        if (em && !seen.has(em.toLowerCase())) {
+          seen.add(em.toLowerCase());
+          out.push(em);
+        }
+      }
+      return out;
+    };
+
+    const filteredEmails = dedupeEmails(filteredOrders);
+    const dueEmails = dedupeEmails(dueOrdersWithEmail);
+    const paidEmails = dedupeEmails(paidOrdersWithEmail);
+    const selectedEmails = dedupeEmails(allOrders.filter((o) => selectedOrderIds.includes(o.id)));
+
+    const totalDueOrdersCount = allOrders.filter((o) => o.paymentStatus !== 'Paid').length;
+    const totalPaidOrdersCount = allOrders.filter((o) => o.paymentStatus === 'Paid').length;
+
+    return {
+      allOrdersWithEmail,
+      filteredEmails,
+      dueEmails,
+      paidEmails,
+      selectedEmails,
+      totalDueOrdersCount,
+      totalPaidOrdersCount,
+    };
+  }, [state.orders, filteredOrders, selectedOrderIds, resolveOrderEmail]);
+
+  const orderMailRecipients = useMemo(() => {
+    const allOrders = state.orders || [];
+    const source =
+      orderMailRecipientMode === 'due'
+        ? allOrders.filter((o) => o.paymentStatus !== 'Paid')
+        : orderMailRecipientMode === 'paid'
+          ? allOrders.filter((o) => o.paymentStatus === 'Paid')
+          : orderMailRecipientMode === 'selected'
+            ? allOrders.filter((o) => selectedOrderIds.includes(o.id))
+            : orderMailRecipientMode === 'custom'
+              ? allOrders.filter((o) => customOrderMailIds.includes(o.id))
+              : filteredOrders;
+
+    return source
+      .map((o) => ({ order: o, email: resolveOrderEmail(o) }))
+      .filter((entry) => Boolean(entry.email));
+  }, [
+    orderMailRecipientMode,
+    state.orders,
+    selectedOrderIds,
+    customOrderMailIds,
+    filteredOrders,
+    resolveOrderEmail,
+  ]);
+
+  const substituteOrderMailVars = useCallback(
+    (text: string, order: HoodieOrder | null): string => {
+      const origin = typeof window !== 'undefined' ? window.location.origin : 'https://orthohin-27.vercel.app';
+      if (!order) {
+        return text
+          .replace(/\{orderId\}/gi, 'RCS-ORDER')
+          .replace(/\{name\}/gi, "Orthohin '27 Batchmate")
+          .replace(/\{roll\}/gi, "Batch '27")
+          .replace(/\{size\}/gi, 'Your Size')
+          .replace(/\{qty\}/gi, '1')
+          .replace(/\{amount\}/gi, String(HOODIE_UNIT_PRICE))
+          .replace(/\{dueAmount\}/gi, String(HOODIE_UNIT_PRICE))
+          .replace(/\{paymentStatus\}/gi, 'Due / Paid')
+          .replace(/\{portalUrl\}/gi, origin);
+      }
+      const fin = getOrderFinancials(order);
+      return text
+        .replace(/\{orderId\}/gi, order.id)
+        .replace(/\{name\}/gi, order.customerName)
+        .replace(/\{roll\}/gi, order.roll || 'N/A')
+        .replace(/\{size\}/gi, order.size)
+        .replace(/\{qty\}/gi, String(fin.qty))
+        .replace(/\{amount\}/gi, String(fin.totalAmount))
+        .replace(/\{dueAmount\}/gi, String(fin.dueAmount))
+        .replace(/\{paymentStatus\}/gi, fin.isPaid ? 'PAID' : 'DUE')
+        .replace(/\{portalUrl\}/gi, origin);
+    },
+    []
+  );
+
+  const buildOrderEmailLinks = useCallback(
+    (emails: string[], subject: string, body: string, field: 'bcc' | 'to') => {
+      const joined = emails.join(',');
+      let mailtoHref = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      if (emails.length > 0) {
+        if (field === 'to' || emails.length === 1) {
+          mailtoHref = `mailto:${joined}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        } else {
+          mailtoHref = `mailto:?bcc=${encodeURIComponent(joined)}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        }
+      }
+      const gmailParams = new URLSearchParams({
+        view: 'cm',
+        fs: '1',
+        su: subject,
+        body,
+      });
+      if (emails.length > 0) {
+        if (field === 'to' || emails.length === 1) {
+          gmailParams.set('to', joined);
+        } else {
+          gmailParams.set('bcc', joined);
+        }
+      }
+      const gmailHref = `https://mail.google.com/mail/?${gmailParams.toString()}`;
+      return { mailtoHref, gmailHref };
+    },
+    []
+  );
+
+  const resolvedOrderMailDraft = useMemo(() => {
+    const single = orderMailRecipients.length === 1 ? orderMailRecipients[0].order : null;
+    const subject = substituteOrderMailVars(
+      orderMailSubject.trim() || "RCS Hoodie '26-'27 Invoice Update",
+      single
+    );
+    const body = substituteOrderMailVars(orderMailBody.trim(), single);
+    const seen = new Set<string>();
+    const emails: string[] = [];
+    for (const entry of orderMailRecipients) {
+      if (!seen.has(entry.email.toLowerCase())) {
+        seen.add(entry.email.toLowerCase());
+        emails.push(entry.email);
+      }
+    }
+    const joined = emails.join(',');
+    const { mailtoHref, gmailHref } = buildOrderEmailLinks(
+      emails,
+      subject,
+      body,
+      orderMailAddressField
+    );
+
+    const individualLinks = orderMailRecipients.map(({ order, email }) => {
+      const indSubject = substituteOrderMailVars(
+        orderMailSubject.trim() || `RCS Hoodie Invoice ${order.id}`,
+        order
+      );
+      const indBody = substituteOrderMailVars(orderMailBody.trim(), order);
+      const links = buildOrderEmailLinks([email], indSubject, indBody, 'to');
+      return {
+        order,
+        email,
+        subject: indSubject,
+        body: indBody,
+        mailtoHref: links.mailtoHref,
+        gmailHref: links.gmailHref,
+      };
+    });
+
+    return {
+      singleOrder: single,
+      subject,
+      body,
+      emails,
+      joined,
+      mailtoHref,
+      gmailHref,
+      individualLinks,
+    };
+  }, [
+    orderMailRecipients,
+    orderMailSubject,
+    orderMailBody,
+    orderMailAddressField,
+    substituteOrderMailVars,
+    buildOrderEmailLinks,
+  ]);
 
   const filteredBatchmates = useMemo(() => {
     const q = bmSearch.trim().toLowerCase();
     return state.batchmates.filter((b) => {
       const matchesGroup = bmGroupFilter === 'All' || (b.group || 'Other') === bmGroupFilter;
+      const matchesBlood = bmBloodFilter === 'All' || (b.bloodGroup || '').toUpperCase() === bmBloodFilter;
+      const hasEmail = Boolean((b.email || '').trim());
+      const matchesEmail =
+        bmEmailFilter === 'all' ||
+        (bmEmailFilter === 'has_email' && hasEmail) ||
+        (bmEmailFilter === 'missing_email' && !hasEmail);
       const matchesQuery =
         !q ||
         b.name.toLowerCase().includes(q) ||
+        (b.nickname && b.nickname.toLowerCase().includes(q)) ||
         b.roll.toLowerCase().includes(q) ||
         (b.group && b.group.toLowerCase().includes(q)) ||
-        (b.social && b.social.toLowerCase().includes(q));
-      return matchesGroup && matchesQuery;
+        (b.email && b.email.toLowerCase().includes(q)) ||
+        (b.phone && b.phone.toLowerCase().includes(q)) ||
+        (b.social && b.social.toLowerCase().includes(q)) ||
+        (b.hobbies && b.hobbies.toLowerCase().includes(q)) ||
+        (b.bloodGroup && b.bloodGroup.toLowerCase().includes(q)) ||
+        (b.dreamGoal && b.dreamGoal.toLowerCase().includes(q)) ||
+        (b.hangoutSpot && b.hangoutSpot.toLowerCase().includes(q)) ||
+        (b.superpower && b.superpower.toLowerCase().includes(q)) ||
+        (b.favoriteMemory && b.favoriteMemory.toLowerCase().includes(q)) ||
+        (b.quote && b.quote.toLowerCase().includes(q));
+      return matchesGroup && matchesBlood && matchesEmail && matchesQuery;
     });
-  }, [state.batchmates, bmSearch, bmGroupFilter]);
+  }, [state.batchmates, bmSearch, bmGroupFilter, bmBloodFilter, bmEmailFilter]);
+
+  const membersWithEmail = useMemo(
+    () => state.batchmates.filter((b) => Boolean((b.email || '').trim())),
+    [state.batchmates]
+  );
+
+  const filteredBatchmateEmails = useMemo(() => {
+    const seen = new Set<string>();
+    const list: string[] = [];
+    for (const b of filteredBatchmates) {
+      const email = (b.email || '').trim();
+      if (email && !seen.has(email.toLowerCase())) {
+        seen.add(email.toLowerCase());
+        list.push(email);
+      }
+    }
+    return list;
+  }, [filteredBatchmates]);
+
+  const selectedBatchmateEmails = useMemo(() => {
+    const seen = new Set<string>();
+    const list: string[] = [];
+    for (const b of state.batchmates) {
+      if (!selectedBmIds.includes(b.id)) continue;
+      const email = (b.email || '').trim();
+      if (email && !seen.has(email.toLowerCase())) {
+        seen.add(email.toLowerCase());
+        list.push(email);
+      }
+    }
+    return list;
+  }, [state.batchmates, selectedBmIds]);
+
+  const mailRecipients = useMemo(() => {
+    const source =
+      mailRecipientMode === 'selected'
+        ? state.batchmates.filter((b) => selectedBmIds.includes(b.id))
+        : mailRecipientMode === 'custom'
+          ? state.batchmates.filter((b) => customMailIds.includes(b.id))
+          : filteredBatchmates;
+    const seen = new Set<string>();
+    const recipients: Batchmate[] = [];
+    for (const b of source) {
+      const email = (b.email || '').trim();
+      if (email && !seen.has(email.toLowerCase())) {
+        seen.add(email.toLowerCase());
+        recipients.push(b);
+      }
+    }
+    return recipients;
+  }, [mailRecipientMode, state.batchmates, selectedBmIds, customMailIds, filteredBatchmates]);
+
+  const resolvedMailDraft = useMemo(() => {
+    const single = mailRecipients.length === 1 ? mailRecipients[0] : null;
+    const subVars = (text: string) =>
+      text
+        .replace(/\{name\}/gi, single ? single.name : "Orthohin '27 Batchmate")
+        .replace(/\{roll\}/gi, single ? single.roll || 'N/A' : "Batch '27")
+        .replace(/\{group\}/gi, single ? single.group || 'Class of 2027' : 'Class of 2027');
+
+    const subject = subVars(mailSubject.trim() || "Message from ORTHOHIN '27");
+    const body = subVars(mailBody.trim());
+    const emails = mailRecipients.map((r) => (r.email || '').trim()).filter(Boolean);
+    const joined = emails.join(',');
+
+    let mailtoHref = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    if (emails.length > 0) {
+      if (mailAddressField === 'to' || emails.length === 1) {
+        mailtoHref = `mailto:${joined}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      } else {
+        mailtoHref = `mailto:?bcc=${encodeURIComponent(joined)}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      }
+    }
+
+    const gmailParams = new URLSearchParams({
+      view: 'cm',
+      fs: '1',
+      su: subject,
+      body,
+    });
+    if (emails.length > 0) {
+      if (mailAddressField === 'to' || emails.length === 1) {
+        gmailParams.set('to', joined);
+      } else {
+        gmailParams.set('bcc', joined);
+      }
+    }
+    const gmailHref = `https://mail.google.com/mail/?${gmailParams.toString()}`;
+
+    return { subject, body, emails, joined, mailtoHref, gmailHref };
+  }, [mailRecipients, mailSubject, mailBody, mailAddressField]);
 
   const filteredLogs = useMemo(() => {
     const q = logSearch.trim().toLowerCase();
@@ -820,28 +1423,35 @@ export function AdminModal({
       return;
     }
     const order: HoodieOrder = {
-      id: `RCS-${Date.now().toString().slice(-5)}`,
+      id: `RCS-${Date.now().toString().slice(-6)}`,
       customerName: newOrderName.trim(),
       roll: newOrderRoll.trim(),
       size: newOrderSize,
       quantity: newOrderQty,
       contact: newOrderContact.trim(),
+      email: newOrderEmail.trim() || undefined,
       notes: newOrderNotes.trim() || undefined,
       status: 'Confirmed',
+      paymentStatus: newOrderPaymentStatus,
       createdAt: new Date().toISOString(),
     };
     try {
       await createOrderInDb(order);
       broadcastLiveSync();
-      void addActivityLogInDb('Manual Order Added', `${order.id}: ${order.customerName} (${order.size} × ${order.quantity})`);
+      void addActivityLogInDb(
+        'Manual Order Added',
+        `${order.id}: ${order.customerName} (${order.size} × ${order.quantity} · ${order.paymentStatus})`
+      );
       await onRefreshData();
       setNewOrderName('');
       setNewOrderRoll('');
       setNewOrderContact('');
+      setNewOrderEmail('');
+      setNewOrderPaymentStatus('Due');
       setNewOrderNotes('');
       setNewOrderQty(1);
       setShowAddOrder(false);
-      onToast(`Order ${order.id} added.`, 'success');
+      onToast(`Order ${order.id} added (${order.paymentStatus}).`, 'success');
     } catch {
       onToast('Could not add order.', 'error');
     }
@@ -851,6 +1461,9 @@ export function AdminModal({
     onUpdateState({
       ...state,
       orders: state.orders.map((o) => (o.id === orderId ? { ...o, status } : o)),
+      publicOrders: (state.publicOrders || []).map((o) =>
+        o.id === orderId ? { ...o, status } : o
+      ),
     });
     try {
       await updateOrderStatusInDb(orderId, status, notes);
@@ -863,11 +1476,36 @@ export function AdminModal({
     }
   };
 
+  const handleOrderPaymentStatus = async (order: HoodieOrder, paymentStatus: PaymentStatus) => {
+    onUpdateState({
+      ...state,
+      orders: state.orders.map((o) => (o.id === order.id ? { ...o, paymentStatus } : o)),
+      publicOrders: (state.publicOrders || []).map((o) =>
+        o.id === order.id ? { ...o, paymentStatus } : o
+      ),
+    });
+    try {
+      await updateOrderStatusInDb(order.id, order.status, order.notes, { paymentStatus });
+      broadcastLiveSync();
+      void addActivityLogInDb(
+        'Order Payment Updated',
+        `Order ${order.id} (${order.customerName}) marked ${paymentStatus}`
+      );
+      setLiveSyncStatus('saved');
+      onToast(`Order ${order.id} marked as ${paymentStatus}.`, 'success');
+    } catch {
+      onToast('Could not update payment status.', 'error');
+    }
+  };
+
   const handleUpdateOrderDraft = (nextDraft: HoodieOrder) => {
     setOrderDraft(nextDraft);
     onUpdateState({
       ...state,
       orders: state.orders.map((o) => (o.id === nextDraft.id ? nextDraft : o)),
+      publicOrders: (state.publicOrders || []).map((o) =>
+        o.id === nextDraft.id ? { ...o, ...nextDraft, contact: '', email: undefined } : o
+      ),
     });
     scheduleOrderAutoSave(nextDraft);
   };
@@ -881,7 +1519,10 @@ export function AdminModal({
     try {
       pendingOrdersRef.current[orderDraft.id] = orderDraft;
       await flushOrder(orderDraft.id);
-      void addActivityLogInDb('Order Edited', `${orderDraft.id}: ${orderDraft.customerName} (${orderDraft.size})`);
+      void addActivityLogInDb(
+        'Order Edited',
+        `${orderDraft.id}: ${orderDraft.customerName} (${orderDraft.size} · ${orderDraft.paymentStatus || 'Due'})`
+      );
       setEditingOrderId(null);
       setOrderDraft(null);
       onToast(`Order ${orderDraft.id} synced live.`, 'success');
@@ -910,6 +1551,31 @@ export function AdminModal({
     }
   };
 
+  const handleBulkOrderPayment = async (paymentStatus: PaymentStatus) => {
+    if (selectedOrderIds.length === 0) return;
+    setIsSyncing(true);
+    try {
+      await Promise.all(
+        selectedOrderIds.map((id) => {
+          const ord = state.orders.find((o) => o.id === id);
+          return updateOrderStatusInDb(id, ord?.status || 'Pending', ord?.notes, { paymentStatus });
+        })
+      );
+      broadcastLiveSync();
+      void addActivityLogInDb(
+        'Bulk Payment Update',
+        `${selectedOrderIds.length} order(s) marked as ${paymentStatus}`
+      );
+      await onRefreshData();
+      setSelectedOrderIds([]);
+      onToast(`${selectedOrderIds.length} order(s) marked as ${paymentStatus}.`, 'success');
+    } catch {
+      onToast('Bulk payment update failed.', 'error');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const handleBulkDeleteOrders = async () => {
     if (selectedOrderIds.length === 0) return;
     setIsSyncing(true);
@@ -933,6 +1599,73 @@ export function AdminModal({
     );
   };
 
+  const handleCopyOrderEmailList = async (emails: string[], label: string, flashKey: string) => {
+    if (emails.length === 0) {
+      onToast(`No email addresses found in ${label}.`, 'info');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(emails.join(', '));
+      setCopiedOrderBulkMode(flashKey);
+      window.setTimeout(() => {
+        setCopiedOrderBulkMode((prev) => (prev === flashKey ? null : prev));
+      }, 2200);
+      onToast(`Copied ${emails.length} order email${emails.length > 1 ? 's' : ''} (${label}).`, 'success');
+    } catch {
+      onToast('Could not copy email list to clipboard.', 'error');
+    }
+  };
+
+  const handleCopySingleOrderEmail = async (orderId: string, email: string) => {
+    try {
+      await navigator.clipboard.writeText(email);
+      setCopiedOrderEmailId(orderId);
+      window.setTimeout(() => {
+        setCopiedOrderEmailId((prev) => (prev === orderId ? null : prev));
+      }, 1800);
+      onToast(`Copied ${email}`, 'success');
+    } catch {
+      onToast('Could not copy email.', 'error');
+    }
+  };
+
+  const handleSelectOrderMailTemplate = (templateId: string) => {
+    const tpl = ORDER_MAIL_TEMPLATES.find((t) => t.id === templateId);
+    if (!tpl) return;
+    setSelectedOrderMailTemplateId(tpl.id);
+    setOrderMailSubject(tpl.subject);
+    setOrderMailBody(tpl.body);
+  };
+
+  const toggleCustomOrderMailRecipient = (orderId: string) => {
+    setCustomOrderMailIds((prev) =>
+      prev.includes(orderId) ? prev.filter((item) => item !== orderId) : [...prev, orderId]
+    );
+  };
+
+  const handleOpenMailForSingleOrder = (order: HoodieOrder) => {
+    const tplId = order.paymentStatus === 'Paid' ? 'paid_confirmed' : 'due_700';
+    handleSelectOrderMailTemplate(tplId);
+    setCustomOrderMailIds([order.id]);
+    setOrderMailRecipientMode('custom');
+    document.getElementById('admin-orders-mail')?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const handleCopyOrderMailDraft = async () => {
+    const lines = [
+      `To / BCC (${resolvedOrderMailDraft.emails.length}): ${resolvedOrderMailDraft.joined || 'None selected'}`,
+      `Subject: ${resolvedOrderMailDraft.subject}`,
+      '',
+      resolvedOrderMailDraft.body,
+    ].join('\n');
+    try {
+      await navigator.clipboard.writeText(lines);
+      onToast('Order invoice email draft copied to clipboard.', 'success');
+    } catch {
+      onToast('Could not copy email draft.', 'error');
+    }
+  };
+
   const handleDeleteOrder = async (orderId: string) => {
     try {
       await deleteOrderInDb(orderId);
@@ -941,6 +1674,7 @@ export function AdminModal({
       await onRefreshData();
       setConfirmDeleteOrderId(null);
       setSelectedOrderIds((prev) => prev.filter((id) => id !== orderId));
+      setCustomOrderMailIds((prev) => prev.filter((id) => id !== orderId));
       onToast('Order removed.', 'info');
     } catch {
       onToast('Could not delete order.', 'error');
@@ -951,21 +1685,40 @@ export function AdminModal({
     const targetOrders =
       onlySelected && selectedOrderIds.length > 0
         ? state.orders.filter((o) => selectedOrderIds.includes(o.id))
-        : state.orders;
+        : filteredOrders;
     downloadCsv(
       `orthohin27_rcs_orders_${new Date().toISOString().slice(0, 10)}.csv`,
-      ['Order ID', 'Name', 'Roll', 'Size', 'Quantity', 'Contact', 'Notes', 'Status', 'Created At'],
-      targetOrders.map((o) => [
-        o.id,
-        o.customerName,
-        o.roll,
-        o.size,
-        o.quantity,
-        o.contact,
-        o.notes || '',
-        o.status,
-        o.createdAt,
-      ])
+      [
+        'Order ID',
+        'Name',
+        'Roll',
+        'Size',
+        'Quantity',
+        'Total (BDT)',
+        'Payment Status',
+        'Contact',
+        'Email',
+        'Notes',
+        'Status',
+        'Created At',
+      ],
+      targetOrders.map((o) => {
+        const fin = getOrderFinancials(o);
+        return [
+          o.id,
+          o.customerName,
+          o.roll,
+          o.size,
+          o.quantity,
+          fin.totalAmount,
+          fin.isPaid ? 'Paid' : 'Due',
+          o.contact,
+          resolveOrderEmail(o),
+          o.notes || '',
+          o.status,
+          o.createdAt,
+        ];
+      })
     );
     onToast(`Exported ${targetOrders.length} order(s) to CSV.`, 'success');
   };
@@ -980,9 +1733,19 @@ export function AdminModal({
     const member: Batchmate = {
       id: `bm-${Date.now()}`,
       name: newBmName.trim(),
+      nickname: newBmNickname.trim() || undefined,
       roll: newBmRoll.trim(),
       group: newBmGroup.trim() || 'Science',
+      email: newBmEmail.trim() || undefined,
+      phone: newBmPhone.trim() || undefined,
       social: newBmSocial.trim() || undefined,
+      hobbies: newBmHobbies.trim() || undefined,
+      bloodGroup: newBmBloodGroup.trim() || undefined,
+      birthday: newBmBirthday.trim() || undefined,
+      dreamGoal: newBmDreamGoal.trim() || undefined,
+      hangoutSpot: newBmHangoutSpot.trim() || undefined,
+      superpower: newBmSuperpower.trim() || undefined,
+      favoriteMemory: newBmFavoriteMemory.trim() || undefined,
       quote: newBmQuote.trim() || undefined,
       photo: newBmPhoto || undefined,
       registeredAt: new Date().toISOString().slice(0, 10),
@@ -993,8 +1756,18 @@ export function AdminModal({
       void addActivityLogInDb('Batchmate Added', `${member.name} (Roll ${member.roll}) added by admin`);
       await onRefreshData();
       setNewBmName('');
+      setNewBmNickname('');
       setNewBmRoll('');
+      setNewBmEmail('');
+      setNewBmPhone('');
       setNewBmSocial('');
+      setNewBmHobbies('');
+      setNewBmBloodGroup('');
+      setNewBmBirthday('');
+      setNewBmDreamGoal('');
+      setNewBmHangoutSpot('');
+      setNewBmSuperpower('');
+      setNewBmFavoriteMemory('');
       setNewBmQuote('');
       setNewBmPhoto('');
       setShowAddBm(false);
@@ -1083,19 +1856,130 @@ export function AdminModal({
       void addActivityLogInDb('Batchmate Removed', `${target?.name || id} removed from directory`);
       await onRefreshData();
       setConfirmDeleteBmId(null);
+      setSelectedBmIds((prev) => prev.filter((item) => item !== id));
+      setCustomMailIds((prev) => prev.filter((item) => item !== id));
       onToast('Batchmate removed from directory.', 'info');
     } catch {
       onToast('Could not remove batchmate.', 'error');
     }
   };
 
+  const toggleBmSelection = (id: string) => {
+    setSelectedBmIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAllFilteredBms = () => {
+    const filteredIds = filteredBatchmates.map((b) => b.id);
+    const allSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedBmIds.includes(id));
+    if (allSelected) {
+      setSelectedBmIds((prev) => prev.filter((id) => !filteredIds.includes(id)));
+    } else {
+      setSelectedBmIds((prev) => Array.from(new Set([...prev, ...filteredIds])));
+    }
+  };
+
+  const handleCopyEmailList = async (emails: string[], label: string, flashKey: string) => {
+    if (emails.length === 0) {
+      onToast(`No email addresses found in ${label}.`, 'info');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(emails.join(', '));
+      setCopiedBulkEmailsMode(flashKey);
+      window.setTimeout(() => {
+        setCopiedBulkEmailsMode((prev) => (prev === flashKey ? null : prev));
+      }, 2200);
+      onToast(`Copied ${emails.length} email address${emails.length > 1 ? 'es' : ''} (${label}).`, 'success');
+    } catch {
+      onToast('Could not copy email list to clipboard.', 'error');
+    }
+  };
+
+  const handleCopySingleBmEmail = async (id: string, email: string) => {
+    try {
+      await navigator.clipboard.writeText(email);
+      setCopiedBmEmailId(id);
+      window.setTimeout(() => {
+        setCopiedBmEmailId((prev) => (prev === id ? null : prev));
+      }, 1800);
+      onToast(`Copied ${email}`, 'success');
+    } catch {
+      onToast('Could not copy email.', 'error');
+    }
+  };
+
+  const handleSelectMailTemplate = (templateId: string) => {
+    const tpl = ADMIN_MAIL_TEMPLATES.find((t) => t.id === templateId);
+    if (!tpl) return;
+    setSelectedMailTemplateId(tpl.id);
+    setMailSubject(tpl.subject);
+    setMailBody(tpl.body);
+  };
+
+  const toggleCustomMailRecipient = (id: string) => {
+    setCustomMailIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleCopyMailDraft = async () => {
+    const lines = [
+      `To / BCC (${resolvedMailDraft.emails.length}): ${resolvedMailDraft.joined || 'None selected'}`,
+      `Subject: ${resolvedMailDraft.subject}`,
+      '',
+      resolvedMailDraft.body,
+    ].join('\n');
+    try {
+      await navigator.clipboard.writeText(lines);
+      onToast('Full email draft copied to clipboard.', 'success');
+    } catch {
+      onToast('Could not copy email draft.', 'error');
+    }
+  };
+
   const handleExportBatchmatesCsv = () => {
     downloadCsv(
       `orthohin27_batchmates_${new Date().toISOString().slice(0, 10)}.csv`,
-      ['Name', 'Roll', 'Group', 'Social', 'Quote', 'Registered At'],
-      state.batchmates.map((b) => [b.name, b.roll, b.group, b.social || '', b.quote || '', b.registeredAt || ''])
+      [
+        'Name',
+        'Nickname',
+        'Roll',
+        'Group',
+        'Email',
+        'Phone',
+        'Blood Group',
+        'Birthday',
+        'Hobbies',
+        'Dream Goal',
+        'Hangout Spot',
+        'Superpower',
+        'Favorite Memory',
+        'Social',
+        'Quote',
+        'Registered At',
+      ],
+      filteredBatchmates.map((b) => [
+        b.name,
+        b.nickname || '',
+        b.roll,
+        b.group,
+        b.email || '',
+        b.phone || '',
+        b.bloodGroup || '',
+        b.birthday || '',
+        b.hobbies || '',
+        b.dreamGoal || '',
+        b.hangoutSpot || '',
+        b.superpower || '',
+        b.favoriteMemory || '',
+        b.social || '',
+        b.quote || '',
+        b.registeredAt || '',
+      ])
     );
-    onToast('Batchmates CSV downloaded.', 'success');
+    onToast(`Exported ${filteredBatchmates.length} batchmate(s) to CSV.`, 'success');
   };
 
   /* Gallery Management */
@@ -2623,69 +3507,189 @@ export function AdminModal({
                 </div>
               )}
 
-              {/* TAB 3: FULL HOODIE ORDERS CONTROL */}
+              {/* TAB 3: FULL HOODIE ORDERS CONTROL, PAYMENTS & MAIL STUDIO */}
               {activeTab === 'orders' && (
-                <div className="space-y-4">
-                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="flex flex-wrap gap-1 p-1 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 w-fit">
-                        {(['All', 'Pending', 'Confirmed', 'Delivered'] as const).map((status) => (
-                          <button
-                            key={status}
-                            type="button"
-                            onClick={() => setOrderStatusFilter(status)}
-                            className={`px-3 py-1 rounded-md text-xs font-medium cursor-pointer ${
-                              orderStatusFilter === status
-                                ? 'bg-zinc-900 text-white dark:bg-zinc-800'
-                                : 'text-zinc-700 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'
-                            }`}
-                          >
-                            {status}
-                          </button>
-                        ))}
+                <div className="space-y-5">
+                  {/* Search, Filters & Actions Bar */}
+                  <div className="p-4 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none space-y-3">
+                    <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+                      <div className="flex flex-wrap items-center gap-2 flex-1">
+                        <div className="relative flex-1 min-w-[200px] max-w-xs">
+                          <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                          <input
+                            type="text"
+                            value={orderSearch}
+                            onChange={(e) => setOrderSearch(e.target.value)}
+                            placeholder="Search name, roll, Order ID, email..."
+                            className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500 focus:outline-none focus:border-rose-500"
+                          />
+                        </div>
+
+                        {/* Payment Status Filter */}
+                        <div className="flex items-center gap-1 p-1 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800">
+                          {(['All', 'Due', 'Paid'] as const).map((pay) => (
+                            <button
+                              key={pay}
+                              type="button"
+                              onClick={() => setOrderPaymentFilter(pay)}
+                              className={`px-2.5 py-1 rounded-md text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer ${
+                                orderPaymentFilter === pay
+                                  ? pay === 'Due'
+                                    ? 'bg-amber-600 text-white'
+                                    : pay === 'Paid'
+                                      ? 'bg-emerald-600 text-white'
+                                      : 'bg-zinc-900 text-white dark:bg-zinc-800'
+                                  : 'text-zinc-700 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'
+                              }`}
+                            >
+                              {pay === 'Due'
+                                ? `Due (${orderEmailStats.totalDueOrdersCount})`
+                                : pay === 'Paid'
+                                  ? `Paid (${orderEmailStats.totalPaidOrdersCount})`
+                                  : 'All Pay'}
+                            </button>
+                          ))}
+                        </div>
+
+                        <select
+                          value={orderStatusFilter}
+                          onChange={(e) => setOrderStatusFilter(e.target.value as 'All' | OrderStatus)}
+                          aria-label="Filter by order status"
+                          className="px-2.5 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white focus:outline-none focus:border-rose-500"
+                        >
+                          <option value="All">All Statuses</option>
+                          <option value="Pending">Pending</option>
+                          <option value="Confirmed">Confirmed</option>
+                          <option value="Delivered">Delivered</option>
+                        </select>
+
+                        <select
+                          value={orderSizeFilter}
+                          onChange={(e) => setOrderSizeFilter(e.target.value as 'All' | HoodieOrder['size'])}
+                          aria-label="Filter by hoodie size"
+                          className="px-2.5 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white focus:outline-none focus:border-rose-500"
+                        >
+                          <option value="All">All Sizes</option>
+                          {HOODIE_SIZES.map((sz) => (
+                            <option key={sz} value={sz}>
+                              Size {sz}
+                            </option>
+                          ))}
+                        </select>
+
+                        <select
+                          value={orderEmailFilter}
+                          onChange={(e) =>
+                            setOrderEmailFilter(e.target.value as 'all' | 'has_email' | 'missing_email')
+                          }
+                          aria-label="Filter by email status"
+                          className="px-2.5 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white focus:outline-none focus:border-rose-500"
+                        >
+                          <option value="all">All Emails</option>
+                          <option value="has_email">Has Email Only</option>
+                          <option value="missing_email">No Email Listed</option>
+                        </select>
                       </div>
 
-                      <select
-                        value={orderSizeFilter}
-                        onChange={(e) => setOrderSizeFilter(e.target.value as 'All' | HoodieOrder['size'])}
-                        aria-label="Filter by hoodie size"
-                        className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white focus:outline-none focus:border-rose-500"
-                      >
-                        <option value="All">All Sizes</option>
-                        {HOODIE_SIZES.map((sz) => (
-                          <option key={sz} value={sz}>
-                            Size {sz}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="flex flex-wrap items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleExportOrdersCsv(selectedOrderIds.length > 0)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-xs font-medium text-zinc-900 dark:text-white whitespace-nowrap shrink-0 cursor-pointer"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          {selectedOrderIds.length > 0 ? `CSV (${selectedOrderIds.length})` : `CSV (${filteredOrders.length})`}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowAddOrder((v) => !v)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-xs font-semibold text-white whitespace-nowrap shrink-0 cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" /> Add Manual Order
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="relative flex-1 sm:flex-initial">
-                        <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                        <input
-                          type="text"
-                          value={orderSearch}
-                          onChange={(e) => setOrderSearch(e.target.value)}
-                          placeholder="Search name, roll, contact..."
-                          className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500 focus:outline-none focus:border-rose-500"
-                        />
+                    {/* One-Click Email Copy & Invoice Mail Studio Jump Bar */}
+                    <div className="pt-3 border-t border-zinc-200 dark:border-zinc-800 flex flex-wrap items-center justify-between gap-2.5">
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-700 dark:text-zinc-400">
+                        <span className="inline-flex items-center gap-1.5 font-medium text-zinc-950 dark:text-zinc-200">
+                          <Filter className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                          Showing <span className="font-mono font-bold tabular-nums">{filteredOrders.length}</span> of{' '}
+                          <span className="font-mono font-bold tabular-nums">{(state.orders || []).length}</span>
+                        </span>
+                        <span className="text-zinc-400 dark:text-zinc-600">·</span>
+                        <span>
+                          Due Emails:{' '}
+                          <span className="font-mono font-semibold text-amber-700 dark:text-amber-400 tabular-nums">
+                            {orderEmailStats.dueEmails.length}
+                          </span>
+                        </span>
+                        <span className="text-zinc-400 dark:text-zinc-600">·</span>
+                        <span>
+                          Paid Emails:{' '}
+                          <span className="font-mono font-semibold text-emerald-700 dark:text-emerald-400 tabular-nums">
+                            {orderEmailStats.paidEmails.length}
+                          </span>
+                        </span>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => handleExportOrdersCsv(selectedOrderIds.length > 0)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-zinc-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-xs font-medium text-zinc-900 dark:text-white cursor-pointer shrink-0"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                        {selectedOrderIds.length > 0 ? `CSV (${selectedOrderIds.length})` : 'CSV'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setShowAddOrder((v) => !v)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-xs font-semibold text-white cursor-pointer shrink-0"
-                      >
-                        <Plus className="w-3.5 h-3.5" /> Add Manual Order
-                      </button>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void handleCopyOrderEmailList(
+                              orderEmailStats.dueEmails,
+                              'Due 700 Taka orders',
+                              'due'
+                            )
+                          }
+                          disabled={orderEmailStats.dueEmails.length === 0}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 disabled:opacity-40 text-white text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer disabled:cursor-not-allowed"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                          {copiedOrderBulkMode === 'due'
+                            ? 'Copied Due Emails'
+                            : `Copy Due Emails (${orderEmailStats.dueEmails.length})`}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void handleCopyOrderEmailList(
+                              orderEmailStats.paidEmails,
+                              'Paid orders',
+                              'paid'
+                            )
+                          }
+                          disabled={orderEmailStats.paidEmails.length === 0}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer disabled:cursor-not-allowed"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                          {copiedOrderBulkMode === 'paid'
+                            ? 'Copied Paid Emails'
+                            : `Copy Paid Emails (${orderEmailStats.paidEmails.length})`}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (selectedOrderIds.length > 0) {
+                              setOrderMailRecipientMode('selected');
+                            } else if (orderPaymentFilter === 'Paid') {
+                              setOrderMailRecipientMode('paid');
+                              handleSelectOrderMailTemplate('paid_confirmed');
+                            } else {
+                              setOrderMailRecipientMode('due');
+                              handleSelectOrderMailTemplate('due_700');
+                            }
+                            document
+                              .getElementById('admin-orders-mail')
+                              ?.scrollIntoView({ behavior: 'smooth' });
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-white text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer"
+                        >
+                          <Mail className="w-3.5 h-3.5" /> Send Mail &amp; Invoice
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -2695,7 +3699,7 @@ export function AdminModal({
                       className="p-4 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none space-y-3"
                     >
                       <p className="text-xs font-bold text-zinc-950 dark:text-white">Add Offline / Direct Order</p>
-                      <div className="grid sm:grid-cols-3 gap-2.5">
+                      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
                         <input
                           type="text"
                           required
@@ -2720,8 +3724,15 @@ export function AdminModal({
                           placeholder="Phone or @instagram *"
                           className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500"
                         />
+                        <input
+                          type="email"
+                          value={newOrderEmail}
+                          onChange={(e) => setNewOrderEmail(e.target.value)}
+                          placeholder="Email Address (for invoice mail)"
+                          className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500"
+                        />
                       </div>
-                      <div className="grid sm:grid-cols-3 gap-2.5">
+                      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
                         <select
                           value={newOrderSize}
                           onChange={(e) => setNewOrderSize(e.target.value as HoodieOrder['size'])}
@@ -2740,9 +3751,18 @@ export function AdminModal({
                         >
                           {[1, 2, 3, 4, 5].map((q) => (
                             <option key={q} value={q}>
-                              Qty: {q}
+                              Qty: {q} ({q * HOODIE_UNIT_PRICE} Taka)
                             </option>
                           ))}
+                        </select>
+                        <select
+                          value={newOrderPaymentStatus}
+                          onChange={(e) => setNewOrderPaymentStatus(e.target.value as PaymentStatus)}
+                          aria-label="Payment status"
+                          className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 font-mono text-xs text-zinc-950 dark:text-white"
+                        >
+                          <option value="Due">Due ({newOrderQty * HOODIE_UNIT_PRICE} Taka)</option>
+                          <option value="Paid">Paid ({newOrderQty * HOODIE_UNIT_PRICE} Taka)</option>
                         </select>
                         <input
                           type="text"
@@ -2764,7 +3784,7 @@ export function AdminModal({
                           type="submit"
                           className="px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-white text-xs font-semibold cursor-pointer"
                         >
-                          Create Confirmed Order
+                          Create Order
                         </button>
                       </div>
                     </form>
@@ -2795,16 +3815,32 @@ export function AdminModal({
                           <button
                             type="button"
                             disabled={isSyncing}
-                            onClick={() => void handleBulkOrderStatus('Confirmed')}
-                            className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 dark:hover:bg-emerald-500 text-white text-xs font-medium cursor-pointer"
+                            onClick={() => void handleBulkOrderPayment('Paid')}
+                            className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer"
                           >
-                            Confirm Selected
+                            Mark Paid
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isSyncing}
+                            onClick={() => void handleBulkOrderPayment('Due')}
+                            className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer"
+                          >
+                            Mark Due (৳700)
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isSyncing}
+                            onClick={() => void handleBulkOrderStatus('Confirmed')}
+                            className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-700 dark:hover:bg-zinc-600 text-white text-xs font-medium whitespace-nowrap shrink-0 cursor-pointer"
+                          >
+                            Confirm Order
                           </button>
                           <button
                             type="button"
                             disabled={isSyncing}
                             onClick={() => void handleBulkOrderStatus('Delivered')}
-                            className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-900 dark:bg-zinc-700 dark:hover:bg-zinc-600 text-white text-xs font-medium cursor-pointer"
+                            className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-900 dark:bg-zinc-700 dark:hover:bg-zinc-600 text-white text-xs font-medium whitespace-nowrap shrink-0 cursor-pointer"
                           >
                             Mark Delivered
                           </button>
@@ -2812,9 +3848,9 @@ export function AdminModal({
                             type="button"
                             disabled={isSyncing}
                             onClick={() => void handleBulkDeleteOrders()}
-                            className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-white text-xs font-medium cursor-pointer"
+                            className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-medium whitespace-nowrap shrink-0 cursor-pointer"
                           >
-                            Delete Selected
+                            Delete
                           </button>
                           <button
                             type="button"
@@ -2837,6 +3873,9 @@ export function AdminModal({
                       {filteredOrders.map((order) => {
                         const isSelected = selectedOrderIds.includes(order.id);
                         const isEditing = editingOrderId === order.id && orderDraft;
+                        const financials = getOrderFinancials(order);
+                        const resolvedEmail = resolveOrderEmail(order);
+
                         return (
                           <div
                             key={order.id}
@@ -2844,7 +3883,7 @@ export function AdminModal({
                               isSelected ? 'border-rose-500/70 dark:border-rose-500/50' : 'border-zinc-300 dark:border-zinc-800'
                             }`}
                           >
-                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                               <div className="flex items-start gap-3">
                                 <input
                                   type="checkbox"
@@ -2853,32 +3892,96 @@ export function AdminModal({
                                   aria-label={`Select order ${order.id}`}
                                   className="mt-1 accent-rose-600 cursor-pointer"
                                 />
-                                <div className="space-y-1">
+                                <div className="space-y-1.5 min-w-0">
                                   <div className="flex flex-wrap items-center gap-2 text-sm font-bold text-zinc-950 dark:text-white">
-                                    <span className="font-mono text-rose-700 dark:text-rose-400">{order.id}</span>
+                                    <span className="font-mono text-rose-700 dark:text-rose-400 select-all">{order.id}</span>
                                     <span>·</span>
                                     <span>{order.customerName}</span>
-                                    <span className="text-xs font-mono text-zinc-600 dark:text-zinc-400">
-                                      (Roll {order.roll} · Size {order.size} × {order.quantity})
+                                    <span className="text-xs font-mono text-zinc-600 dark:text-zinc-400 tabular-nums">
+                                      (Roll {order.roll} · Size {order.size} × {financials.qty} · ৳{financials.totalAmount})
                                     </span>
                                   </div>
-                                  <p className="text-xs text-zinc-600 dark:text-zinc-400">
-                                    Contact: <span className="text-zinc-900 dark:text-zinc-200">{order.contact}</span>
-                                    {order.notes ? ` · Note: ${order.notes}` : ''}
-                                  </p>
+
+                                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-600 dark:text-zinc-400">
+                                    <span>
+                                      Contact: <span className="text-zinc-900 dark:text-zinc-200">{order.contact}</span>
+                                    </span>
+                                    {resolvedEmail ? (
+                                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-900 dark:text-emerald-300">
+                                        <Mail className="w-3 h-3 shrink-0" />
+                                        <span className="font-mono text-[11px]">{resolvedEmail}</span>
+                                        <button
+                                          type="button"
+                                          onClick={() => void handleCopySingleOrderEmail(order.id, resolvedEmail)}
+                                          title="Copy email"
+                                          className="text-emerald-700 hover:text-emerald-950 dark:text-emerald-400 dark:hover:text-white cursor-pointer"
+                                        >
+                                          {copiedOrderEmailId === order.id ? (
+                                            <Check className="w-3 h-3" />
+                                          ) : (
+                                            <Copy className="w-3 h-3" />
+                                          )}
+                                        </button>
+                                      </span>
+                                    ) : (
+                                      <span className="text-[11px] italic text-zinc-500">
+                                        No email saved (click Edit to add)
+                                      </span>
+                                    )}
+                                    {order.notes && <span>Note: {order.notes}</span>}
+                                  </div>
                                 </div>
                               </div>
 
                               <div className="flex flex-wrap items-center gap-2 shrink-0">
+                                {/* 1-Click Due 700 Taka / Paid Toggle */}
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    void handleOrderPaymentStatus(
+                                      order,
+                                      financials.isPaid ? 'Due' : 'Paid'
+                                    )
+                                  }
+                                  title="Click to toggle Paid vs Due 700 Taka"
+                                  className={`px-2.5 py-1.5 rounded-lg border text-xs font-mono font-bold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
+                                    financials.isPaid
+                                      ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-400 dark:border-emerald-500/50 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-950'
+                                      : 'bg-amber-50 dark:bg-amber-950/60 border-amber-400 dark:border-amber-500/50 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-950'
+                                  }`}
+                                >
+                                  {financials.isPaid ? (
+                                    <>
+                                      <CheckCircle2 className="w-3.5 h-3.5" /> Paid (৳{financials.totalAmount})
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Clock className="w-3.5 h-3.5" /> Due (৳{financials.dueAmount})
+                                    </>
+                                  )}
+                                </button>
+
+                                {resolvedEmail && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenMailForSingleOrder(order)}
+                                    title={`Send ${financials.isPaid ? 'Paid' : 'Due 700 Taka'} invoice mail to ${order.customerName}`}
+                                    className="px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-600 dark:bg-rose-950/40 dark:hover:bg-rose-600 border border-rose-300 dark:border-rose-500/40 text-rose-700 hover:text-white dark:text-rose-300 dark:hover:text-white text-xs font-semibold inline-flex items-center gap-1 whitespace-nowrap shrink-0 transition-colors cursor-pointer"
+                                  >
+                                    <Mail className="w-3 h-3" /> Send Mail
+                                  </button>
+                                )}
+
                                 <button
                                   type="button"
                                   onClick={() => void downloadOrderInvoicePng(order, hc)}
-                                  title="Download official order invoice"
-                                  className="px-2.5 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-xs text-zinc-900 dark:text-zinc-200 inline-flex items-center gap-1 cursor-pointer"
+                                  title="Download official order invoice PNG"
+                                  className="px-2.5 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-xs text-zinc-900 dark:text-zinc-200 inline-flex items-center gap-1 whitespace-nowrap shrink-0 cursor-pointer"
                                 >
                                   <Download className="w-3 h-3" />
                                   Invoice
                                 </button>
+
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -2887,7 +3990,11 @@ export function AdminModal({
                                       setOrderDraft(null);
                                     } else {
                                       setEditingOrderId(order.id);
-                                      setOrderDraft({ ...order });
+                                      setOrderDraft({
+                                        ...order,
+                                        email: order.email || resolvedEmail,
+                                        paymentStatus: order.paymentStatus === 'Paid' ? 'Paid' : 'Due',
+                                      });
                                     }
                                   }}
                                   className="px-2.5 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-xs text-zinc-900 dark:text-zinc-200 cursor-pointer"
@@ -2939,7 +4046,7 @@ export function AdminModal({
                             </div>
 
                             {isEditing && (
-                              <div className="grid sm:grid-cols-3 gap-2.5 pt-3 border-t border-zinc-200 dark:border-zinc-800">
+                              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-3 border-t border-zinc-200 dark:border-zinc-800">
                                 <input
                                   type="text"
                                   value={orderDraft.customerName}
@@ -2964,7 +4071,16 @@ export function AdminModal({
                                   onChange={(e) =>
                                     handleUpdateOrderDraft({ ...orderDraft, contact: e.target.value })
                                   }
-                                  placeholder="Contact"
+                                  placeholder="Phone / Social Contact"
+                                  className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
+                                />
+                                <input
+                                  type="email"
+                                  value={orderDraft.email || ''}
+                                  onChange={(e) =>
+                                    handleUpdateOrderDraft({ ...orderDraft, email: e.target.value })
+                                  }
+                                  placeholder="Customer Email"
                                   className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
                                 />
                                 <select
@@ -2992,9 +4108,23 @@ export function AdminModal({
                                 >
                                   {[1, 2, 3, 4, 5].map((q) => (
                                     <option key={q} value={q}>
-                                      Qty: {q}
+                                      Qty: {q} ({q * HOODIE_UNIT_PRICE} Taka)
                                     </option>
                                   ))}
+                                </select>
+                                <select
+                                  value={orderDraft.paymentStatus === 'Paid' ? 'Paid' : 'Due'}
+                                  onChange={(e) =>
+                                    handleUpdateOrderDraft({
+                                      ...orderDraft,
+                                      paymentStatus: e.target.value as PaymentStatus,
+                                    })
+                                  }
+                                  aria-label="Edit order payment status"
+                                  className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 font-mono text-xs text-zinc-950 dark:text-white"
+                                >
+                                  <option value="Due">Payment: Due</option>
+                                  <option value="Paid">Payment: Paid</option>
                                 </select>
                                 <input
                                   type="text"
@@ -3005,7 +4135,7 @@ export function AdminModal({
                                   placeholder="Internal / Delivery Note"
                                   className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
                                 />
-                                <div className="sm:col-span-3 flex justify-end gap-2">
+                                <div className="sm:col-span-2 lg:col-span-4 flex justify-end gap-2">
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -3031,64 +4161,577 @@ export function AdminModal({
                       })}
                     </div>
                   )}
+
+                  {/* HOODIE ORDER SEND MAIL & INVOICE STUDIO */}
+                  <section
+                    id="admin-orders-mail"
+                    className="p-5 rounded-2xl bg-white dark:bg-[#111116] border border-rose-300 dark:border-rose-500/30 shadow-xs dark:shadow-none space-y-5"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-zinc-200 dark:border-zinc-800">
+                      <div className="space-y-1">
+                        <div className="inline-flex items-center gap-2 text-rose-700 dark:text-rose-400 text-xs font-bold uppercase tracking-wider">
+                          <Mail className="w-4 h-4" />
+                          Hoodie Orders · Send Mail &amp; Invoice Studio
+                        </div>
+                        <h3 className="text-base font-bold text-zinc-950 dark:text-white">
+                          Send Payment Due (700 Taka) &amp; Paid Invoices Directly
+                        </h3>
+                        <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                          Ready-made invoice email templates with exact Order ID, Due/Paid amount, and 1-click Mail app or Gmail launcher.
+                        </p>
+                      </div>
+
+                      <div className="inline-flex items-center gap-1 p-1 rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 self-start">
+                        {(['bcc', 'to'] as const).map((field) => (
+                          <button
+                            key={field}
+                            type="button"
+                            onClick={() => setOrderMailAddressField(field)}
+                            className={`px-2.5 py-1 rounded-md text-[11px] font-semibold uppercase cursor-pointer ${
+                              orderMailAddressField === field
+                                ? 'bg-rose-600 text-white'
+                                : 'text-zinc-700 dark:text-zinc-300 hover:text-zinc-950'
+                            }`}
+                          >
+                            {field}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Step 1: Select Order Recipients */}
+                    <div className="space-y-2.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-200">
+                          1. Select Order Recipients ({resolvedOrderMailDraft.emails.length} email
+                          {resolvedOrderMailDraft.emails.length === 1 ? '' : 's'})
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOrderMailRecipientMode('due');
+                              handleSelectOrderMailTemplate('due_700');
+                            }}
+                            className={`px-3 py-1 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+                              orderMailRecipientMode === 'due'
+                                ? 'bg-amber-600 text-white font-semibold'
+                                : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 border border-zinc-300 dark:border-zinc-800'
+                            }`}
+                          >
+                            Payment Due ({orderEmailStats.dueEmails.length})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOrderMailRecipientMode('paid');
+                              handleSelectOrderMailTemplate('paid_confirmed');
+                            }}
+                            className={`px-3 py-1 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+                              orderMailRecipientMode === 'paid'
+                                ? 'bg-emerald-600 text-white font-semibold'
+                                : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 border border-zinc-300 dark:border-zinc-800'
+                            }`}
+                          >
+                            Paid Orders ({orderEmailStats.paidEmails.length})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setOrderMailRecipientMode('filtered')}
+                            className={`px-3 py-1 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+                              orderMailRecipientMode === 'filtered'
+                                ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-950 font-semibold'
+                                : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 border border-zinc-300 dark:border-zinc-800'
+                            }`}
+                          >
+                            Current Filter ({orderEmailStats.filteredEmails.length})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setOrderMailRecipientMode('selected')}
+                            className={`px-3 py-1 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+                              orderMailRecipientMode === 'selected'
+                                ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-950 font-semibold'
+                                : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 border border-zinc-300 dark:border-zinc-800'
+                            }`}
+                          >
+                            Checked ({orderEmailStats.selectedEmails.length})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setOrderMailRecipientMode('custom')}
+                            className={`px-3 py-1 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+                              orderMailRecipientMode === 'custom'
+                                ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-950 font-semibold'
+                                : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 border border-zinc-300 dark:border-zinc-800'
+                            }`}
+                          >
+                            Pick Orders
+                          </button>
+                        </div>
+                      </div>
+
+                      {orderMailRecipientMode === 'custom' && (
+                        <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 space-y-2">
+                          {orderEmailStats.allOrdersWithEmail.length === 0 ? (
+                            <p className="text-xs text-zinc-500">
+                              No hoodie orders have an email address saved yet. Click Edit on an order to add one.
+                            </p>
+                          ) : (
+                            <div className="flex flex-wrap gap-1.5">
+                              {orderEmailStats.allOrdersWithEmail.map((ord) => {
+                                const active = customOrderMailIds.includes(ord.id);
+                                const em = resolveOrderEmail(ord);
+                                const fin = getOrderFinancials(ord);
+                                return (
+                                  <button
+                                    key={ord.id}
+                                    type="button"
+                                    onClick={() => toggleCustomOrderMailRecipient(ord.id)}
+                                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium border cursor-pointer transition-colors ${
+                                      active
+                                        ? 'bg-rose-600 border-rose-600 text-white font-semibold'
+                                        : 'bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-300 hover:border-rose-500'
+                                    }`}
+                                  >
+                                    {active ? <Check className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
+                                    <span>{ord.customerName}</span>
+                                    <span className="font-mono opacity-80">
+                                      ({ord.id} · {fin.isPaid ? 'Paid' : `Due ৳${fin.dueAmount}`} · {em})
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-[11px] font-mono text-zinc-700 dark:text-zinc-300 flex items-center justify-between gap-2">
+                        <span className="truncate">
+                          {resolvedOrderMailDraft.emails.length > 0
+                            ? `${orderMailAddressField.toUpperCase()}: ${resolvedOrderMailDraft.joined}`
+                            : 'No recipient emails found in this order filter yet.'}
+                        </span>
+                        {resolvedOrderMailDraft.emails.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void handleCopyOrderEmailList(
+                                resolvedOrderMailDraft.emails,
+                                'order recipients',
+                                'mail_recips'
+                              )
+                            }
+                            className="inline-flex items-center gap-1 text-rose-700 dark:text-rose-400 hover:underline font-sans font-semibold shrink-0 cursor-pointer"
+                          >
+                            <Copy className="w-3 h-3" />
+                            {copiedOrderBulkMode === 'mail_recips' ? 'Copied' : 'Copy'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Step 2: Ready-Made Templates */}
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-200">
+                        2. Choose Invoice / Order Email Template
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
+                        {ORDER_MAIL_TEMPLATES.map((tpl) => {
+                          const active = selectedOrderMailTemplateId === tpl.id;
+                          return (
+                            <button
+                              key={tpl.id}
+                              type="button"
+                              onClick={() => handleSelectOrderMailTemplate(tpl.id)}
+                              className={`text-left p-3 rounded-xl border transition-colors cursor-pointer space-y-1 ${
+                                active
+                                  ? 'bg-rose-50 dark:bg-rose-950/35 border-rose-500 text-zinc-950 dark:text-white'
+                                  : 'bg-zinc-50 dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-800 hover:border-zinc-400 dark:hover:border-zinc-600 text-zinc-800 dark:text-zinc-300'
+                              }`}
+                            >
+                              <p
+                                className={`text-[10px] font-semibold uppercase tracking-wider ${
+                                  tpl.id === 'due_700'
+                                    ? 'text-amber-700 dark:text-amber-400'
+                                    : tpl.id === 'paid_confirmed'
+                                      ? 'text-emerald-700 dark:text-emerald-400'
+                                      : 'text-rose-700 dark:text-rose-400'
+                                }`}
+                              >
+                                {tpl.tag}
+                              </p>
+                              <p className="text-xs font-semibold truncate">{tpl.label}</p>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Step 3: Subject & Body Editor */}
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-200">
+                          3. Customize Subject &amp; Message
+                        </p>
+                        <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-600 dark:text-zinc-400">
+                          <span>Insert:</span>
+                          {[
+                            '{orderId}',
+                            '{name}',
+                            '{roll}',
+                            '{size}',
+                            '{qty}',
+                            '{amount}',
+                            '{dueAmount}',
+                            '{paymentStatus}',
+                          ].map((token) => (
+                            <button
+                              key={token}
+                              type="button"
+                              onClick={() =>
+                                setOrderMailBody((prev) => `${prev}${prev.endsWith(' ') || !prev ? '' : ' '}${token}`)
+                              }
+                              className="px-2 py-0.5 rounded bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 font-mono text-[11px] text-zinc-900 dark:text-zinc-200 cursor-pointer"
+                            >
+                              {token}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <input
+                        type="text"
+                        value={orderMailSubject}
+                        onChange={(e) => setOrderMailSubject(e.target.value)}
+                        placeholder="Email subject..."
+                        className="w-full px-3.5 py-2.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs font-medium text-zinc-950 dark:text-white placeholder:text-zinc-500 focus:outline-none focus:border-rose-500"
+                      />
+
+                      <textarea
+                        rows={7}
+                        value={orderMailBody}
+                        onChange={(e) => setOrderMailBody(e.target.value)}
+                        placeholder="Write your invoice email body..."
+                        className="w-full px-3.5 py-2.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500 leading-relaxed focus:outline-none focus:border-rose-500 resize-y"
+                      />
+                    </div>
+
+                    {/* Step 4: Individual Exact-ID Personalized Quick Send + Bulk Launch */}
+                    {resolvedOrderMailDraft.individualLinks.length > 0 && (
+                      <div className="p-3.5 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 space-y-2.5">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-200">
+                            4A. Send Personalized Email with Exact Order ID &amp; Downloadable Invoice (
+                            {resolvedOrderMailDraft.individualLinks.length})
+                          </p>
+                          <span className="text-[11px] text-zinc-500">
+                            Pre-fills exact Order ID &amp; Due/Paid invoice per student
+                          </span>
+                        </div>
+                        <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                          {resolvedOrderMailDraft.individualLinks.map((item) => {
+                            const fin = getOrderFinancials(item.order);
+                            return (
+                              <div
+                                key={item.order.id}
+                                className="p-2.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 flex flex-wrap items-center justify-between gap-2 text-xs"
+                              >
+                                <div className="min-w-0 space-y-0.5">
+                                  <p className="font-semibold text-zinc-950 dark:text-white truncate">
+                                    {item.order.customerName}{' '}
+                                    <span className="font-mono text-rose-700 dark:text-rose-400">
+                                      ({item.order.id})
+                                    </span>
+                                  </p>
+                                  <p className="text-[11px] font-mono text-zinc-600 dark:text-zinc-400 truncate">
+                                    {item.email} · {fin.isPaid ? `Paid ৳${fin.totalAmount}` : `Due ৳${fin.dueAmount}`}
+                                  </p>
+                                </div>
+
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => void downloadOrderInvoicePng(item.order, hc)}
+                                    title="Download exact Invoice PNG to attach"
+                                    className="px-2.5 py-1 rounded-md bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-[11px] font-medium text-zinc-900 dark:text-zinc-200 inline-flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                                  >
+                                    <Download className="w-3 h-3" /> PNG
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => downloadOrderInvoiceHtml(item.order, hc)}
+                                    title="Download printable invoice slip"
+                                    className="px-2 py-1 rounded-md bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-[11px] font-medium text-zinc-900 dark:text-zinc-200 inline-flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                                  >
+                                    <FileText className="w-3 h-3" /> Slip
+                                  </button>
+                                  <a
+                                    href={item.gmailHref}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="px-2.5 py-1 rounded-md bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-700 dark:hover:bg-zinc-600 text-white text-[11px] font-semibold inline-flex items-center gap-1 whitespace-nowrap"
+                                  >
+                                    <ExternalLink className="w-3 h-3" /> Gmail
+                                  </a>
+                                  <a
+                                    href={item.mailtoHref}
+                                    className="px-2.5 py-1 rounded-md bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-semibold inline-flex items-center gap-1 whitespace-nowrap"
+                                  >
+                                    <Send className="w-3 h-3" /> Mail App
+                                  </a>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Bulk Mail App / Gmail Web Footer */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-zinc-200 dark:border-zinc-800">
+                      <p className="text-[11px] text-zinc-600 dark:text-zinc-400">
+                        Opens your phone or PC default Mail app / Gmail directly with selected recipients, subject &amp; invoice message.
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void handleCopyOrderMailDraft()}
+                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-xs font-medium text-zinc-900 dark:text-zinc-200 whitespace-nowrap shrink-0 cursor-pointer"
+                        >
+                          <Copy className="w-3.5 h-3.5" /> Copy Draft
+                        </button>
+                        {resolvedOrderMailDraft.singleOrder && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void downloadOrderInvoicePng(resolvedOrderMailDraft.singleOrder!, hc)
+                            }
+                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-xs font-medium text-zinc-900 dark:text-zinc-200 whitespace-nowrap shrink-0 cursor-pointer"
+                          >
+                            <Download className="w-3.5 h-3.5" /> Download Invoice PNG
+                          </button>
+                        )}
+                        <a
+                          href={resolvedOrderMailDraft.gmailHref}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-white text-xs font-semibold whitespace-nowrap shrink-0 transition-colors"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" /> Open Gmail Web
+                        </a>
+                        <a
+                          href={resolvedOrderMailDraft.mailtoHref}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-white text-xs font-semibold whitespace-nowrap shrink-0 transition-colors"
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                          {resolvedOrderMailDraft.emails.length > 0
+                            ? `Open Mail App (${resolvedOrderMailDraft.emails.length})`
+                            : 'Open Mail App'}
+                        </a>
+                      </div>
+                    </div>
+                  </section>
                 </div>
               )}
 
-              {/* TAB 4: FULL BATCHMATES CONTROL */}
+              {/* TAB 4: FULL BATCHMATES CONTROL & SEND MAIL STUDIO */}
               {activeTab === 'batchmates' && (
-                <div className="space-y-4">
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                    <div className="flex flex-wrap items-center gap-2 flex-1">
-                      <div className="relative flex-1 min-w-[200px] max-w-xs">
-                        <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                        <input
-                          type="text"
-                          value={bmSearch}
-                          onChange={(e) => setBmSearch(e.target.value)}
-                          placeholder="Search name, roll, or group..."
-                          className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500 focus:outline-none focus:border-rose-500"
-                        />
+                <div className="space-y-5">
+                  {/* Top Search, Multi-Filters & Actions Bar */}
+                  <div className="p-4 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none space-y-3">
+                    <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+                      <div className="flex flex-wrap items-center gap-2 flex-1">
+                        <div className="relative flex-1 min-w-[210px] max-w-sm">
+                          <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                          <input
+                            type="text"
+                            value={bmSearch}
+                            onChange={(e) => setBmSearch(e.target.value)}
+                            placeholder="Search name, roll, email, phone, hobby, dream..."
+                            className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500 focus:outline-none focus:border-rose-500"
+                          />
+                        </div>
+                        <select
+                          value={bmGroupFilter}
+                          onChange={(e) => setBmGroupFilter(e.target.value)}
+                          aria-label="Filter by group"
+                          className="px-2.5 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white focus:outline-none focus:border-rose-500"
+                        >
+                          <option value="All">All Groups</option>
+                          {analytics.groupNames.map((grp) => (
+                            <option key={grp} value={grp}>
+                              {grp}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          value={bmBloodFilter}
+                          onChange={(e) => setBmBloodFilter(e.target.value)}
+                          aria-label="Filter by blood group"
+                          className="px-2.5 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white focus:outline-none focus:border-rose-500"
+                        >
+                          <option value="All">All Blood Groups</option>
+                          {BLOOD_GROUP_OPTIONS.map((bg) => (
+                            <option key={bg} value={bg}>
+                              {bg}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          value={bmEmailFilter}
+                          onChange={(e) =>
+                            setBmEmailFilter(e.target.value as 'all' | 'has_email' | 'missing_email')
+                          }
+                          aria-label="Filter by email status"
+                          className="px-2.5 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white focus:outline-none focus:border-rose-500"
+                        >
+                          <option value="all">All Email Status</option>
+                          <option value="has_email">Has Email Only</option>
+                          <option value="missing_email">No Email Listed</option>
+                        </select>
+                        {(bmSearch || bmGroupFilter !== 'All' || bmBloodFilter !== 'All' || bmEmailFilter !== 'all') && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setBmSearch('');
+                              setBmGroupFilter('All');
+                              setBmBloodFilter('All');
+                              setBmEmailFilter('all');
+                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-xs font-medium text-zinc-800 dark:text-zinc-200 whitespace-nowrap shrink-0 cursor-pointer"
+                          >
+                            <RotateCcw className="w-3 h-3" /> Reset
+                          </button>
+                        )}
                       </div>
-                      <select
-                        value={bmGroupFilter}
-                        onChange={(e) => setBmGroupFilter(e.target.value)}
-                        aria-label="Filter by group"
-                        className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white focus:outline-none focus:border-rose-500"
-                      >
-                        <option value="All">All Groups</option>
-                        {analytics.groupNames.map((grp) => (
-                          <option key={grp} value={grp}>
-                            {grp}
-                          </option>
-                        ))}
-                      </select>
+
+                      <div className="flex flex-wrap items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={handleExportBatchmatesCsv}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-xs font-medium text-zinc-900 dark:text-white whitespace-nowrap shrink-0 cursor-pointer"
+                        >
+                          <Download className="w-3.5 h-3.5" /> CSV ({filteredBatchmates.length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowAddBm((v) => !v)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-xs font-semibold text-white whitespace-nowrap shrink-0 cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" /> Add Batchmate
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={handleExportBatchmatesCsv}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-zinc-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-xs font-medium text-zinc-900 dark:text-white cursor-pointer"
-                      >
-                        <Download className="w-3.5 h-3.5" /> CSV
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setShowAddBm((v) => !v)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-xs font-semibold text-white cursor-pointer"
-                      >
-                        <Plus className="w-3.5 h-3.5" /> Add Batchmate
-                      </button>
+                    {/* One-Click Email Copy & Bulk Mail Jump Strip */}
+                    <div className="pt-3 border-t border-zinc-200 dark:border-zinc-800 flex flex-wrap items-center justify-between gap-2.5">
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-700 dark:text-zinc-400">
+                        <span className="inline-flex items-center gap-1.5 font-medium text-zinc-950 dark:text-zinc-200">
+                          <Filter className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                          Showing <span className="font-mono font-bold tabular-nums">{filteredBatchmates.length}</span> of{' '}
+                          <span className="font-mono font-bold tabular-nums">{state.batchmates.length}</span>
+                        </span>
+                        <span className="text-zinc-400 dark:text-zinc-600">·</span>
+                        <span>
+                          Filtered Emails:{' '}
+                          <span className="font-mono font-semibold text-emerald-700 dark:text-emerald-400 tabular-nums">
+                            {filteredBatchmateEmails.length}
+                          </span>
+                        </span>
+                        <span className="text-zinc-400 dark:text-zinc-600">·</span>
+                        <span>
+                          Selected:{' '}
+                          <span className="font-mono font-semibold text-zinc-950 dark:text-white tabular-nums">
+                            {selectedBmIds.length}
+                          </span>
+                        </span>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={handleSelectAllFilteredBms}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-xs font-medium text-zinc-900 dark:text-zinc-200 whitespace-nowrap shrink-0 cursor-pointer"
+                        >
+                          <CheckSquare className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                          {filteredBatchmates.length > 0 &&
+                          filteredBatchmates.every((b) => selectedBmIds.includes(b.id))
+                            ? 'Unselect Filtered'
+                            : 'Select All Filtered'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void handleCopyEmailList(
+                              filteredBatchmateEmails,
+                              'all filtered members',
+                              'filtered'
+                            )
+                          }
+                          disabled={filteredBatchmateEmails.length === 0}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer disabled:cursor-not-allowed"
+                        >
+                          {copiedBulkEmailsMode === 'filtered' ? (
+                            <>
+                              <Check className="w-3.5 h-3.5" /> Copied Filtered Emails
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3.5 h-3.5" /> Copy All Filtered Emails ({filteredBatchmateEmails.length})
+                            </>
+                          )}
+                        </button>
+                        {selectedBmIds.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void handleCopyEmailList(
+                                selectedBatchmateEmails,
+                                'selected members',
+                                'selected'
+                              )
+                            }
+                            disabled={selectedBatchmateEmails.length === 0}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-950 disabled:opacity-40 text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer"
+                          >
+                            {copiedBulkEmailsMode === 'selected' ? (
+                              <>
+                                <Check className="w-3.5 h-3.5" /> Copied Selected
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3.5 h-3.5" /> Copy Selected ({selectedBatchmateEmails.length})
+                              </>
+                            )}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (selectedBmIds.length > 0) setMailRecipientMode('selected');
+                            else setMailRecipientMode('filtered');
+                            document.getElementById('admin-send-mail')?.scrollIntoView({ behavior: 'smooth' });
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-white text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer"
+                        >
+                          <Mail className="w-3.5 h-3.5" /> Send Mail
+                        </button>
+                      </div>
                     </div>
                   </div>
 
+                  {/* Direct Add Member Form */}
                   {showAddBm && (
                     <form
                       onSubmit={handleAddBatchmateInsideAdmin}
                       className="p-4 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none space-y-3"
                     >
                       <div className="flex items-center justify-between">
-                        <p className="text-xs font-bold text-zinc-950 dark:text-white">Add New Batchmate Directly</p>
+                        <p className="text-xs font-bold text-zinc-950 dark:text-white">
+                          Add New Batchmate Directly (Front + Flip Card + Private Contact)
+                        </p>
                         <button
                           type="button"
                           onClick={() => {
@@ -3111,6 +4754,13 @@ export function AdminModal({
                         />
                         <input
                           type="text"
+                          value={newBmNickname}
+                          onChange={(e) => setNewBmNickname(e.target.value)}
+                          placeholder="Nickname (optional)"
+                          className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500"
+                        />
+                        <input
+                          type="text"
                           required
                           value={newBmRoll}
                           onChange={(e) => setNewBmRoll(e.target.value)}
@@ -3125,11 +4775,80 @@ export function AdminModal({
                           className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500"
                         />
                         <input
+                          type="email"
+                          value={newBmEmail}
+                          onChange={(e) => setNewBmEmail(e.target.value)}
+                          placeholder="Email (admin private)"
+                          className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500"
+                        />
+                        <input
+                          type="tel"
+                          value={newBmPhone}
+                          onChange={(e) => setNewBmPhone(e.target.value)}
+                          placeholder="Phone (admin private)"
+                          className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500"
+                        />
+                        <input
                           type="text"
                           value={newBmSocial}
                           onChange={(e) => setNewBmSocial(e.target.value)}
                           placeholder="@instagram (optional)"
                           className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500"
+                        />
+                        <select
+                          value={newBmBloodGroup}
+                          onChange={(e) => setNewBmBloodGroup(e.target.value)}
+                          aria-label="New member blood group"
+                          className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
+                        >
+                          <option value="">Blood Group</option>
+                          {BLOOD_GROUP_OPTIONS.map((bg) => (
+                            <option key={bg} value={bg}>
+                              {bg}
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          type="text"
+                          value={newBmBirthday}
+                          onChange={(e) => setNewBmBirthday(e.target.value)}
+                          placeholder="Birthday (e.g. 14 May)"
+                          className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500"
+                        />
+                        <input
+                          type="text"
+                          value={newBmHobbies}
+                          onChange={(e) => setNewBmHobbies(e.target.value)}
+                          placeholder="Hobbies & Interests"
+                          className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500"
+                        />
+                        <input
+                          type="text"
+                          value={newBmDreamGoal}
+                          onChange={(e) => setNewBmDreamGoal(e.target.value)}
+                          placeholder="Dream / Future Goal"
+                          className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500"
+                        />
+                        <input
+                          type="text"
+                          value={newBmHangoutSpot}
+                          onChange={(e) => setNewBmHangoutSpot(e.target.value)}
+                          placeholder="Favorite Campus Spot"
+                          className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500"
+                        />
+                        <input
+                          type="text"
+                          value={newBmSuperpower}
+                          onChange={(e) => setNewBmSuperpower(e.target.value)}
+                          placeholder="Hidden Talent / Superpower"
+                          className="sm:col-span-2 px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500"
+                        />
+                        <input
+                          type="text"
+                          value={newBmFavoriteMemory}
+                          onChange={(e) => setNewBmFavoriteMemory(e.target.value)}
+                          placeholder="Favorite RCS Memory"
+                          className="sm:col-span-2 px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500"
                         />
                       </div>
                       <div className="flex flex-col sm:flex-row gap-2.5 items-center">
@@ -3137,7 +4856,7 @@ export function AdminModal({
                           type="text"
                           value={newBmQuote}
                           onChange={(e) => setNewBmQuote(e.target.value)}
-                          placeholder="Batch note or quote (optional)"
+                          placeholder="Yearbook quote (front card)"
                           className="flex-1 w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500"
                         />
                         <button
@@ -3167,144 +4886,630 @@ export function AdminModal({
                     </form>
                   )}
 
-                  <div className="space-y-2.5">
-                    {filteredBatchmates.map((bm) => {
-                      const isDupRoll = analytics.duplicateRolls.includes(bm.roll.trim());
-                      return (
-                        <div
-                          key={bm.id}
-                          className="p-3.5 rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-xs dark:shadow-none space-y-3"
-                        >
-                          <div className="flex items-center gap-3">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setBmPhotoTargetId(bm.id);
-                                bmPhotoInputRef.current?.click();
-                              }}
-                              title="Click to upload or replace portrait"
-                              className="w-11 h-11 rounded-full overflow-hidden bg-zinc-100 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 hover:border-rose-500 shrink-0 flex items-center justify-center cursor-pointer"
-                            >
-                              {bm.photo ? (
-                                <img src={bm.photo} alt={bm.name} className="w-full h-full object-cover object-top" />
-                              ) : (
-                                <span className="text-xs font-bold text-zinc-700 dark:text-zinc-400">{getInitials(bm.name)}</span>
-                              )}
-                            </button>
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-semibold text-zinc-950 dark:text-white truncate">{bm.name}</p>
-                              <p className="text-xs text-zinc-600 dark:text-zinc-400">
-                                <span className={`font-mono tabular-nums ${isDupRoll ? 'text-amber-700 dark:text-amber-400 font-semibold' : ''}`}>
-                                  Roll {bm.roll || 'N/A'}
-                                </span>{' '}
-                                · {bm.group}
-                                {bm.social ? ` · ${bm.social}` : ''}
-                              </p>
-                            </div>
+                  {/* Registered Batchmates Directory List */}
+                  {filteredBatchmates.length === 0 ? (
+                    <div className="p-10 text-center rounded-xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800">
+                      <Users className="w-7 h-7 text-zinc-400 mx-auto mb-2" />
+                      <p className="text-xs text-zinc-700 dark:text-zinc-400">
+                        No registered members match your current filters.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {filteredBatchmates.map((bm) => {
+                        const isDupRoll = analytics.duplicateRolls.includes(bm.roll.trim());
+                        const isSelected = selectedBmIds.includes(bm.id);
+                        return (
+                          <div
+                            key={bm.id}
+                            className={`p-3.5 rounded-xl bg-white dark:bg-[#111116] border shadow-xs dark:shadow-none space-y-3 transition-colors ${
+                              isSelected
+                                ? 'border-rose-500/70 dark:border-rose-500/60'
+                                : 'border-zinc-300 dark:border-zinc-800'
+                            }`}
+                          >
+                            <div className="flex items-start gap-3">
+                              <button
+                                type="button"
+                                onClick={() => toggleBmSelection(bm.id)}
+                                aria-label={`Select ${bm.name}`}
+                                className="mt-2.5 text-zinc-500 hover:text-rose-600 dark:hover:text-rose-400 shrink-0 cursor-pointer"
+                              >
+                                {isSelected ? (
+                                  <CheckSquare className="w-4 h-4 text-rose-600 dark:text-rose-400" />
+                                ) : (
+                                  <Square className="w-4 h-4" />
+                                )}
+                              </button>
 
-                            <div className="flex items-center gap-1.5 shrink-0">
                               <button
                                 type="button"
                                 onClick={() => {
                                   setBmPhotoTargetId(bm.id);
                                   bmPhotoInputRef.current?.click();
                                 }}
-                                title="Upload / change portrait"
-                                className="p-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-zinc-800 dark:text-zinc-300 cursor-pointer"
+                                title="Click to upload or replace portrait"
+                                className="w-11 h-11 rounded-full overflow-hidden bg-zinc-100 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 hover:border-rose-500 shrink-0 flex items-center justify-center cursor-pointer mt-0.5"
                               >
-                                <Camera className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (editingBmId === bm.id) {
-                                    void handleSaveBatchmate(bm);
-                                  } else {
-                                    setEditingBmId(bm.id);
-                                  }
-                                }}
-                                className={`px-2.5 py-1.5 rounded-lg text-xs cursor-pointer ${
-                                  editingBmId === bm.id
-                                    ? 'bg-emerald-600 hover:bg-emerald-700 dark:hover:bg-emerald-500 text-white font-semibold'
-                                    : 'bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-zinc-900 dark:text-zinc-200'
-                                }`}
-                              >
-                                {editingBmId === bm.id ? 'Save' : 'Edit'}
+                                {bm.photo ? (
+                                  <img
+                                    src={bm.photo}
+                                    alt={bm.name}
+                                    className="w-full h-full object-cover object-top"
+                                  />
+                                ) : (
+                                  <span className="text-xs font-bold text-zinc-700 dark:text-zinc-400">
+                                    {getInitials(bm.name)}
+                                  </span>
+                                )}
                               </button>
 
-                              {confirmDeleteBmId === bm.id ? (
-                                <div className="flex items-center gap-1">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteBatchmate(bm.id)}
-                                    className="px-2.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-medium cursor-pointer"
+                              <div className="min-w-0 flex-1 space-y-1.5">
+                                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                                  <p className="text-sm font-semibold text-zinc-950 dark:text-white truncate">
+                                    {bm.name}
+                                  </p>
+                                  {bm.nickname && (
+                                    <span className="text-xs text-rose-700 dark:text-rose-400 font-medium">
+                                      "{bm.nickname}"
+                                    </span>
+                                  )}
+                                  <span
+                                    className={`text-xs font-mono tabular-nums ${
+                                      isDupRoll
+                                        ? 'text-amber-700 dark:text-amber-400 font-semibold'
+                                        : 'text-zinc-600 dark:text-zinc-400'
+                                    }`}
                                   >
-                                    Remove
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setConfirmDeleteBmId(null)}
-                                    className="px-2 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-transparent text-zinc-900 dark:text-zinc-300 text-xs cursor-pointer"
-                                  >
-                                    Cancel
-                                  </button>
+                                    Roll {bm.roll || 'N/A'}
+                                  </span>
+                                  <span className="text-xs text-zinc-500 dark:text-zinc-400">· {bm.group}</span>
+                                  {bm.bloodGroup && (
+                                    <span className="inline-flex items-center gap-1 text-[11px] font-mono font-semibold text-rose-700 dark:text-rose-300">
+                                      <Droplets className="w-3 h-3" /> {bm.bloodGroup}
+                                    </span>
+                                  )}
                                 </div>
-                              ) : (
+
+                                {/* Private Admin Contact & Social Strip */}
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                                  {bm.email ? (
+                                    <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-900 dark:text-emerald-300">
+                                      <Mail className="w-3 h-3 shrink-0" />
+                                      <span className="font-mono text-[11px]">{bm.email}</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => void handleCopySingleBmEmail(bm.id, bm.email!)}
+                                        title="Copy this email"
+                                        className="ml-1 text-emerald-700 hover:text-emerald-950 dark:text-emerald-400 dark:hover:text-white cursor-pointer"
+                                      >
+                                        {copiedBmEmailId === bm.id ? (
+                                          <Check className="w-3 h-3" />
+                                        ) : (
+                                          <Copy className="w-3 h-3" />
+                                        )}
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <span className="text-[11px] text-zinc-500 dark:text-zinc-500 italic">
+                                      No email provided
+                                    </span>
+                                  )}
+
+                                  {bm.phone && (
+                                    <span className="inline-flex items-center gap-1 text-[11px] font-mono text-zinc-700 dark:text-zinc-300">
+                                      <Phone className="w-3 h-3 text-zinc-500" /> {bm.phone}
+                                    </span>
+                                  )}
+
+                                  {bm.social && (
+                                    <span className="text-[11px] text-zinc-600 dark:text-zinc-400">
+                                      {bm.social}
+                                    </span>
+                                  )}
+
+                                  {bm.registeredAt && (
+                                    <span className="text-[11px] font-mono text-zinc-500">
+                                      Reg: {bm.registeredAt}
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Flip Card Dossier Details */}
+                                {(bm.hobbies ||
+                                  bm.dreamGoal ||
+                                  bm.hangoutSpot ||
+                                  bm.birthday ||
+                                  bm.superpower ||
+                                  bm.favoriteMemory ||
+                                  bm.quote) && (
+                                  <div className="pt-1 grid sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-1 text-[11px] text-zinc-700 dark:text-zinc-400">
+                                    {bm.hobbies && (
+                                      <p className="truncate">
+                                        <Heart className="w-3 h-3 inline mr-1 text-rose-500" />
+                                        <span className="font-semibold text-zinc-900 dark:text-zinc-200">Hobbies:</span>{' '}
+                                        {bm.hobbies}
+                                      </p>
+                                    )}
+                                    {bm.dreamGoal && (
+                                      <p className="truncate">
+                                        <Compass className="w-3 h-3 inline mr-1 text-amber-500" />
+                                        <span className="font-semibold text-zinc-900 dark:text-zinc-200">Dream:</span>{' '}
+                                        {bm.dreamGoal}
+                                      </p>
+                                    )}
+                                    {bm.hangoutSpot && (
+                                      <p className="truncate">
+                                        <MapPin className="w-3 h-3 inline mr-1 text-emerald-500" />
+                                        <span className="font-semibold text-zinc-900 dark:text-zinc-200">Spot:</span>{' '}
+                                        {bm.hangoutSpot}
+                                      </p>
+                                    )}
+                                    {bm.birthday && (
+                                      <p className="truncate">
+                                        <Cake className="w-3 h-3 inline mr-1 text-rose-500" />
+                                        <span className="font-semibold text-zinc-900 dark:text-zinc-200">B&apos;day:</span>{' '}
+                                        {bm.birthday}
+                                      </p>
+                                    )}
+                                    {bm.superpower && (
+                                      <p className="truncate">
+                                        <Sparkles className="w-3 h-3 inline mr-1 text-amber-500" />
+                                        <span className="font-semibold text-zinc-900 dark:text-zinc-200">Talent:</span>{' '}
+                                        {bm.superpower}
+                                      </p>
+                                    )}
+                                    {bm.favoriteMemory && (
+                                      <p className="truncate">
+                                        <span className="font-semibold text-zinc-900 dark:text-zinc-200">Memory:</span>{' '}
+                                        {bm.favoriteMemory}
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                {bm.email && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setCustomMailIds([bm.id]);
+                                      setMailRecipientMode('custom');
+                                      document
+                                        .getElementById('admin-send-mail')
+                                        ?.scrollIntoView({ behavior: 'smooth' });
+                                    }}
+                                    title="Send mail to this member"
+                                    className="p-2 rounded-lg bg-zinc-100 hover:bg-rose-600 dark:bg-zinc-800 border border-zinc-300 dark:border-transparent text-zinc-800 dark:text-zinc-300 hover:text-white transition-colors cursor-pointer"
+                                  >
+                                    <Mail className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
                                 <button
                                   type="button"
-                                  onClick={() => setConfirmDeleteBmId(bm.id)}
-                                  title="Remove batchmate"
-                                  className="p-2 rounded-lg bg-zinc-100 hover:bg-rose-600 dark:bg-zinc-800 border border-zinc-300 dark:border-transparent text-zinc-800 dark:text-zinc-300 hover:text-white hover:border-rose-600 transition-colors cursor-pointer"
+                                  onClick={() => {
+                                    setBmPhotoTargetId(bm.id);
+                                    bmPhotoInputRef.current?.click();
+                                  }}
+                                  title="Upload / change portrait"
+                                  className="p-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-zinc-800 dark:text-zinc-300 cursor-pointer"
                                 >
-                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <Camera className="w-3.5 h-3.5" />
                                 </button>
-                              )}
-                            </div>
-                          </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (editingBmId === bm.id) {
+                                      void handleSaveBatchmate(bm);
+                                    } else {
+                                      setEditingBmId(bm.id);
+                                    }
+                                  }}
+                                  className={`px-2.5 py-1.5 rounded-lg text-xs cursor-pointer ${
+                                    editingBmId === bm.id
+                                      ? 'bg-emerald-600 hover:bg-emerald-700 dark:hover:bg-emerald-500 text-white font-semibold'
+                                      : 'bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-zinc-900 dark:text-zinc-200'
+                                  }`}
+                                >
+                                  {editingBmId === bm.id ? 'Save' : 'Edit'}
+                                </button>
 
-                          {editingBmId === bm.id && (
-                            <div className="grid sm:grid-cols-2 gap-2.5 pt-2 border-t border-zinc-200 dark:border-zinc-800">
-                              <input
-                                type="text"
-                                value={bm.name}
-                                onChange={(e) => handleUpdateBatchmateField(bm.id, 'name', e.target.value)}
-                                placeholder="Name"
-                                className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
-                              />
-                              <input
-                                type="text"
-                                value={bm.roll}
-                                onChange={(e) => handleUpdateBatchmateField(bm.id, 'roll', e.target.value)}
-                                placeholder="Roll"
-                                className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 font-mono text-xs text-zinc-950 dark:text-white"
-                              />
-                              <input
-                                type="text"
-                                value={bm.group}
-                                onChange={(e) => handleUpdateBatchmateField(bm.id, 'group', e.target.value)}
-                                placeholder="Group"
-                                className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
-                              />
-                              <input
-                                type="text"
-                                value={bm.social || ''}
-                                onChange={(e) => handleUpdateBatchmateField(bm.id, 'social', e.target.value)}
-                                placeholder="Social handle"
-                                className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
-                              />
-                              <input
-                                type="text"
-                                value={bm.quote || ''}
-                                onChange={(e) => handleUpdateBatchmateField(bm.id, 'quote', e.target.value)}
-                                placeholder="Bio / Quote"
-                                className="sm:col-span-2 px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
-                              />
+                                {confirmDeleteBmId === bm.id ? (
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteBatchmate(bm.id)}
+                                      className="px-2.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-medium cursor-pointer"
+                                    >
+                                      Remove
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setConfirmDeleteBmId(null)}
+                                      className="px-2 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-transparent text-zinc-900 dark:text-zinc-300 text-xs cursor-pointer"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => setConfirmDeleteBmId(bm.id)}
+                                    title="Remove batchmate"
+                                    className="p-2 rounded-lg bg-zinc-100 hover:bg-rose-600 dark:bg-zinc-800 border border-zinc-300 dark:border-transparent text-zinc-800 dark:text-zinc-300 hover:text-white hover:border-rose-600 transition-colors cursor-pointer"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            {editingBmId === bm.id && (
+                              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-2.5 border-t border-zinc-200 dark:border-zinc-800">
+                                <input
+                                  type="text"
+                                  value={bm.name}
+                                  onChange={(e) => handleUpdateBatchmateField(bm.id, 'name', e.target.value)}
+                                  placeholder="Full Name"
+                                  className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
+                                />
+                                <input
+                                  type="text"
+                                  value={bm.nickname || ''}
+                                  onChange={(e) => handleUpdateBatchmateField(bm.id, 'nickname', e.target.value)}
+                                  placeholder="Nickname"
+                                  className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
+                                />
+                                <input
+                                  type="text"
+                                  value={bm.roll}
+                                  onChange={(e) => handleUpdateBatchmateField(bm.id, 'roll', e.target.value)}
+                                  placeholder="Roll"
+                                  className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 font-mono text-xs text-zinc-950 dark:text-white"
+                                />
+                                <input
+                                  type="text"
+                                  value={bm.group}
+                                  onChange={(e) => handleUpdateBatchmateField(bm.id, 'group', e.target.value)}
+                                  placeholder="Group"
+                                  className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
+                                />
+                                <input
+                                  type="email"
+                                  value={bm.email || ''}
+                                  onChange={(e) => handleUpdateBatchmateField(bm.id, 'email', e.target.value)}
+                                  placeholder="Email (admin private)"
+                                  className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
+                                />
+                                <input
+                                  type="tel"
+                                  value={bm.phone || ''}
+                                  onChange={(e) => handleUpdateBatchmateField(bm.id, 'phone', e.target.value)}
+                                  placeholder="Phone (admin private)"
+                                  className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
+                                />
+                                <input
+                                  type="text"
+                                  value={bm.social || ''}
+                                  onChange={(e) => handleUpdateBatchmateField(bm.id, 'social', e.target.value)}
+                                  placeholder="Social handle"
+                                  className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
+                                />
+                                <select
+                                  value={bm.bloodGroup || ''}
+                                  onChange={(e) => handleUpdateBatchmateField(bm.id, 'bloodGroup', e.target.value)}
+                                  aria-label={`Blood group for ${bm.name}`}
+                                  className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
+                                >
+                                  <option value="">Blood Group</option>
+                                  {BLOOD_GROUP_OPTIONS.map((bg) => (
+                                    <option key={bg} value={bg}>
+                                      {bg}
+                                    </option>
+                                  ))}
+                                </select>
+                                <input
+                                  type="text"
+                                  value={bm.birthday || ''}
+                                  onChange={(e) => handleUpdateBatchmateField(bm.id, 'birthday', e.target.value)}
+                                  placeholder="Birthday"
+                                  className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
+                                />
+                                <input
+                                  type="text"
+                                  value={bm.hobbies || ''}
+                                  onChange={(e) => handleUpdateBatchmateField(bm.id, 'hobbies', e.target.value)}
+                                  placeholder="Hobbies & Interests"
+                                  className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
+                                />
+                                <input
+                                  type="text"
+                                  value={bm.dreamGoal || ''}
+                                  onChange={(e) => handleUpdateBatchmateField(bm.id, 'dreamGoal', e.target.value)}
+                                  placeholder="Dream / Goal"
+                                  className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
+                                />
+                                <input
+                                  type="text"
+                                  value={bm.hangoutSpot || ''}
+                                  onChange={(e) => handleUpdateBatchmateField(bm.id, 'hangoutSpot', e.target.value)}
+                                  placeholder="Favorite Hangout Spot"
+                                  className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
+                                />
+                                <input
+                                  type="text"
+                                  value={bm.superpower || ''}
+                                  onChange={(e) => handleUpdateBatchmateField(bm.id, 'superpower', e.target.value)}
+                                  placeholder="Hidden Talent / Superpower"
+                                  className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
+                                />
+                                <input
+                                  type="text"
+                                  value={bm.favoriteMemory || ''}
+                                  onChange={(e) => handleUpdateBatchmateField(bm.id, 'favoriteMemory', e.target.value)}
+                                  placeholder="Favorite RCS Memory"
+                                  className="sm:col-span-2 px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
+                                />
+                                <input
+                                  type="text"
+                                  value={bm.quote || ''}
+                                  onChange={(e) => handleUpdateBatchmateField(bm.id, 'quote', e.target.value)}
+                                  placeholder="Bio / Quote"
+                                  className="sm:col-span-2 lg:col-span-3 px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* SEND MAIL STUDIO AT THE BOTTOM */}
+                  <section
+                    id="admin-send-mail"
+                    className="p-5 sm:p-6 rounded-2xl bg-white dark:bg-[#111116] border border-zinc-300 dark:border-zinc-800 shadow-sm dark:shadow-none space-y-5"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-zinc-200 dark:border-zinc-800">
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-widest text-rose-700 dark:text-rose-400">
+                          Batch Communication Studio
+                        </p>
+                        <h3 className="text-lg font-bold text-zinc-950 dark:text-white mt-0.5 flex items-center gap-2">
+                          <Mail className="w-4 h-4 text-rose-600 dark:text-rose-400" />
+                          Send Mail with Ready Templates
+                        </h3>
+                        <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">
+                          Select recipients, pick a template, customize the draft, and launch your Phone or PC Mail app directly.
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">Address Mode:</span>
+                        <div className="inline-flex rounded-lg border border-zinc-300 dark:border-zinc-700 overflow-hidden text-xs">
+                          <button
+                            type="button"
+                            onClick={() => setMailAddressField('bcc')}
+                            className={`px-2.5 py-1 font-semibold cursor-pointer ${
+                              mailAddressField === 'bcc'
+                                ? 'bg-rose-600 text-white'
+                                : 'bg-zinc-50 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300'
+                            }`}
+                          >
+                            BCC
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setMailAddressField('to')}
+                            className={`px-2.5 py-1 font-semibold cursor-pointer ${
+                              mailAddressField === 'to'
+                                ? 'bg-rose-600 text-white'
+                                : 'bg-zinc-50 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300'
+                            }`}
+                          >
+                            To
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Step 1: Recipient Selector */}
+                    <div className="space-y-2.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-200">
+                          1. Recipients ({resolvedMailDraft.emails.length} email{resolvedMailDraft.emails.length !== 1 ? 's' : ''} ready)
+                        </p>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setMailRecipientMode('filtered')}
+                            className={`px-3 py-1 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+                              mailRecipientMode === 'filtered'
+                                ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-950 font-semibold'
+                                : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 border border-zinc-300 dark:border-zinc-800'
+                            }`}
+                          >
+                            All Filtered ({filteredBatchmateEmails.length})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setMailRecipientMode('selected')}
+                            className={`px-3 py-1 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+                              mailRecipientMode === 'selected'
+                                ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-950 font-semibold'
+                                : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 border border-zinc-300 dark:border-zinc-800'
+                            }`}
+                          >
+                            Checked Rows ({selectedBatchmateEmails.length})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setMailRecipientMode('custom')}
+                            className={`px-3 py-1 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+                              mailRecipientMode === 'custom'
+                                ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-950 font-semibold'
+                                : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 border border-zinc-300 dark:border-zinc-800'
+                            }`}
+                          >
+                            Pick Members Individually
+                          </button>
+                        </div>
+                      </div>
+
+                      {mailRecipientMode === 'custom' && (
+                        <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 space-y-2">
+                          {membersWithEmail.length === 0 ? (
+                            <p className="text-xs text-zinc-500">
+                              No registered members have an email address saved yet.
+                            </p>
+                          ) : (
+                            <div className="flex flex-wrap gap-1.5">
+                              {membersWithEmail.map((m) => {
+                                const active = customMailIds.includes(m.id);
+                                return (
+                                  <button
+                                    key={m.id}
+                                    type="button"
+                                    onClick={() => toggleCustomMailRecipient(m.id)}
+                                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium border cursor-pointer transition-colors ${
+                                      active
+                                        ? 'bg-rose-600 border-rose-600 text-white font-semibold'
+                                        : 'bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-300 hover:border-rose-500'
+                                    }`}
+                                  >
+                                    {active ? <Check className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
+                                    <span>{m.name}</span>
+                                    <span className="font-mono opacity-80">({m.email})</span>
+                                  </button>
+                                );
+                              })}
                             </div>
                           )}
                         </div>
-                      );
-                    })}
-                  </div>
+                      )}
+
+                      <div className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-[11px] font-mono text-zinc-700 dark:text-zinc-300 flex items-center justify-between gap-2">
+                        <span className="truncate">
+                          {resolvedMailDraft.emails.length > 0
+                            ? `${mailAddressField.toUpperCase()}: ${resolvedMailDraft.joined}`
+                            : 'No recipient emails selected yet. Register members with email or switch filter.'}
+                        </span>
+                        {resolvedMailDraft.emails.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void handleCopyEmailList(resolvedMailDraft.emails, 'mail recipients', 'mail_recips')
+                            }
+                            className="inline-flex items-center gap-1 text-rose-700 dark:text-rose-400 hover:underline font-sans font-semibold shrink-0 cursor-pointer"
+                          >
+                            <Copy className="w-3 h-3" />
+                            {copiedBulkEmailsMode === 'mail_recips' ? 'Copied' : 'Copy'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Step 2: Ready-Made Templates */}
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-200">
+                        2. Choose a Template
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                        {ADMIN_MAIL_TEMPLATES.map((tpl) => {
+                          const active = selectedMailTemplateId === tpl.id;
+                          return (
+                            <button
+                              key={tpl.id}
+                              type="button"
+                              onClick={() => handleSelectMailTemplate(tpl.id)}
+                              className={`text-left p-3 rounded-xl border transition-colors cursor-pointer space-y-1 ${
+                                active
+                                  ? 'bg-rose-50 dark:bg-rose-950/35 border-rose-500 text-zinc-950 dark:text-white'
+                                  : 'bg-zinc-50 dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-800 hover:border-zinc-400 dark:hover:border-zinc-600 text-zinc-800 dark:text-zinc-300'
+                              }`}
+                            >
+                              <p className="text-[10px] font-semibold uppercase tracking-wider text-rose-700 dark:text-rose-400">
+                                {tpl.tag}
+                              </p>
+                              <p className="text-xs font-semibold truncate">{tpl.label}</p>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Step 3: Subject & Body Editor */}
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-200">
+                          3. Customize Subject &amp; Message
+                        </p>
+                        <div className="flex items-center gap-1.5 text-[11px] text-zinc-600 dark:text-zinc-400">
+                          <span>Insert:</span>
+                          {['{name}', '{roll}', '{group}'].map((token) => (
+                            <button
+                              key={token}
+                              type="button"
+                              onClick={() => setMailBody((prev) => `${prev}${prev.endsWith(' ') || !prev ? '' : ' '}${token}`)}
+                              className="px-2 py-0.5 rounded bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 font-mono text-[11px] text-zinc-900 dark:text-zinc-200 cursor-pointer"
+                            >
+                              {token}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <input
+                        type="text"
+                        value={mailSubject}
+                        onChange={(e) => setMailSubject(e.target.value)}
+                        placeholder="Email subject..."
+                        className="w-full px-3.5 py-2.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs font-medium text-zinc-950 dark:text-white placeholder:text-zinc-500 focus:outline-none focus:border-rose-500"
+                      />
+
+                      <textarea
+                        rows={7}
+                        value={mailBody}
+                        onChange={(e) => setMailBody(e.target.value)}
+                        placeholder="Write your email body..."
+                        className="w-full px-3.5 py-2.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-950 dark:text-white placeholder:text-zinc-500 leading-relaxed focus:outline-none focus:border-rose-500 resize-y"
+                      />
+                    </div>
+
+                    {/* Step 4: Launch Phone/PC Mail App or Gmail Web */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-zinc-200 dark:border-zinc-800">
+                      <p className="text-[11px] text-zinc-600 dark:text-zinc-400">
+                        Opens your phone or PC default Mail app / Gmail directly with recipients, subject &amp; message pre-filled.
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void handleCopyMailDraft()}
+                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-xs font-medium text-zinc-900 dark:text-zinc-200 whitespace-nowrap shrink-0 cursor-pointer"
+                        >
+                          <Copy className="w-3.5 h-3.5" /> Copy Draft
+                        </button>
+                        <a
+                          href={resolvedMailDraft.gmailHref}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-white text-xs font-semibold whitespace-nowrap shrink-0 transition-colors"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" /> Open Gmail Web
+                        </a>
+                        <a
+                          href={resolvedMailDraft.mailtoHref}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 dark:hover:bg-rose-500 text-white text-xs font-semibold whitespace-nowrap shrink-0 transition-colors"
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                          {resolvedMailDraft.emails.length > 0
+                            ? `Open Mail App (${resolvedMailDraft.emails.length})`
+                            : 'Open Mail App'}
+                        </a>
+                      </div>
+                    </div>
+                  </section>
                 </div>
               )}
 

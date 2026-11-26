@@ -12,6 +12,8 @@ export type ViewMode =
 
 export type OrderStatus = 'Pending' | 'Confirmed' | 'Delivered';
 
+export type PaymentStatus = 'Due' | 'Paid';
+
 export interface AdminTeamMember {
   id: string;
   name: string;
@@ -25,12 +27,30 @@ export interface AdminTeamMember {
 export interface Batchmate {
   id: string;
   name: string;
+  nickname?: string;
   roll: string;
   group: string;
   social?: string;
   quote?: string;
   photo?: string;
+  hobbies?: string;
+  bloodGroup?: string;
+  dreamGoal?: string;
+  favoriteMemory?: string;
+  hangoutSpot?: string;
+  birthday?: string;
+  superpower?: string;
   registeredAt?: string;
+  // Hydrated strictly for authenticated admin views (stored separately in batchmateContacts)
+  email?: string;
+  phone?: string;
+}
+
+export interface BatchmateContact {
+  id: string;
+  batchmateId: string;
+  email?: string;
+  phone?: string;
 }
 
 export interface GalleryItem {
@@ -62,8 +82,10 @@ export interface HoodieOrder {
   size: 'S' | 'M' | 'L' | 'XL' | 'XXL' | 'XXXL';
   quantity: number;
   contact: string;
+  email?: string;
   notes?: string;
   status: OrderStatus;
+  paymentStatus?: PaymentStatus;
   createdAt: string;
 }
 
@@ -148,6 +170,7 @@ export interface PortalState {
   profile: string;
   batchmates: Batchmate[];
   orders: HoodieOrder[];
+  publicOrders?: HoodieOrder[];
   notices: BatchNotice[];
   hoodieConfig: HoodieConfig;
   siteConfig: SiteConfig;

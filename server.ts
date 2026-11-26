@@ -76,11 +76,21 @@ async function startServer() {
       const created = await createBatchmate({
         id: body.id || `bm-${Date.now()}`,
         name: body.name.trim(),
+        nickname: body.nickname,
         roll: body.roll.trim(),
         group: body.group?.trim() || 'Batchmate',
         social: body.social,
         quote: body.quote,
         photo: body.photo,
+        hobbies: body.hobbies,
+        bloodGroup: body.bloodGroup,
+        dreamGoal: body.dreamGoal,
+        favoriteMemory: body.favoriteMemory,
+        hangoutSpot: body.hangoutSpot,
+        birthday: body.birthday,
+        superpower: body.superpower,
+        email: body.email,
+        phone: body.phone,
         registeredAt: body.registeredAt || new Date().toISOString().slice(0, 10),
       });
       res.status(201).json(created);
@@ -97,14 +107,16 @@ async function startServer() {
     }
     try {
       const created = await createOrder({
-        id: body.id || `RCS-${Date.now().toString().slice(-5)}`,
+        id: body.id || `RCS-${Date.now().toString().slice(-6)}`,
         customerName: body.customerName.trim(),
         roll: body.roll.trim(),
         size: (body.size as HoodieOrder['size']) || 'L',
         quantity: Number(body.quantity || 1),
         contact: body.contact.trim(),
+        email: body.email?.trim() || undefined,
         notes: body.notes,
         status: 'Pending',
+        paymentStatus: 'Due',
         createdAt: new Date().toISOString(),
       });
       res.status(201).json(created);
@@ -145,14 +157,16 @@ async function startServer() {
     }
     try {
       const created = await createOrder({
-        id: body.id || `RCS-${Date.now().toString().slice(-5)}`,
+        id: body.id || `RCS-${Date.now().toString().slice(-6)}`,
         customerName: body.customerName.trim(),
         roll: body.roll.trim(),
         size: (body.size as HoodieOrder['size']) || 'L',
         quantity: Number(body.quantity || 1),
         contact: body.contact.trim(),
+        email: body.email?.trim() || undefined,
         notes: body.notes,
         status: (body.status as OrderStatus) || 'Confirmed',
+        paymentStatus: body.paymentStatus === 'Paid' ? 'Paid' : 'Due',
         createdAt: new Date().toISOString(),
       });
       res.status(201).json(created);
@@ -181,15 +195,18 @@ async function startServer() {
 
   app.patch('/api/admin/orders/:id', requireAuth, requireAdmin, async (req: AuthRequest, res) => {
     try {
-      const { status, notes, customerName, roll, size, quantity, contact } = req.body as Partial<HoodieOrder> & {
-        status: OrderStatus;
-      };
+      const { status, notes, customerName, roll, size, quantity, contact, email, paymentStatus } =
+        req.body as Partial<HoodieOrder> & {
+          status: OrderStatus;
+        };
       await updateOrderStatus(req.params.id, status, notes, {
         customerName,
         roll,
         size,
         quantity,
         contact,
+        email,
+        paymentStatus,
       });
       res.json({ ok: true });
     } catch (error) {
