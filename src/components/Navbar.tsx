@@ -1,13 +1,14 @@
-import { useState } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import { motion } from 'motion/react';
-import { Menu, Moon, Sun, X } from 'lucide-react';
-import type { SiteConfig, ViewMode } from '../types';
+import { ArrowRight, Megaphone, Menu, Moon, Sun, X } from 'lucide-react';
+import type { BatchNotice, SiteConfig, ViewMode } from '../types';
 import type { ThemeMode } from '../utils/theme';
 import { SITE_LOGO_SRC } from '../utils/storage';
 
 interface NavbarProps {
   activeView: ViewMode;
   siteConfig?: SiteConfig;
+  notices?: BatchNotice[];
   theme: ThemeMode;
   onToggleTheme: () => void;
   onNavigate: (view: ViewMode, sectionId?: string) => void;
@@ -17,12 +18,14 @@ interface NavbarProps {
 export function Navbar({
   activeView,
   siteConfig,
+  notices = [],
   theme,
   onToggleTheme,
   onNavigate,
   onOpenRegister,
 }: NavbarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+
   const brandName = siteConfig?.brandName || 'ORTHOHIN';
   const brandAccent = siteConfig?.brandAccent ?? "'27";
   const showGallery = siteConfig?.sections?.gallery ?? true;
@@ -30,6 +33,35 @@ export function Navbar({
   const showHoodieNav = siteConfig?.sections?.hoodieNav ?? true;
   const registrationOpen = siteConfig?.registrationOpen ?? true;
   const isDark = theme === 'dark';
+
+  const latestNotices = useMemo(() => {
+    return notices
+      .filter((n) => n.active)
+      .slice()
+      .sort((a, b) => {
+        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+        return b.createdAt.localeCompare(a.createdAt);
+      });
+  }, [notices]);
+
+  const tickerNotices = useMemo(() => {
+    if (latestNotices.length === 0) return [];
+    const repeated: BatchNotice[] = [];
+    const minItems = Math.max(latestNotices.length, 3);
+    while (repeated.length < minItems) {
+      repeated.push(...latestNotices);
+    }
+    return repeated;
+  }, [latestNotices]);
+
+  const tickerDurationSec = useMemo(() => {
+    if (tickerNotices.length === 0) return 26;
+    const totalChars = tickerNotices.reduce(
+      (sum, item) => sum + item.title.length + item.message.length + 24,
+      0
+    );
+    return Math.max(20, Math.min(72, Math.round(totalChars * 0.16)));
+  }, [tickerNotices]);
 
   const handleNav = (view: ViewMode, sectionId?: string) => {
     setMobileOpen(false);
@@ -48,6 +80,63 @@ export function Navbar({
 
   return (
     <header className="fixed top-0 inset-x-0 z-40 bg-white/90 dark:bg-[#070709]/85 backdrop-blur-xl border-b border-zinc-300/90 dark:border-zinc-800/80 transition-colors duration-150">
+      {/* Continuous Red News-Style Notice Ticker above Navigation Bar */}
+      {tickerNotices.length > 0 && (
+        <div className="h-9 bg-red-600 dark:bg-red-700 text-white border-b border-red-700 dark:border-red-800 flex items-stretch overflow-hidden">
+          <button
+            type="button"
+            onClick={() => handleNav('notices')}
+            className="px-3 sm:px-4 bg-red-800 dark:bg-red-900 hover:bg-red-900 dark:hover:bg-red-950 border-r border-red-500/50 flex items-center gap-1.5 sm:gap-2 shrink-0 text-[11px] sm:text-xs font-extrabold uppercase tracking-wider text-white transition-colors cursor-pointer"
+          >
+            <Megaphone className="w-3.5 h-3.5 text-white shrink-0" />
+            <span>Latest Notice</span>
+          </button>
+
+          <div
+            className="flex-1 min-w-0 overflow-hidden flex items-center news-ticker-container"
+            style={{ '--ticker-duration': `${tickerDurationSec}s` } as CSSProperties}
+          >
+            <div className="news-ticker-track">
+              {[0, 1].map((copyIdx) => (
+                <div
+                  key={copyIdx}
+                  aria-hidden={copyIdx === 1}
+                  className="flex items-center shrink-0"
+                >
+                  {tickerNotices.map((notice, idx) => (
+                    <button
+                      key={`${copyIdx}-${notice.id}-${idx}`}
+                      type="button"
+                      tabIndex={copyIdx === 1 ? -1 : 0}
+                      onClick={() => handleNav('notices')}
+                      className="inline-flex items-center gap-2 px-4 sm:px-6 text-xs text-white/95 hover:text-white whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:underline"
+                    >
+                      <span className="font-bold uppercase tracking-wide text-[10px] sm:text-[11px] text-red-100">
+                        [{notice.category}]
+                      </span>
+                      <span className="font-bold text-white">{notice.title}</span>
+                      <span className="text-red-100/90">— {notice.message}</span>
+                      <span className="ml-3 text-red-200/70 font-mono text-[11px]" aria-hidden="true">
+                        ◆
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => handleNav('notices')}
+            className="hidden sm:inline-flex items-center gap-1 px-3.5 bg-red-800/90 dark:bg-red-900/90 hover:bg-red-900 dark:hover:bg-red-950 border-l border-red-500/50 text-[11px] font-bold text-white transition-colors cursor-pointer shrink-0 whitespace-nowrap"
+          >
+            <span>All Notices</span>
+            <ArrowRight className="w-3 h-3" />
+          </button>
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4 lg:gap-8">
         {/* Zone 1: Site logo & wordmark */}
         <button

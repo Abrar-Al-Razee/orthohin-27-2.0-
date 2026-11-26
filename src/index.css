@@ -99,6 +99,27 @@ html.dark ::-webkit-scrollbar-thumb:hover {
   transform: translateZ(32px);
 }
 
+@keyframes news-ticker-scroll {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+.news-ticker-track {
+  display: flex;
+  align-items: center;
+  width: max-content;
+  animation: news-ticker-scroll var(--ticker-duration, 26s) linear infinite;
+  will-change: transform;
+}
+
+.news-ticker-container:hover .news-ticker-track {
+  animation-play-state: paused;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

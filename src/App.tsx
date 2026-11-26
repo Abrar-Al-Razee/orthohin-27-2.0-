@@ -609,6 +609,7 @@ export default function App() {
       <Navbar
         activeView={activeView}
         siteConfig={sc}
+        notices={state.notices}
         theme={theme}
         onToggleTheme={toggleTheme}
         onNavigate={handleNavigate}
@@ -621,7 +622,7 @@ export default function App() {
         }}
       />
 
-      <main className="flex-1 relative z-10">
+      <main className={`flex-1 relative z-10 ${state.notices.some((n) => n.active) ? 'pt-9' : ''}`}>
         {sc.announcement.trim() && (
           <div className="mt-16 bg-rose-50/95 dark:bg-rose-950/60 backdrop-blur-sm border-b border-rose-300 dark:border-rose-500/30 px-4 py-2.5 text-center text-xs font-semibold text-rose-900 dark:text-rose-200">
             {sc.announcement}
