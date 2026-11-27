@@ -466,14 +466,28 @@ export function downloadCsv(filename: string, headers: string[], rows: (string |
   URL.revokeObjectURL(url);
 }
 
-export function compressImage(file: File, maxDimension = 900, maxLength = 200000): Promise<string> {
+export const MAX_IMAGE_FILE_BYTES = 3 * 1024 * 1024;
+export const MAX_IMAGE_DATA_URL_LENGTH = 4_250_000;
+
+export function compressImage(
+  file: File,
+  maxDimension = 1920,
+  maxLength = MAX_IMAGE_DATA_URL_LENGTH
+): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(new Error('Could not read file'));
     reader.onload = () => {
+      const rawDataUrl = String(reader.result || '');
       const img = new Image();
       img.onerror = () => reject(new Error('Invalid image file'));
       img.onload = () => {
+        // Keep original high-res photo untouched if it already fits within the 3 MB limit
+        if (file.size <= MAX_IMAGE_FILE_BYTES && rawDataUrl.length <= maxLength) {
+          resolve(rawDataUrl);
+          return;
+        }
+
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         if (!ctx) {
@@ -482,10 +496,10 @@ export function compressImage(file: File, maxDimension = 900, maxLength = 200000
         }
 
         let currentMaxDim = maxDimension;
-        let quality = 0.82;
+        let quality = 0.92;
         let dataUrl = '';
 
-        for (let attempt = 0; attempt < 14; attempt++) {
+        for (let attempt = 0; attempt < 16; attempt++) {
           const scale = Math.min(1, currentMaxDim / Math.max(img.width, img.height));
           canvas.width = Math.max(1, Math.round(img.width * scale));
           canvas.height = Math.max(1, Math.round(img.height * scale));
@@ -498,16 +512,16 @@ export function compressImage(file: File, maxDimension = 900, maxLength = 200000
             return;
           }
 
-          if (quality > 0.36) {
-            quality = Number(Math.max(0.32, quality - 0.12).toFixed(2));
+          if (quality > 0.45) {
+            quality = Number(Math.max(0.4, quality - 0.1).toFixed(2));
           } else {
-            currentMaxDim = Math.max(220, Math.round(currentMaxDim * 0.72));
+            currentMaxDim = Math.max(320, Math.round(currentMaxDim * 0.78));
           }
         }
 
         resolve(dataUrl);
       };
-      img.src = String(reader.result);
+      img.src = rawDataUrl;
     };
     reader.readAsDataURL(file);
   });

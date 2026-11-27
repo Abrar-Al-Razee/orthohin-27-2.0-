@@ -1,11 +1,12 @@
 import { initializeApp } from 'firebase/app';
 import { getAnalytics, isSupported } from 'firebase/analytics';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import { getDatabase } from 'firebase/database';
 import {
-  doc,
-  getDocFromServer,
   getFirestore,
   initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
   type Firestore,
 } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
@@ -17,17 +18,30 @@ function createFirestoreClient(): Firestore {
     return initializeFirestore(
       app,
       {
-        experimentalForceLongPolling: true,
-        experimentalLongPollingOptions: { timeoutSeconds: 15 },
+        localCache: persistentLocalCache({
+          tabManager: persistentMultipleTabManager(),
+        }),
+        experimentalAutoDetectLongPolling: true,
       },
       firebaseConfig.firestoreDatabaseId
     );
   } catch {
-    return getFirestore(app, firebaseConfig.firestoreDatabaseId);
+    try {
+      return initializeFirestore(
+        app,
+        {
+          experimentalAutoDetectLongPolling: true,
+        },
+        firebaseConfig.firestoreDatabaseId
+      );
+    } catch {
+      return getFirestore(app, firebaseConfig.firestoreDatabaseId);
+    }
   }
 }
 
 export const db = createFirestoreClient();
+export const rtdb = getDatabase(app, firebaseConfig.databaseURL);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
@@ -44,14 +58,3 @@ if (typeof window !== 'undefined' && firebaseConfig.measurementId) {
     });
 }
 
-async function testConnection() {
-  try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error('Please check your Firebase configuration.');
-    }
-  }
-}
-
-void testConnection();

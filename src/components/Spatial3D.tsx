@@ -247,6 +247,7 @@ interface TiltStage3DProps {
   maxTilt?: number;
   glare?: boolean;
   scaleOnHover?: number;
+  liftOnHover?: number;
 }
 
 export function TiltStage3D({
@@ -255,6 +256,7 @@ export function TiltStage3D({
   maxTilt = 7,
   glare = true,
   scaleOnHover = 1.012,
+  liftOnHover = 0,
 }: TiltStage3DProps) {
   const reducedMotion = useReducedMotion();
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -310,8 +312,9 @@ export function TiltStage3D({
         }}
         animate={{
           scale: hovered ? scaleOnHover : 1,
+          y: hovered ? -liftOnHover : 0,
         }}
-        transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+        transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
         className="relative w-full h-full will-change-transform"
       >
         {children}

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Camera, Lock, Sparkles, Upload, UserPlus, X } from 'lucide-react';
 import type { Batchmate } from '../types';
-import { compressImage, getInitials } from '../utils/storage';
+import { compressImage, getInitials, MAX_IMAGE_DATA_URL_LENGTH } from '../utils/storage';
 
 interface RegisterModalProps {
   isOpen: boolean;
@@ -63,7 +63,7 @@ export function RegisterModal({ isOpen, onClose, onRegister }: RegisterModalProp
     setError('');
     setIsProcessingPhoto(true);
     try {
-      const compressed = await compressImage(file, 600, 180000);
+      const compressed = await compressImage(file, 1600, MAX_IMAGE_DATA_URL_LENGTH);
       setPhoto(compressed);
     } catch {
       setError('Could not process that image. Please choose a valid JPG or PNG file.');
@@ -200,7 +200,7 @@ export function RegisterModal({ isOpen, onClose, onRegister }: RegisterModalProp
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-zinc-950 dark:text-white">Profile Card Portrait</p>
               <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">
-                Upload a portrait photo for your flip card and collectible Batch '27 PNG card.
+                Upload a portrait photo (up to 3 MB; larger photos auto-compressed) for your flip card and collectible Batch '27 PNG card.
               </p>
               <div className="flex flex-wrap items-center gap-2 mt-3">
                 <input

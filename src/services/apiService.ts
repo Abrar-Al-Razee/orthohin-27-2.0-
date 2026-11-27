@@ -1,4 +1,3 @@
-import { auth } from '../firebase';
 import type {
   ActivityLogEntry,
   AdminTeamMember,
@@ -27,9 +26,6 @@ import {
   saveAdminTeamMemberInFirestore,
   saveGalleryItemInFirestore,
   saveSettingsInFirestore,
-  seedDefaultsIfEmptyInFirestore,
-  subscribeAdminDataFromFirestore,
-  subscribePublicPortalFromFirestore,
   syncPortalStateInFirestore,
   updateBatchmateInFirestore,
   updateNoticeInFirestore,
@@ -37,96 +33,46 @@ import {
   type AdminFirestoreCallbacks,
   type PublicFirestoreCallbacks,
 } from './firestoreFallback';
+import {
+  addActivityLogInRtdb,
+  createBatchmateInRtdb,
+  createNoticeInRtdb,
+  createOrderInRtdb,
+  deleteAdminTeamMemberInRtdb,
+  deleteBatchmateInRtdb,
+  deleteGalleryItemInRtdb,
+  deleteNoticeInRtdb,
+  deleteOrderInRtdb,
+  fetchAdminDataFromRtdb,
+  fetchPublicPortalFromRtdb,
+  saveAdminTeamMemberInRtdb,
+  saveGalleryItemInRtdb,
+  saveSettingsInRtdb,
+  seedDefaultsIfEmptyInRtdb,
+  subscribeAdminDataFromRtdb,
+  subscribePublicPortalFromRtdb,
+  syncPortalStateInRtdb,
+  updateBatchmateInRtdb,
+  updateNoticeInRtdb,
+  updateOrderStatusInRtdb,
+} from './rtdbService';
 
-let usingFirestoreBackend = false;
-let apiServerUnavailable = false;
+const FIRESTORE_IMAGE_CAP = 350000;
+
+function fitsFirestoreImage(val: string | undefined): boolean {
+  return !val || val.length <= FIRESTORE_IMAGE_CAP;
+}
 
 export function isUsingFirestoreBackend(): boolean {
-  return usingFirestoreBackend;
+  return true;
 }
 
 export function subscribePublicPortalInFirestore(callbacks: PublicFirestoreCallbacks): () => void {
-  return subscribePublicPortalFromFirestore(callbacks);
+  return subscribePublicPortalFromRtdb(callbacks);
 }
 
 export function subscribeAdminDataInFirestore(callbacks: AdminFirestoreCallbacks): () => void {
-  return subscribeAdminDataFromFirestore(callbacks);
-}
-
-class SchemaNotReadyError extends Error {
-  constructor() {
-    super('SUPABASE_SCHEMA_MISSING');
-  }
-}
-
-async function getAuthHeaders(): Promise<HeadersInit> {
-  const user = auth.currentUser;
-  if (!user) {
-    throw new Error('Authentication required');
-  }
-  const token = await user.getIdToken();
-  return {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
-  };
-}
-
-async function handleApiResponse<T>(res: Response): Promise<T> {
-  const contentType = (res.headers.get('content-type') || '').toLowerCase();
-  if (!contentType.includes('application/json')) {
-    apiServerUnavailable = true;
-    throw new SchemaNotReadyError();
-  }
-
-  let payload: unknown = null;
-  try {
-    payload = await res.json();
-  } catch {
-    apiServerUnavailable = true;
-    throw new SchemaNotReadyError();
-  }
-
-  const meta = (payload && typeof payload === 'object' ? payload : {}) as {
-    error?: string;
-    code?: string;
-    useFallback?: boolean;
-  };
-  if (meta.useFallback && meta.code === 'SUPABASE_SCHEMA_MISSING') {
-    throw new SchemaNotReadyError();
-  }
-  if (!res.ok) {
-    if (res.status === 404 || res.status === 405 || res.status === 501) {
-      apiServerUnavailable = true;
-      throw new SchemaNotReadyError();
-    }
-    if (
-      res.status >= 502 ||
-      (res.status === 500 && meta.code === 'SUPABASE_SCHEMA_MISSING') ||
-      meta.code === 'SUPABASE_SCHEMA_MISSING'
-    ) {
-      throw new SchemaNotReadyError();
-    }
-    throw new Error(meta.error || 'Request failed');
-  }
-  return payload as T;
-}
-
-async function withSupabaseOrFallback<T>(supabaseCall: () => Promise<T>, fallbackCall: () => Promise<T>): Promise<T> {
-  if (apiServerUnavailable) {
-    usingFirestoreBackend = true;
-    return fallbackCall();
-  }
-  try {
-    const result = await supabaseCall();
-    usingFirestoreBackend = false;
-    return result;
-  } catch (err) {
-    if (err instanceof SchemaNotReadyError || err instanceof TypeError) {
-      usingFirestoreBackend = true;
-      return fallbackCall();
-    }
-    throw err;
-  }
+  return subscribeAdminDataFromRtdb(callbacks);
 }
 
 export interface PublicPortalPayload {
@@ -149,86 +95,37 @@ export interface AdminPortalPayload {
 }
 
 export async function fetchPublicPortal(): Promise<PublicPortalPayload> {
-  return withSupabaseOrFallback(
-    async () => {
-      const res = await fetch('/api/portal');
-      return handleApiResponse<PublicPortalPayload>(res);
-    },
-    () => fetchPublicPortalFromFirestore()
-  );
+  return fetchPublicPortalFromRtdb();
 }
 
 export async function fetchAdminData(): Promise<AdminPortalPayload> {
-  return withSupabaseOrFallback(
-    async () => {
-      const headers = await getAuthHeaders();
-      const res = await fetch('/api/admin/data', { headers });
-      return handleApiResponse<AdminPortalPayload>(res);
-    },
-    () => fetchAdminDataFromFirestore()
-  );
+  return fetchAdminDataFromRtdb();
 }
 
 export async function createBatchmateInDb(bm: Batchmate): Promise<Batchmate> {
-  return withSupabaseOrFallback(
-    async () => {
-      const res = await fetch('/api/batchmates', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(bm),
-      });
-      return handleApiResponse<Batchmate>(res);
-    },
-    () => createBatchmateInFirestore(bm)
-  );
+  const saved = await createBatchmateInRtdb(bm);
+  if (fitsFirestoreImage(bm.photo)) {
+    void createBatchmateInFirestore(bm).catch(() => {});
+  }
+  return saved;
 }
 
 export async function updateBatchmateInDb(bm: Batchmate): Promise<void> {
-  return withSupabaseOrFallback(
-    async () => {
-      const headers = await getAuthHeaders();
-      const res = await fetch(`/api/admin/batchmates/${encodeURIComponent(bm.id)}`, {
-        method: 'PUT',
-        headers,
-        body: JSON.stringify(bm),
-      });
-      await handleApiResponse(res);
-    },
-    () => updateBatchmateInFirestore(bm)
-  );
+  await updateBatchmateInRtdb(bm);
+  if (fitsFirestoreImage(bm.photo)) {
+    void updateBatchmateInFirestore(bm).catch(() => {});
+  }
 }
 
 export async function deleteBatchmateInDb(id: string): Promise<void> {
-  return withSupabaseOrFallback(
-    async () => {
-      const headers = await getAuthHeaders();
-      const res = await fetch(`/api/admin/batchmates/${encodeURIComponent(id)}`, {
-        method: 'DELETE',
-        headers,
-      });
-      await handleApiResponse(res);
-    },
-    () => deleteBatchmateInFirestore(id)
-  );
+  await deleteBatchmateInRtdb(id);
+  void deleteBatchmateInFirestore(id).catch(() => {});
 }
 
 export async function createOrderInDb(order: HoodieOrder): Promise<HoodieOrder> {
-  return withSupabaseOrFallback(
-    async () => {
-      const useAdminEndpoint = Boolean(
-        auth.currentUser && (order.status !== 'Pending' || order.paymentStatus === 'Paid')
-      );
-      const endpoint = useAdminEndpoint ? '/api/admin/orders' : '/api/orders';
-      const headers = useAdminEndpoint ? await getAuthHeaders() : { 'Content-Type': 'application/json' };
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(order),
-      });
-      return handleApiResponse<HoodieOrder>(res);
-    },
-    () => createOrderInFirestore(order)
-  );
+  const saved = await createOrderInRtdb(order);
+  void createOrderInFirestore(order).catch(() => {});
+  return saved;
 }
 
 export async function updateOrderStatusInDb(
@@ -237,168 +134,60 @@ export async function updateOrderStatusInDb(
   notes?: string,
   extra?: Partial<Pick<HoodieOrder, 'customerName' | 'roll' | 'size' | 'quantity' | 'contact' | 'email' | 'paymentStatus'>>
 ): Promise<void> {
-  return withSupabaseOrFallback(
-    async () => {
-      const headers = await getAuthHeaders();
-      const res = await fetch(`/api/admin/orders/${encodeURIComponent(id)}`, {
-        method: 'PATCH',
-        headers,
-        body: JSON.stringify({ status, notes, ...(extra || {}) }),
-      });
-      await handleApiResponse(res);
-    },
-    () => updateOrderStatusInFirestore(id, status, notes, extra)
-  );
+  await updateOrderStatusInRtdb(id, status, notes, extra);
+  void updateOrderStatusInFirestore(id, status, notes, extra).catch(() => {});
 }
 
 export async function deleteOrderInDb(id: string): Promise<void> {
-  return withSupabaseOrFallback(
-    async () => {
-      const headers = await getAuthHeaders();
-      const res = await fetch(`/api/admin/orders/${encodeURIComponent(id)}`, {
-        method: 'DELETE',
-        headers,
-      });
-      await handleApiResponse(res);
-    },
-    () => deleteOrderInFirestore(id)
-  );
+  await deleteOrderInRtdb(id);
+  void deleteOrderInFirestore(id).catch(() => {});
 }
 
 export async function createNoticeInDb(notice: BatchNotice): Promise<void> {
-  return withSupabaseOrFallback(
-    async () => {
-      const headers = await getAuthHeaders();
-      const res = await fetch('/api/admin/notices', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(notice),
-      });
-      await handleApiResponse(res);
-    },
-    () => createNoticeInFirestore(notice)
-  );
+  await createNoticeInRtdb(notice);
+  void createNoticeInFirestore(notice).catch(() => {});
 }
 
 export async function updateNoticeInDb(notice: BatchNotice): Promise<void> {
-  return withSupabaseOrFallback(
-    async () => {
-      const headers = await getAuthHeaders();
-      const res = await fetch(`/api/admin/notices/${encodeURIComponent(notice.id)}`, {
-        method: 'PUT',
-        headers,
-        body: JSON.stringify(notice),
-      });
-      await handleApiResponse(res);
-    },
-    () => updateNoticeInFirestore(notice)
-  );
+  await updateNoticeInRtdb(notice);
+  void updateNoticeInFirestore(notice).catch(() => {});
 }
 
 export async function deleteNoticeInDb(id: string): Promise<void> {
-  return withSupabaseOrFallback(
-    async () => {
-      const headers = await getAuthHeaders();
-      const res = await fetch(`/api/admin/notices/${encodeURIComponent(id)}`, {
-        method: 'DELETE',
-        headers,
-      });
-      await handleApiResponse(res);
-    },
-    () => deleteNoticeInFirestore(id)
-  );
+  await deleteNoticeInRtdb(id);
+  void deleteNoticeInFirestore(id).catch(() => {});
 }
 
 export async function saveGalleryItemInDb(item: GalleryItem, sortOrder: number): Promise<void> {
-  return withSupabaseOrFallback(
-    async () => {
-      const headers = await getAuthHeaders();
-      const res = await fetch(`/api/admin/gallery/${encodeURIComponent(item.id)}`, {
-        method: 'PUT',
-        headers,
-        body: JSON.stringify({ item, sortOrder }),
-      });
-      await handleApiResponse(res);
-    },
-    () => saveGalleryItemInFirestore(item, sortOrder)
-  );
+  await saveGalleryItemInRtdb(item, sortOrder);
+  if (fitsFirestoreImage(item.src)) {
+    void saveGalleryItemInFirestore(item, sortOrder).catch(() => {});
+  }
 }
 
 export async function reorderGalleryInDb(items: GalleryItem[]): Promise<void> {
-  return withSupabaseOrFallback(
-    async () => {
-      const headers = await getAuthHeaders();
-      const res = await fetch('/api/admin/gallery/reorder', {
-        method: 'PUT',
-        headers,
-        body: JSON.stringify({ items }),
-      });
-      await handleApiResponse(res);
-    },
-    async () => {
-      await Promise.all(items.map((item, idx) => saveGalleryItemInFirestore(item, idx)));
-    }
-  );
+  await Promise.all(items.map((item, idx) => saveGalleryItemInDb(item, idx)));
 }
 
 export async function deleteGalleryItemInDb(id: string): Promise<void> {
-  return withSupabaseOrFallback(
-    async () => {
-      const headers = await getAuthHeaders();
-      const res = await fetch(`/api/admin/gallery/${encodeURIComponent(id)}`, {
-        method: 'DELETE',
-        headers,
-      });
-      await handleApiResponse(res);
-    },
-    () => deleteGalleryItemInFirestore(id)
-  );
+  await deleteGalleryItemInRtdb(id);
+  void deleteGalleryItemInFirestore(id).catch(() => {});
 }
 
 export async function saveAdminTeamMemberInDb(member: AdminTeamMember, sortOrder: number): Promise<void> {
-  return withSupabaseOrFallback(
-    async () => {
-      const headers = await getAuthHeaders();
-      const res = await fetch(`/api/admin/team/${encodeURIComponent(member.id)}`, {
-        method: 'PUT',
-        headers,
-        body: JSON.stringify({ member, sortOrder }),
-      });
-      await handleApiResponse(res);
-    },
-    () => saveAdminTeamMemberInFirestore(member, sortOrder)
-  );
+  await saveAdminTeamMemberInRtdb(member, sortOrder);
+  if (fitsFirestoreImage(member.photo)) {
+    void saveAdminTeamMemberInFirestore(member, sortOrder).catch(() => {});
+  }
 }
 
 export async function reorderAdminTeamInDb(members: AdminTeamMember[]): Promise<void> {
-  return withSupabaseOrFallback(
-    async () => {
-      const headers = await getAuthHeaders();
-      const res = await fetch('/api/admin/team/reorder', {
-        method: 'PUT',
-        headers,
-        body: JSON.stringify({ members }),
-      });
-      await handleApiResponse(res);
-    },
-    async () => {
-      await Promise.all(members.map((m, idx) => saveAdminTeamMemberInFirestore(m, idx)));
-    }
-  );
+  await Promise.all(members.map((m, idx) => saveAdminTeamMemberInDb(m, idx)));
 }
 
 export async function deleteAdminTeamMemberInDb(id: string): Promise<void> {
-  return withSupabaseOrFallback(
-    async () => {
-      const headers = await getAuthHeaders();
-      const res = await fetch(`/api/admin/team/${encodeURIComponent(id)}`, {
-        method: 'DELETE',
-        headers,
-      });
-      await handleApiResponse(res);
-    },
-    () => deleteAdminTeamMemberInFirestore(id)
-  );
+  await deleteAdminTeamMemberInRtdb(id);
+  void deleteAdminTeamMemberInFirestore(id).catch(() => {});
 }
 
 export async function saveSettingsInDb(
@@ -406,61 +195,78 @@ export async function saveSettingsInDb(
   hoodieConfig: HoodieConfig,
   siteConfig: SiteConfig
 ): Promise<void> {
-  return withSupabaseOrFallback(
-    async () => {
-      const headers = await getAuthHeaders();
-      const res = await fetch('/api/admin/settings', {
-        method: 'PUT',
-        headers,
-        body: JSON.stringify({ profile, hoodieConfig, siteConfig }),
-      });
-      await handleApiResponse(res);
-    },
-    () => saveSettingsInFirestore(profile, hoodieConfig, siteConfig)
-  );
+  await saveSettingsInRtdb(profile, hoodieConfig, siteConfig);
+  if (
+    fitsFirestoreImage(profile) &&
+    fitsFirestoreImage(hoodieConfig.frontImage) &&
+    fitsFirestoreImage(hoodieConfig.backImage) &&
+    fitsFirestoreImage(siteConfig.heroImage)
+  ) {
+    void saveSettingsInFirestore(profile, hoodieConfig, siteConfig).catch(() => {});
+  }
 }
 
 export async function addActivityLogInDb(action: string, detail: string): Promise<void> {
-  return withSupabaseOrFallback(
-    async () => {
-      const headers = await getAuthHeaders();
-      const res = await fetch('/api/admin/logs', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ action, detail }),
-      });
-      await handleApiResponse(res);
-    },
-    () => addActivityLogInFirestore(action, detail)
-  );
+  await addActivityLogInRtdb(action, detail);
+  void addActivityLogInFirestore(action, detail).catch(() => {});
 }
 
 export async function seedDefaultsIfEmptyInDb(defaults: PortalState): Promise<void> {
-  return withSupabaseOrFallback(
-    async () => {
-      const headers = await getAuthHeaders();
-      const res = await fetch('/api/admin/seed', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(defaults),
-      });
-      await handleApiResponse(res);
-    },
-    () => seedDefaultsIfEmptyInFirestore(defaults)
-  );
+  return seedDefaultsIfEmptyInRtdb(defaults);
 }
 
 export async function syncPortalStateInDb(state: PortalState, replaceCollections: boolean): Promise<void> {
-  return withSupabaseOrFallback(
-    async () => {
-      const headers = await getAuthHeaders();
-      const res = await fetch('/api/admin/sync', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ state, replaceCollections }),
-      });
-      await handleApiResponse(res);
-    },
-    () => syncPortalStateInFirestore(state, replaceCollections)
-  );
+  await syncPortalStateInRtdb(state, replaceCollections);
+  void syncPortalStateInFirestore(state, replaceCollections).catch(() => {});
+}
+
+export async function migrateFirestoreToRtdb(currentFallback: PortalState): Promise<{
+  batchmates: number;
+  gallery: number;
+  orders: number;
+  notices: number;
+}> {
+  const pub = await fetchPublicPortalFromFirestore();
+  let orders: HoodieOrder[] = [];
+  let contactsByBmId: Record<string, BatchmateContact> = {};
+  let activityLog: ActivityLogEntry[] = [];
+
+  try {
+    const adminData = await fetchAdminDataFromFirestore();
+    orders = adminData.orders;
+    activityLog = adminData.activityLog;
+    for (const c of adminData.batchmateContacts || []) {
+      contactsByBmId[c.batchmateId] = c;
+    }
+  } catch {
+    orders = pub.publicOrders || [];
+  }
+
+  const hydratedBatchmates = pub.batchmates.map((bm) => ({
+    ...bm,
+    email: contactsByBmId[bm.id]?.email ?? bm.email,
+    phone: contactsByBmId[bm.id]?.phone ?? bm.phone,
+  }));
+
+  const nextState: PortalState = {
+    batchmates: hydratedBatchmates,
+    notices: pub.notices,
+    gallery: pub.gallery,
+    adminTeam: pub.adminTeam || [],
+    orders,
+    publicOrders: pub.publicOrders || [],
+    activityLog,
+    profile: pub.settings?.profile || currentFallback.profile,
+    hoodieConfig: pub.settings?.hoodieConfig || currentFallback.hoodieConfig,
+    siteConfig: pub.settings?.siteConfig || currentFallback.siteConfig,
+  };
+
+  await syncPortalStateInRtdb(nextState, false);
+
+  return {
+    batchmates: nextState.batchmates.length,
+    gallery: nextState.gallery.length,
+    orders: nextState.orders.length,
+    notices: nextState.notices.length,
+  };
 }

@@ -126,9 +126,27 @@ function resolveViewFromLocation(): ViewMode {
   }
 }
 
+function createInitialShellState(): PortalState {
+  return {
+    gallery: [],
+    profile: DEFAULT_PROFILE_IMAGE,
+    batchmates: [],
+    orders: [],
+    publicOrders: [],
+    notices: [],
+    hoodieConfig: mergeHoodieConfig(),
+    siteConfig: mergeSiteConfig(),
+    adminTeam: [],
+    activityLog: [],
+  };
+}
+
 export default function App() {
   const initialView = resolveViewFromLocation();
-  const [state, setState] = useState<PortalState>(() => createDefaultState());
+  const [state, setState] = useState<PortalState>(() => createInitialShellState());
+  const [isPortalHydrated, setIsPortalHydrated] = useState(false);
+  const [quotaReached, setQuotaReached] = useState(false);
+  const [rtdbRulesNeeded, setRtdbRulesNeeded] = useState(false);
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [activeView, setActiveView] = useState<ViewMode>(initialView);
   const [registerOpen, setRegisterOpen] = useState(false);
@@ -137,11 +155,15 @@ export default function App() {
   const [lightboxItem, setLightboxItem] = useState<GalleryItem | null>(null);
   const [highlightedBatchmateId, setHighlightedBatchmateId] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastMessage | null>(null);
-  const [firestoreRealtimeActive, setFirestoreRealtimeActive] = useState(false);
+  const [firestoreRealtimeActive, setFirestoreRealtimeActive] = useState(() => isUsingFirestoreBackend());
   const { theme, toggleTheme } = useTheme();
 
   const toastTimerRef = useRef<number | null>(null);
+  const retryTimerRef = useRef<number | null>(null);
+  const retryAttemptRef = useRef(0);
   const settingsSeededRef = useRef(false);
+  const hydratedRef = useRef(false);
+  const quotaNotifiedRef = useRef(false);
   const lastLocalEditAtRef = useRef(0);
   const batchmateContactsRef = useRef<Record<string, BatchmateContact>>({});
 
@@ -194,6 +216,7 @@ export default function App() {
       window.removeEventListener('popstate', syncRoute);
       window.removeEventListener('hashchange', syncRoute);
       if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+      if (retryTimerRef.current) window.clearTimeout(retryTimerRef.current);
     };
   }, []);
 
@@ -211,40 +234,58 @@ export default function App() {
       const hasSettings = payload.settings !== null;
       if (hasSettings) settingsSeededRef.current = true;
 
+      const hasRealData =
+        hasSettings ||
+        payload.batchmates.length > 0 ||
+        payload.gallery.length > 0 ||
+        payload.notices.length > 0 ||
+        (Array.isArray(payload.adminTeam) && payload.adminTeam.length > 0);
+
+      hydratedRef.current = true;
+      retryAttemptRef.current = 0;
+      setIsPortalHydrated(true);
+      if (retryTimerRef.current) {
+        window.clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
+
       setState((prev) => {
-        const rawBatchmates =
-          payload.batchmates.length > 0 || hasSettings
-            ? hasSettings
-              ? payload.batchmates
-              : [
-                  ...payload.batchmates,
-                  ...defaults.batchmates.filter((d) => !payload.batchmates.some((i) => i.id === d.id)),
-                ]
-            : defaults.batchmates;
+        const rawBatchmates = hasRealData ? payload.batchmates : defaults.batchmates;
 
         return {
           ...prev,
           batchmates: hydrateBatchmatesWithContacts(rawBatchmates, isFirebaseAdmin),
-          notices: payload.notices.length > 0 || hasSettings ? payload.notices : defaults.notices,
-          gallery: payload.gallery.length > 0 || hasSettings ? payload.gallery : defaults.gallery,
-          adminTeam:
-            Array.isArray(payload.adminTeam) && payload.adminTeam.length > 0
+          notices: hasRealData ? payload.notices : defaults.notices,
+          gallery: hasRealData ? payload.gallery : defaults.gallery,
+          adminTeam: hasRealData
+            ? Array.isArray(payload.adminTeam)
               ? payload.adminTeam
-              : hasSettings
-                ? []
-                : defaults.adminTeam,
+              : []
+            : defaults.adminTeam,
           publicOrders: Array.isArray(payload.publicOrders) ? payload.publicOrders : prev.publicOrders || [],
           profile: payload.settings?.profile || defaults.profile,
           hoodieConfig: mergeHoodieConfig(payload.settings?.hoodieConfig),
           siteConfig: mergeSiteConfig(payload.settings?.siteConfig),
         };
       });
-    } catch {
-      // Keep current/default state smoothly without exposing backend details
+    } catch (err) {
+      const msg = err instanceof Error ? err.message.toLowerCase() : '';
+      if (msg.includes('quota exceeded')) {
+        showToast('Daily Firestore quota reached. Existing data is safe and resets tomorrow.', 'error');
+        return;
+      }
+      if (!hydratedRef.current && !retryTimerRef.current) {
+        const delayMs = Math.min(5000, 1500 * Math.pow(1.6, retryAttemptRef.current));
+        retryAttemptRef.current += 1;
+        retryTimerRef.current = window.setTimeout(() => {
+          retryTimerRef.current = null;
+          void refreshPublicPortal();
+        }, delayMs);
+      }
     } finally {
       setFirestoreRealtimeActive(isUsingFirestoreBackend());
     }
-  }, [hydrateBatchmatesWithContacts, isFirebaseAdmin]);
+  }, [hydrateBatchmatesWithContacts, isFirebaseAdmin, showToast]);
 
   const refreshAdminData = useCallback(async () => {
     if (!isFirebaseAdmin) {
@@ -279,12 +320,16 @@ export default function App() {
   }, [hydrateBatchmatesWithContacts, isFirebaseAdmin]);
 
   const refreshAllData = useCallback(async () => {
+    if (firestoreRealtimeActive) return;
     await Promise.all([refreshPublicPortal(), refreshAdminData()]);
-  }, [refreshPublicPortal, refreshAdminData]);
+  }, [firestoreRealtimeActive, refreshPublicPortal, refreshAdminData]);
 
   useEffect(() => {
-    void refreshPublicPortal();
+    if (!firestoreRealtimeActive) {
+      void refreshPublicPortal();
+    }
     const syncFromRemoteIfIdle = () => {
+      if (firestoreRealtimeActive) return;
       if (Date.now() - lastLocalEditAtRef.current < 1600) return;
       void refreshPublicPortal();
       if (isFirebaseAdmin) {
@@ -318,7 +363,7 @@ export default function App() {
       window.removeEventListener('storage', handleStorage);
       if (bc) bc.close();
     };
-  }, [refreshPublicPortal, refreshAdminData, isFirebaseAdmin]);
+  }, [firestoreRealtimeActive, refreshPublicPortal, refreshAdminData, isFirebaseAdmin]);
 
   useEffect(() => {
     if (firestoreRealtimeActive || adminOpen) return;
@@ -331,8 +376,10 @@ export default function App() {
   }, [firestoreRealtimeActive, adminOpen, refreshPublicPortal]);
 
   useEffect(() => {
-    void refreshAdminData();
-  }, [refreshAdminData]);
+    if (!firestoreRealtimeActive || !isFirebaseAdmin) {
+      void refreshAdminData();
+    }
+  }, [firestoreRealtimeActive, isFirebaseAdmin, refreshAdminData]);
 
   useEffect(() => {
     if (!firestoreRealtimeActive) return;
@@ -340,44 +387,54 @@ export default function App() {
     return subscribePublicPortalInFirestore({
       onBatchmates: (batchmates) => {
         if (Date.now() - lastLocalEditAtRef.current < 1600) return;
-        const hasSettings = settingsSeededRef.current;
-        const resolved =
-          batchmates.length > 0 || hasSettings
-            ? hasSettings
-              ? batchmates
-              : [...batchmates, ...defaults.batchmates.filter((d) => !batchmates.some((i) => i.id === d.id))]
-            : defaults.batchmates;
+        hydratedRef.current = true;
+        setQuotaReached(false);
+        setRtdbRulesNeeded(false);
+        setIsPortalHydrated(true);
         setState((prev) => ({
           ...prev,
-          batchmates: hydrateBatchmatesWithContacts(resolved, isFirebaseAdmin),
+          batchmates: hydrateBatchmatesWithContacts(batchmates, isFirebaseAdmin),
         }));
       },
       onNotices: (notices) => {
         if (Date.now() - lastLocalEditAtRef.current < 1600) return;
-        const hasSettings = settingsSeededRef.current;
+        hydratedRef.current = true;
+        setQuotaReached(false);
+        setRtdbRulesNeeded(false);
+        setIsPortalHydrated(true);
         setState((prev) => ({
           ...prev,
-          notices: notices.length > 0 || hasSettings ? notices : defaults.notices,
+          notices,
         }));
       },
       onGallery: (gallery) => {
         if (Date.now() - lastLocalEditAtRef.current < 1600) return;
-        const hasSettings = settingsSeededRef.current;
+        hydratedRef.current = true;
+        setQuotaReached(false);
+        setRtdbRulesNeeded(false);
+        setIsPortalHydrated(true);
         setState((prev) => ({
           ...prev,
-          gallery: gallery.length > 0 || hasSettings ? gallery : defaults.gallery,
+          gallery,
         }));
       },
       onAdminTeam: (adminTeam) => {
         if (Date.now() - lastLocalEditAtRef.current < 1600) return;
-        const hasSettings = settingsSeededRef.current;
+        hydratedRef.current = true;
+        setQuotaReached(false);
+        setRtdbRulesNeeded(false);
+        setIsPortalHydrated(true);
         setState((prev) => ({
           ...prev,
-          adminTeam: adminTeam.length > 0 || hasSettings ? adminTeam : defaults.adminTeam,
+          adminTeam,
         }));
       },
       onPublicOrders: (publicOrders) => {
         if (Date.now() - lastLocalEditAtRef.current < 1600) return;
+        hydratedRef.current = true;
+        setQuotaReached(false);
+        setRtdbRulesNeeded(false);
+        setIsPortalHydrated(true);
         setState((prev) => ({
           ...prev,
           publicOrders,
@@ -385,6 +442,10 @@ export default function App() {
       },
       onSettings: (settings) => {
         if (Date.now() - lastLocalEditAtRef.current < 1600) return;
+        hydratedRef.current = true;
+        setQuotaReached(false);
+        setRtdbRulesNeeded(false);
+        setIsPortalHydrated(true);
         if (settings !== null) {
           settingsSeededRef.current = true;
           setState((prev) => ({
@@ -395,8 +456,28 @@ export default function App() {
           }));
         }
       },
+      onError: (err) => {
+        const msg = err instanceof Error ? err.message.toLowerCase() : String(err).toLowerCase();
+        if (msg.includes('permission_denied') || msg.includes('permission denied')) {
+          setRtdbRulesNeeded(true);
+          setIsPortalHydrated(true);
+          if (!quotaNotifiedRef.current) {
+            quotaNotifiedRef.current = true;
+            showToast('Publish database.rules.json in Firebase Realtime Database Rules to enable live sync.', 'error');
+          }
+          return;
+        }
+        if (msg.includes('quota') || msg.includes('resource-exhausted')) {
+          setQuotaReached(true);
+          setIsPortalHydrated(true);
+          if (!quotaNotifiedRef.current) {
+            quotaNotifiedRef.current = true;
+            showToast('Daily Firebase quota reached. Data is safe and resets tomorrow.', 'error');
+          }
+        }
+      },
     });
-  }, [firestoreRealtimeActive, hydrateBatchmatesWithContacts, isFirebaseAdmin]);
+  }, [firestoreRealtimeActive, hydrateBatchmatesWithContacts, isFirebaseAdmin, showToast]);
 
   useEffect(() => {
     if (!firestoreRealtimeActive || !isFirebaseAdmin) return;
@@ -419,8 +500,22 @@ export default function App() {
           batchmates: hydrateBatchmatesWithContacts(prev.batchmates, true),
         }));
       },
+      onError: (err) => {
+        const msg = err instanceof Error ? err.message.toLowerCase() : String(err).toLowerCase();
+        if (msg.includes('permission_denied') || msg.includes('permission denied')) {
+          setRtdbRulesNeeded(true);
+          return;
+        }
+        if (msg.includes('quota') || msg.includes('resource-exhausted')) {
+          setQuotaReached(true);
+          if (!quotaNotifiedRef.current) {
+            quotaNotifiedRef.current = true;
+            showToast('Daily Firebase quota reached. Data is safe and resets tomorrow.', 'error');
+          }
+        }
+      },
     });
-  }, [firestoreRealtimeActive, isFirebaseAdmin, hydrateBatchmatesWithContacts]);
+  }, [firestoreRealtimeActive, isFirebaseAdmin, hydrateBatchmatesWithContacts, showToast]);
 
   const updateState = useCallback((next: PortalState) => {
     lastLocalEditAtRef.current = Date.now();
@@ -623,8 +718,18 @@ export default function App() {
       />
 
       <main className={`flex-1 relative z-10 ${state.notices.some((n) => n.active) ? 'pt-9' : ''}`}>
+        {rtdbRulesNeeded && (
+          <div className="mt-16 bg-amber-50/95 dark:bg-amber-950/60 backdrop-blur-sm border-b border-amber-300 dark:border-amber-500/30 px-4 py-2.5 text-center text-xs font-medium text-amber-950 dark:text-amber-200">
+            Realtime Database connected, waiting for rules: paste <span className="font-mono font-semibold">database.rules.json</span> into Firebase Console → Realtime Database → Rules and publish.
+          </div>
+        )}
+        {quotaReached && (
+          <div className={`${rtdbRulesNeeded ? '' : 'mt-16 '}bg-amber-50/95 dark:bg-amber-950/60 backdrop-blur-sm border-b border-amber-300 dark:border-amber-500/30 px-4 py-2.5 text-center text-xs font-medium text-amber-950 dark:text-amber-200`}>
+            Daily Firebase free-tier quota reached. Your database is completely safe and resets automatically tomorrow.
+          </div>
+        )}
         {sc.announcement.trim() && (
-          <div className="mt-16 bg-rose-50/95 dark:bg-rose-950/60 backdrop-blur-sm border-b border-rose-300 dark:border-rose-500/30 px-4 py-2.5 text-center text-xs font-semibold text-rose-900 dark:text-rose-200">
+          <div className={`${rtdbRulesNeeded || quotaReached ? '' : 'mt-16 '}bg-rose-50/95 dark:bg-rose-950/60 backdrop-blur-sm border-b border-rose-300 dark:border-rose-500/30 px-4 py-2.5 text-center text-xs font-semibold text-rose-900 dark:text-rose-200`}>
             {sc.announcement}
           </div>
         )}
@@ -635,7 +740,7 @@ export default function App() {
             {/* Split-Screen Hero */}
             <section
               className={`${
-                sc.announcement.trim() ? 'pt-12' : 'pt-28 lg:pt-36'
+                rtdbRulesNeeded || quotaReached || sc.announcement.trim() ? 'pt-12' : 'pt-28 lg:pt-36'
               } pb-16 lg:pb-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8`}
             >
               <div className="grid lg:grid-cols-12 gap-10 lg:gap-12 items-stretch">
@@ -721,7 +826,7 @@ export default function App() {
                             idx === (sc.kpis || []).length - 1 ? 'text-rose-600 dark:text-rose-500' : 'text-zinc-950 dark:text-white'
                           }`}
                         >
-                          {kpi.autoBatchmateCount ? state.batchmates.length : kpi.value}
+                          {kpi.autoBatchmateCount ? (isPortalHydrated ? state.batchmates.length : '—') : kpi.value}
                         </p>
                         <p className="text-xs text-zinc-700 dark:text-zinc-400 mt-1">{kpi.label}</p>
                       </button>
@@ -900,7 +1005,16 @@ export default function App() {
                   </button>
                 </div>
 
-                {state.gallery.length === 0 ? (
+                {!isPortalHydrated && state.gallery.length === 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {[0, 1, 2].map((idx) => (
+                      <div
+                        key={idx}
+                        className="h-72 rounded-2xl bg-zinc-100/80 dark:bg-[#111114]/80 border border-zinc-200 dark:border-zinc-800/80 animate-pulse"
+                      />
+                    ))}
+                  </div>
+                ) : state.gallery.length === 0 ? (
                   <div className="p-12 text-center rounded-2xl bg-zinc-50 dark:bg-[#111114] border border-zinc-300 dark:border-zinc-800/80">
                     <Camera className="w-8 h-8 text-zinc-500 dark:text-zinc-600 mx-auto mb-3" />
                     <p className="text-sm text-zinc-700 dark:text-zinc-400">No gallery moments added yet.</p>
@@ -982,7 +1096,9 @@ export default function App() {
                     const homeTeam =
                       state.adminTeam && state.adminTeam.length > 0
                         ? state.adminTeam
-                        : [
+                        : !isPortalHydrated
+                          ? []
+                          : [
                             {
                               id: 'admin-1',
                               name: sc.leadName || 'Abrar Al Razee Oytizzoh',
@@ -1137,6 +1253,7 @@ export default function App() {
         {activeView === 'gallery' && (
           <GalleryPage
             gallery={state.gallery}
+            isLoading={!isPortalHydrated}
             onSelectLightbox={setLightboxItem}
             onNavigate={handleNavigate}
           />
@@ -1158,6 +1275,7 @@ export default function App() {
             profileImage={state.profile}
             adminTeam={state.adminTeam || []}
             batchmateCount={state.batchmates.length}
+            isLoading={!isPortalHydrated}
             onNavigate={handleNavigate}
           />
         )}
@@ -1175,6 +1293,7 @@ export default function App() {
         {activeView === 'batchmates' && (
           <BatchmatesView
             batchmates={state.batchmates}
+            isLoading={!isPortalHydrated}
             highlightedId={highlightedBatchmateId}
             onClearHighlight={() => setHighlightedBatchmateId(null)}
             onBackHome={() => handleNavigate('home')}

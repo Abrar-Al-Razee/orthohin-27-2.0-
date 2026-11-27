@@ -96,6 +96,33 @@ function toIsoString(val: unknown): string {
   return new Date().toISOString();
 }
 
+function toEpochMs(val: unknown): number {
+  if (val instanceof Timestamp) return val.toMillis();
+  if (typeof val === 'string' && val.trim()) {
+    const parsed = Date.parse(val);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+
+function sortByTimestampDesc(docs: QueryDocumentSnapshot[], field: string, fallbackField?: string): QueryDocumentSnapshot[] {
+  return [...docs].sort((a, b) => {
+    const ad = a.data();
+    const bd = b.data();
+    const at = toEpochMs(ad[field]) || (fallbackField ? toEpochMs(ad[fallbackField]) : 0);
+    const bt = toEpochMs(bd[field]) || (fallbackField ? toEpochMs(bd[fallbackField]) : 0);
+    return bt - at;
+  });
+}
+
+function sortBySortOrderAsc(docs: QueryDocumentSnapshot[]): QueryDocumentSnapshot[] {
+  return [...docs].sort((a, b) => {
+    const ao = typeof a.data().sortOrder === 'number' ? a.data().sortOrder : Number.MAX_SAFE_INTEGER;
+    const bo = typeof b.data().sortOrder === 'number' ? b.data().sortOrder : Number.MAX_SAFE_INTEGER;
+    return ao - bo;
+  });
+}
+
 function mapBatchmateDoc(d: QueryDocumentSnapshot): Batchmate {
   const data = d.data();
   return {
@@ -223,15 +250,23 @@ export interface PublicFirestoreCallbacks {
       siteConfig: SiteConfig;
     } | null
   ) => void;
+  onError?: (error: unknown, path: string) => void;
 }
 
 export interface AdminFirestoreCallbacks {
   onOrders: (orders: HoodieOrder[]) => void;
   onActivityLogs: (logs: ActivityLogEntry[]) => void;
   onBatchmateContacts?: (contacts: BatchmateContact[]) => void;
+  onError?: (error: unknown, path: string) => void;
 }
 
-function reportListenerError(err: unknown, operationType: OperationType, path: string): void {
+function reportListenerError(
+  err: unknown,
+  operationType: OperationType,
+  path: string,
+  onError?: (error: unknown, path: string) => void
+): void {
+  onError?.(err, path);
   try {
     handleFirestoreError(err, operationType, path);
   } catch {
@@ -241,34 +276,34 @@ function reportListenerError(err: unknown, operationType: OperationType, path: s
 
 export function subscribePublicPortalFromFirestore(callbacks: PublicFirestoreCallbacks): () => void {
   const unsubBatchmates = onSnapshot(
-    query(collection(db, 'batchmates'), orderBy('createdAt', 'desc')),
-    (snap) => callbacks.onBatchmates(snap.docs.map(mapBatchmateDoc)),
-    (err) => reportListenerError(err, OperationType.LIST, 'batchmates')
+    collection(db, 'batchmates'),
+    (snap) => callbacks.onBatchmates(sortByTimestampDesc(snap.docs, 'createdAt', 'registeredAt').map(mapBatchmateDoc)),
+    (err) => reportListenerError(err, OperationType.LIST, 'batchmates', callbacks.onError)
   );
 
   const unsubNotices = onSnapshot(
-    query(collection(db, 'notices'), orderBy('updatedAt', 'desc')),
-    (snap) => callbacks.onNotices(snap.docs.map(mapNoticeDoc)),
-    (err) => reportListenerError(err, OperationType.LIST, 'notices')
+    collection(db, 'notices'),
+    (snap) => callbacks.onNotices(sortByTimestampDesc(snap.docs, 'updatedAt', 'createdAt').map(mapNoticeDoc)),
+    (err) => reportListenerError(err, OperationType.LIST, 'notices', callbacks.onError)
   );
 
   const unsubGallery = onSnapshot(
-    query(collection(db, 'gallery'), orderBy('sortOrder', 'asc')),
-    (snap) => callbacks.onGallery(snap.docs.map(mapGalleryDoc)),
-    (err) => reportListenerError(err, OperationType.LIST, 'gallery')
+    collection(db, 'gallery'),
+    (snap) => callbacks.onGallery(sortBySortOrderAsc(snap.docs).map(mapGalleryDoc)),
+    (err) => reportListenerError(err, OperationType.LIST, 'gallery', callbacks.onError)
   );
 
   const unsubAdminTeam = onSnapshot(
-    query(collection(db, 'adminTeam'), orderBy('sortOrder', 'asc')),
-    (snap) => callbacks.onAdminTeam(snap.docs.map(mapAdminTeamDoc)),
-    (err) => reportListenerError(err, OperationType.LIST, 'adminTeam')
+    collection(db, 'adminTeam'),
+    (snap) => callbacks.onAdminTeam(sortBySortOrderAsc(snap.docs).map(mapAdminTeamDoc)),
+    (err) => reportListenerError(err, OperationType.LIST, 'adminTeam', callbacks.onError)
   );
 
   const unsubPublicOrders = callbacks.onPublicOrders
     ? onSnapshot(
-        query(collection(db, 'publicHoodieOrders'), orderBy('createdAt', 'desc')),
-        (snap) => callbacks.onPublicOrders?.(snap.docs.map(mapPublicOrderDoc)),
-        (err) => reportListenerError(err, OperationType.LIST, 'publicHoodieOrders')
+        collection(db, 'publicHoodieOrders'),
+        (snap) => callbacks.onPublicOrders?.(sortByTimestampDesc(snap.docs, 'createdAt').map(mapPublicOrderDoc)),
+        (err) => reportListenerError(err, OperationType.LIST, 'publicHoodieOrders', callbacks.onError)
       )
     : () => {};
 
@@ -286,7 +321,7 @@ export function subscribePublicPortalFromFirestore(callbacks: PublicFirestoreCal
           : null
       );
     },
-    (err) => reportListenerError(err, OperationType.GET, 'settings/main')
+    (err) => reportListenerError(err, OperationType.GET, 'settings/main', callbacks.onError)
   );
 
   return () => {
@@ -301,22 +336,22 @@ export function subscribePublicPortalFromFirestore(callbacks: PublicFirestoreCal
 
 export function subscribeAdminDataFromFirestore(callbacks: AdminFirestoreCallbacks): () => void {
   const unsubOrders = onSnapshot(
-    query(collection(db, 'orders'), orderBy('createdAt', 'desc')),
-    (snap) => callbacks.onOrders(snap.docs.map(mapOrderDoc)),
-    (err) => reportListenerError(err, OperationType.LIST, 'orders')
+    collection(db, 'orders'),
+    (snap) => callbacks.onOrders(sortByTimestampDesc(snap.docs, 'createdAt').map(mapOrderDoc)),
+    (err) => reportListenerError(err, OperationType.LIST, 'orders', callbacks.onError)
   );
 
   const unsubLogs = onSnapshot(
     query(collection(db, 'activityLogs'), orderBy('createdAt', 'desc'), limit(50)),
     (snap) => callbacks.onActivityLogs(snap.docs.map(mapActivityLogDoc)),
-    (err) => reportListenerError(err, OperationType.LIST, 'activityLogs')
+    (err) => reportListenerError(err, OperationType.LIST, 'activityLogs', callbacks.onError)
   );
 
   const unsubContacts = callbacks.onBatchmateContacts
     ? onSnapshot(
         collection(db, 'batchmateContacts'),
         (snap) => callbacks.onBatchmateContacts?.(snap.docs.map(mapBatchmateContactDoc)),
-        (err) => reportListenerError(err, OperationType.LIST, 'batchmateContacts')
+        (err) => reportListenerError(err, OperationType.LIST, 'batchmateContacts', callbacks.onError)
       )
     : () => {};
 
@@ -328,31 +363,41 @@ export function subscribeAdminDataFromFirestore(callbacks: AdminFirestoreCallbac
 }
 
 export async function fetchPublicPortalFromFirestore() {
-  const [bmSnap, noticeSnap, gallerySnap, adminTeamSnap, publicOrdersSnap, settingsSnap] = await Promise.all([
-    getDocs(query(collection(db, 'batchmates'), orderBy('createdAt', 'desc'))).catch((err) =>
-      handleFirestoreError(err, OperationType.LIST, 'batchmates')
-    ),
-    getDocs(query(collection(db, 'notices'), orderBy('updatedAt', 'desc'))).catch((err) =>
-      handleFirestoreError(err, OperationType.LIST, 'notices')
-    ),
-    getDocs(query(collection(db, 'gallery'), orderBy('sortOrder', 'asc'))).catch((err) =>
-      handleFirestoreError(err, OperationType.LIST, 'gallery')
-    ),
-    getDocs(query(collection(db, 'adminTeam'), orderBy('sortOrder', 'asc'))).catch((err) =>
-      handleFirestoreError(err, OperationType.LIST, 'adminTeam')
-    ),
-    getDocs(query(collection(db, 'publicHoodieOrders'), orderBy('createdAt', 'desc'))).catch(() => null),
-    getDoc(doc(db, 'settings', 'main')).catch((err) =>
-      handleFirestoreError(err, OperationType.GET, 'settings/main')
-    ),
+  const [bmRes, noticeRes, galleryRes, adminTeamRes, publicOrdersRes, settingsRes] = await Promise.allSettled([
+    getDocs(collection(db, 'batchmates')),
+    getDocs(collection(db, 'notices')),
+    getDocs(collection(db, 'gallery')),
+    getDocs(collection(db, 'adminTeam')),
+    getDocs(collection(db, 'publicHoodieOrders')),
+    getDoc(doc(db, 'settings', 'main')),
   ]);
 
-  const batchmates: Batchmate[] = bmSnap.docs.map(mapBatchmateDoc);
-  const notices: BatchNotice[] = noticeSnap.docs.map(mapNoticeDoc);
-  const gallery: GalleryItem[] = gallerySnap.docs.map(mapGalleryDoc);
-  const adminTeam: AdminTeamMember[] = adminTeamSnap.docs.map(mapAdminTeamDoc);
-  const publicOrders: HoodieOrder[] = publicOrdersSnap ? publicOrdersSnap.docs.map(mapPublicOrderDoc) : [];
-  const settingsData = settingsSnap.exists() ? settingsSnap.data() : null;
+  if (bmRes.status === 'rejected' && galleryRes.status === 'rejected' && settingsRes.status === 'rejected') {
+    handleFirestoreError(bmRes.reason, OperationType.LIST, 'batchmates');
+  }
+
+  const batchmates: Batchmate[] =
+    bmRes.status === 'fulfilled'
+      ? sortByTimestampDesc(bmRes.value.docs, 'createdAt', 'registeredAt').map(mapBatchmateDoc)
+      : [];
+  const notices: BatchNotice[] =
+    noticeRes.status === 'fulfilled'
+      ? sortByTimestampDesc(noticeRes.value.docs, 'updatedAt', 'createdAt').map(mapNoticeDoc)
+      : [];
+  const gallery: GalleryItem[] =
+    galleryRes.status === 'fulfilled'
+      ? sortBySortOrderAsc(galleryRes.value.docs).map(mapGalleryDoc)
+      : [];
+  const adminTeam: AdminTeamMember[] =
+    adminTeamRes.status === 'fulfilled'
+      ? sortBySortOrderAsc(adminTeamRes.value.docs).map(mapAdminTeamDoc)
+      : [];
+  const publicOrders: HoodieOrder[] =
+    publicOrdersRes.status === 'fulfilled'
+      ? sortByTimestampDesc(publicOrdersRes.value.docs, 'createdAt').map(mapPublicOrderDoc)
+      : [];
+  const settingsData =
+    settingsRes.status === 'fulfilled' && settingsRes.value.exists() ? settingsRes.value.data() : null;
 
   return {
     batchmates,
@@ -977,6 +1022,11 @@ export async function seedDefaultsIfEmptyInFirestore(defaults: PortalState): Pro
     getDoc(doc(db, 'settings', 'main')),
   ]);
 
+  const isBrandNewDatabase = !settingsSnap.exists() && bmSnap.empty && gallerySnap.empty;
+  if (!isBrandNewDatabase) {
+    return;
+  }
+
   const tasks: Promise<unknown>[] = [];
   if (bmSnap.empty) {
     for (const bm of defaults.batchmates) tasks.push(createBatchmateInFirestore(bm));
@@ -997,22 +1047,7 @@ export async function seedDefaultsIfEmptyInFirestore(defaults: PortalState): Pro
 }
 
 export async function syncPortalStateInFirestore(nextState: PortalState, replaceCollections: boolean): Promise<void> {
-  if (replaceCollections) {
-    const [bmSnap, contactSnap, noticeSnap, gallerySnap, adminTeamSnap] = await Promise.all([
-      getDocs(collection(db, 'batchmates')),
-      getDocs(collection(db, 'batchmateContacts')),
-      getDocs(collection(db, 'notices')),
-      getDocs(collection(db, 'gallery')),
-      getDocs(collection(db, 'adminTeam')),
-    ]);
-    await Promise.all([
-      ...bmSnap.docs.map((d) => deleteDoc(d.ref)),
-      ...contactSnap.docs.map((d) => deleteDoc(d.ref)),
-      ...noticeSnap.docs.map((d) => deleteDoc(d.ref)),
-      ...gallerySnap.docs.map((d) => deleteDoc(d.ref)),
-      ...adminTeamSnap.docs.map((d) => deleteDoc(d.ref)),
-    ]);
-  }
+  // Write/upsert all incoming records FIRST so a network interruption never leaves collections wiped.
   await Promise.all([
     ...nextState.batchmates.map((bm) => createBatchmateInFirestore(bm)),
     ...(nextState.notices || []).map((n) => createNoticeInFirestore(n)),
@@ -1020,4 +1055,27 @@ export async function syncPortalStateInFirestore(nextState: PortalState, replace
     ...(nextState.adminTeam || []).map((m, idx) => saveAdminTeamMemberInFirestore(m, idx)),
     saveSettingsInFirestore(nextState.profile, nextState.hoodieConfig, nextState.siteConfig),
   ]);
+
+  if (replaceCollections) {
+    const keepBmIds = new Set(nextState.batchmates.map((bm) => sanitizeId(bm.id, 'bm')));
+    const keepNoticeIds = new Set((nextState.notices || []).map((n) => sanitizeId(n.id, 'notice')));
+    const keepGalleryIds = new Set(nextState.gallery.map((g) => sanitizeId(g.id, 'gal')));
+    const keepTeamIds = new Set((nextState.adminTeam || []).map((m) => sanitizeId(m.id, 'admin')));
+
+    const [bmSnap, contactSnap, noticeSnap, gallerySnap, adminTeamSnap] = await Promise.all([
+      getDocs(collection(db, 'batchmates')),
+      getDocs(collection(db, 'batchmateContacts')),
+      getDocs(collection(db, 'notices')),
+      getDocs(collection(db, 'gallery')),
+      getDocs(collection(db, 'adminTeam')),
+    ]);
+
+    await Promise.all([
+      ...bmSnap.docs.filter((d) => !keepBmIds.has(d.id)).map((d) => deleteDoc(d.ref)),
+      ...contactSnap.docs.filter((d) => !keepBmIds.has(d.id)).map((d) => deleteDoc(d.ref)),
+      ...noticeSnap.docs.filter((d) => !keepNoticeIds.has(d.id)).map((d) => deleteDoc(d.ref)),
+      ...gallerySnap.docs.filter((d) => !keepGalleryIds.has(d.id)).map((d) => deleteDoc(d.ref)),
+      ...adminTeamSnap.docs.filter((d) => !keepTeamIds.has(d.id)).map((d) => deleteDoc(d.ref)),
+    ]);
+  }
 }

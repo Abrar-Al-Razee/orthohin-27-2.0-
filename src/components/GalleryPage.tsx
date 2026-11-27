@@ -5,13 +5,14 @@ import { Reveal3D, TiltStage3D } from './Spatial3D';
 
 interface GalleryPageProps {
   gallery: GalleryItem[];
+  isLoading?: boolean;
   onSelectLightbox: (item: GalleryItem) => void;
   onNavigate: (view: ViewMode) => void;
 }
 
 type MediaFilter = 'all' | 'photos' | 'videos';
 
-export function GalleryPage({ gallery, onSelectLightbox, onNavigate }: GalleryPageProps) {
+export function GalleryPage({ gallery, isLoading = false, onSelectLightbox, onNavigate }: GalleryPageProps) {
   const [filter, setFilter] = useState<MediaFilter>('all');
   const [query, setQuery] = useState('');
 
@@ -113,7 +114,16 @@ export function GalleryPage({ gallery, onSelectLightbox, onNavigate }: GalleryPa
         </div>
       </div>
 
-      {filtered.length === 0 ? (
+      {isLoading && gallery.length === 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[0, 1, 2, 3, 4, 5].map((idx) => (
+            <div
+              key={idx}
+              className="h-72 rounded-2xl bg-zinc-100/80 dark:bg-[#111114]/80 border border-zinc-200 dark:border-zinc-800/80 animate-pulse"
+            />
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
         <div className="p-14 text-center rounded-2xl bg-white dark:bg-[#111114] border border-zinc-300 dark:border-zinc-800/80 space-y-3">
           <Camera className="w-8 h-8 text-zinc-500 dark:text-zinc-600 mx-auto" />
           <p className="text-base font-medium text-zinc-900 dark:text-zinc-200">No gallery moments match your filter</p>

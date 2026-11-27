@@ -8,6 +8,7 @@ interface DirectoryPageProps {
   profileImage: string;
   adminTeam: AdminTeamMember[];
   batchmateCount: number;
+  isLoading?: boolean;
   onNavigate: (view: ViewMode) => void;
 }
 
@@ -30,6 +31,7 @@ export function DirectoryPage({
   profileImage,
   adminTeam,
   batchmateCount,
+  isLoading = false,
   onNavigate,
 }: DirectoryPageProps) {
   const fallbackAvatar =
@@ -40,7 +42,9 @@ export function DirectoryPage({
   const teamMembers: AdminTeamMember[] =
     adminTeam.length > 0
       ? adminTeam
-      : [
+      : isLoading
+        ? []
+        : [
           {
             id: 'admin-1',
             name: siteConfig.leadName || 'Abrar Al Razee Oytizzoh',
@@ -86,6 +90,16 @@ export function DirectoryPage({
         </p>
       </div>
 
+      {isLoading && teamMembers.length === 0 ? (
+        <div className="grid sm:grid-cols-2 gap-6 max-w-4xl mx-auto">
+          {[0, 1].map((idx) => (
+            <div
+              key={idx}
+              className="h-80 rounded-2xl bg-zinc-100/80 dark:bg-[#111114]/80 border border-zinc-200 dark:border-zinc-800/80 animate-pulse"
+            />
+          ))}
+        </div>
+      ) : (
       <div className={gridClass}>
         {teamMembers.map((member, idx) => {
           const socialLink = resolveSocialLink(member.social);
@@ -139,6 +153,7 @@ export function DirectoryPage({
           );
         })}
       </div>
+      )}
 
       <div className="flex flex-wrap items-center justify-center gap-3 pt-10">
         <button

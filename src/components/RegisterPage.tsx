@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { ArrowLeft, Camera, Lock, Sparkles, Upload, UserPlus, Users } from 'lucide-react';
 import type { Batchmate, ViewMode } from '../types';
-import { compressImage, getInitials } from '../utils/storage';
+import { compressImage, getInitials, MAX_IMAGE_DATA_URL_LENGTH } from '../utils/storage';
 
 interface RegisterPageProps {
   registrationOpen: boolean;
@@ -47,7 +47,7 @@ export function RegisterPage({ registrationOpen, onNavigate, onRegister }: Regis
     setError('');
     setIsProcessingPhoto(true);
     try {
-      const compressed = await compressImage(file, 600, 180000);
+      const compressed = await compressImage(file, 1600, MAX_IMAGE_DATA_URL_LENGTH);
       setPhoto(compressed);
     } catch {
       setError('Could not process that image. Please choose a valid JPG or PNG file.');
@@ -200,7 +200,7 @@ export function RegisterPage({ registrationOpen, onNavigate, onRegister }: Regis
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-zinc-950 dark:text-white">Profile Card Portrait</p>
                 <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">
-                  Upload a crisp photo for your flip card and downloadable Batch '27 collectible card.
+                  Upload a crisp photo (up to 3 MB; larger images auto-compressed) for your flip card and Batch '27 collectible card.
                 </p>
                 <div className="flex flex-wrap items-center gap-2 mt-3">
                   <input

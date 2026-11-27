@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabaseServer.ts';
+import { isSupabaseConfigured, supabase } from '../lib/supabaseServer.ts';
 import type {
   ActivityLogEntry,
   AdminTeamMember,
@@ -58,8 +58,8 @@ export function isSupabaseNetworkOrSchemaMessage(msg: string, code?: string): bo
 }
 
 function assertSupabaseReady(): void {
-  if (Date.now() < supabaseOfflineUntil) {
-    throw new SupabaseSchemaMissingError('Supabase unreachable; using Firebase Firestore.');
+  if (!isSupabaseConfigured || Date.now() < supabaseOfflineUntil) {
+    throw new SupabaseSchemaMissingError('Supabase not configured; using Firebase Firestore.');
   }
 }
 

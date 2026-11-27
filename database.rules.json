@@ -1,0 +1,94 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "batchmates": {
+      ".read": true,
+      ".write": "auth != null && auth.token.email_verified == true && (auth.token.email.toLowerCase() == 'abraralraze@gmail.com' || auth.token.email.toLowerCase() == 'hisamulhisam208@gmail.com')",
+      "$batchmateId": {
+        ".write": "(auth != null && auth.token.email_verified == true && (auth.token.email.toLowerCase() == 'abraralraze@gmail.com' || auth.token.email.toLowerCase() == 'hisamulhisam208@gmail.com')) || (!data.exists() && newData.exists())",
+        ".validate": "!newData.exists() || (newData.hasChildren(['name', 'roll', 'group']) && newData.child('name').isString() && newData.child('name').val().length >= 1 && newData.child('name').val().length <= 100 && newData.child('roll').isString() && newData.child('roll').val().length >= 1 && newData.child('roll').val().length <= 32 && newData.child('group').isString() && newData.child('group').val().length >= 1 && newData.child('group').val().length <= 60)",
+        "photo": {
+          ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 4500000)"
+        }
+      }
+    },
+    "batchmateContacts": {
+      ".read": "auth != null && auth.token.email_verified == true && (auth.token.email.toLowerCase() == 'abraralraze@gmail.com' || auth.token.email.toLowerCase() == 'hisamulhisam208@gmail.com')",
+      ".write": "auth != null && auth.token.email_verified == true && (auth.token.email.toLowerCase() == 'abraralraze@gmail.com' || auth.token.email.toLowerCase() == 'hisamulhisam208@gmail.com')",
+      "$contactId": {
+        ".write": "(auth != null && auth.token.email_verified == true && (auth.token.email.toLowerCase() == 'abraralraze@gmail.com' || auth.token.email.toLowerCase() == 'hisamulhisam208@gmail.com')) || (!data.exists() && newData.exists())",
+        ".validate": "!newData.exists() || newData.hasChildren(['batchmateId', 'name', 'roll', 'group'])"
+      }
+    },
+    "notices": {
+      ".read": true,
+      ".write": "auth != null && auth.token.email_verified == true && (auth.token.email.toLowerCase() == 'abraralraze@gmail.com' || auth.token.email.toLowerCase() == 'hisamulhisam208@gmail.com')",
+      "$noticeId": {
+        ".validate": "!newData.exists() || newData.hasChildren(['title', 'message', 'category'])"
+      }
+    },
+    "gallery": {
+      ".read": true,
+      ".write": "auth != null && auth.token.email_verified == true && (auth.token.email.toLowerCase() == 'abraralraze@gmail.com' || auth.token.email.toLowerCase() == 'hisamulhisam208@gmail.com')",
+      "$galleryId": {
+        ".validate": "!newData.exists() || newData.hasChildren(['title'])",
+        "src": {
+          ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 4500000)"
+        }
+      }
+    },
+    "adminTeam": {
+      ".read": true,
+      ".write": "auth != null && auth.token.email_verified == true && (auth.token.email.toLowerCase() == 'abraralraze@gmail.com' || auth.token.email.toLowerCase() == 'hisamulhisam208@gmail.com')",
+      "$memberId": {
+        ".validate": "!newData.exists() || newData.hasChildren(['name', 'role'])",
+        "photo": {
+          ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 4500000)"
+        }
+      }
+    },
+    "orders": {
+      ".read": "auth != null && auth.token.email_verified == true && (auth.token.email.toLowerCase() == 'abraralraze@gmail.com' || auth.token.email.toLowerCase() == 'hisamulhisam208@gmail.com')",
+      ".write": "auth != null && auth.token.email_verified == true && (auth.token.email.toLowerCase() == 'abraralraze@gmail.com' || auth.token.email.toLowerCase() == 'hisamulhisam208@gmail.com')",
+      "$orderId": {
+        ".write": "(auth != null && auth.token.email_verified == true && (auth.token.email.toLowerCase() == 'abraralraze@gmail.com' || auth.token.email.toLowerCase() == 'hisamulhisam208@gmail.com')) || (!data.exists() && newData.exists() && newData.child('status').val() == 'Pending' && (!newData.child('paymentStatus').exists() || newData.child('paymentStatus').val() == 'Due'))",
+        ".validate": "!newData.exists() || newData.hasChildren(['orderCode', 'customerName', 'roll', 'size', 'quantity', 'contact', 'status'])"
+      }
+    },
+    "publicHoodieOrders": {
+      ".read": true,
+      ".write": "auth != null && auth.token.email_verified == true && (auth.token.email.toLowerCase() == 'abraralraze@gmail.com' || auth.token.email.toLowerCase() == 'hisamulhisam208@gmail.com')",
+      "$orderId": {
+        ".write": "(auth != null && auth.token.email_verified == true && (auth.token.email.toLowerCase() == 'abraralraze@gmail.com' || auth.token.email.toLowerCase() == 'hisamulhisam208@gmail.com')) || (!data.exists() && newData.exists() && newData.child('status').val() == 'Pending' && newData.child('paymentStatus').val() == 'Due')",
+        ".validate": "!newData.exists() || newData.hasChildren(['orderCode', 'customerName', 'roll', 'size', 'quantity', 'status', 'paymentStatus'])"
+      }
+    },
+    "settings": {
+      ".read": true,
+      ".write": "auth != null && auth.token.email_verified == true && (auth.token.email.toLowerCase() == 'abraralraze@gmail.com' || auth.token.email.toLowerCase() == 'hisamulhisam208@gmail.com')",
+      "main": {
+        "profile": {
+          ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 4500000)"
+        },
+        "hoodieConfig": {
+          "frontImage": {
+            ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 4500000)"
+          },
+          "backImage": {
+            ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 4500000)"
+          }
+        },
+        "siteConfig": {
+          "heroImage": {
+            ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 4500000)"
+          }
+        }
+      }
+    },
+    "activityLogs": {
+      ".read": "auth != null && auth.token.email_verified == true && (auth.token.email.toLowerCase() == 'abraralraze@gmail.com' || auth.token.email.toLowerCase() == 'hisamulhisam208@gmail.com')",
+      ".write": "auth != null && auth.token.email_verified == true && (auth.token.email.toLowerCase() == 'abraralraze@gmail.com' || auth.token.email.toLowerCase() == 'hisamulhisam208@gmail.com')"
+    }
+  }
+}

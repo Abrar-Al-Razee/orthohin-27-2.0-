@@ -29,6 +29,7 @@ import { Reveal3D, TiltStage3D } from './Spatial3D';
 
 interface BatchmatesViewProps {
   batchmates: Batchmate[];
+  isLoading?: boolean;
   highlightedId?: string | null;
   onClearHighlight?: () => void;
   onOpenRegister: () => void;
@@ -37,6 +38,7 @@ interface BatchmatesViewProps {
 
 export function BatchmatesView({
   batchmates,
+  isLoading = false,
   highlightedId,
   onClearHighlight,
   onOpenRegister,
@@ -258,7 +260,16 @@ export function BatchmatesView({
       </div>
 
       {/* 3-in-a-Row Grid of 3D Flip Cards */}
-      {filtered.length === 0 ? (
+      {isLoading && batchmates.length === 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[0, 1, 2].map((idx) => (
+            <div
+              key={idx}
+              className="h-[360px] rounded-2xl bg-zinc-100/80 dark:bg-[#111114]/80 border border-zinc-200 dark:border-zinc-800/80 animate-pulse"
+            />
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
         <div className="py-16 text-center rounded-2xl bg-zinc-50 dark:bg-[#111114] border border-zinc-300 dark:border-zinc-800/80">
           <p className="text-base font-medium text-zinc-900 dark:text-zinc-200">No matching batchmates found</p>
           <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">
@@ -280,8 +291,8 @@ export function BatchmatesView({
 
             return (
               <Reveal3D key={person.id} delay={Math.min(idx * 0.04, 0.24)} className="flex flex-col">
-                {/* 3D Flip + Cursor-Tracked Tilt Stage */}
-                <TiltStage3D maxTilt={6} glare={false} scaleOnHover={1.01}>
+                {/* 3D Flip + Cursor-Tracked Tilt + Lift Stage */}
+                <TiltStage3D maxTilt={6.5} glare={false} scaleOnHover={1.018} liftOnHover={6} className="group">
                 <div className="perspective-1200 w-full h-[360px]">
                   <div
                     role="button"
@@ -301,15 +312,15 @@ export function BatchmatesView({
                   >
                     {/* FRONT FACE — Main Info */}
                     <div
-                      className={`absolute inset-0 backface-hidden rounded-2xl bg-white dark:bg-[#111114] border p-6 flex flex-col justify-between shadow-xs dark:shadow-none transition-colors ${
+                      className={`absolute inset-0 backface-hidden rounded-2xl bg-white dark:bg-[#111114] border p-6 flex flex-col justify-between shadow-xs group-hover:shadow-[0_20px_44px_-12px_rgba(24,24,27,0.16),0_8px_20px_-8px_rgba(225,29,72,0.12)] dark:shadow-[0_8px_24px_-12px_rgba(0,0,0,0.45)] dark:group-hover:shadow-[0_24px_50px_-12px_rgba(0,0,0,0.85),0_10px_28px_-10px_rgba(225,29,72,0.18)] transition-[border-color,box-shadow] duration-300 ease-out ${
                         isHighlighted
                           ? 'border-rose-500 ring-2 ring-rose-500/25'
-                          : 'border-zinc-300 dark:border-zinc-800/90 hover:border-zinc-500 dark:hover:border-zinc-700'
+                          : 'border-zinc-300 dark:border-zinc-800/90 group-hover:border-zinc-400 dark:group-hover:border-zinc-700'
                       }`}
                     >
                       <div className="space-y-4">
                         <div className="flex items-start gap-4">
-                          <div className="w-24 h-24 rounded-2xl overflow-hidden bg-zinc-100 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 shrink-0 flex items-center justify-center">
+                          <div className="w-24 h-24 rounded-2xl overflow-hidden bg-zinc-100 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 shrink-0 flex items-center justify-center transition-shadow duration-300 group-hover:shadow-md">
                             {person.photo ? (
                               <img
                                 src={person.photo}
@@ -378,10 +389,10 @@ export function BatchmatesView({
 
                     {/* BACK FACE — Hobbies, Dreams, Memories, Hangout, Birthday, Blood Group */}
                     <div
-                      className={`absolute inset-0 backface-hidden rotate-y-180 rounded-2xl bg-zinc-50 dark:bg-[#141419] border p-5 flex flex-col justify-between shadow-xs dark:shadow-none ${
+                      className={`absolute inset-0 backface-hidden rotate-y-180 rounded-2xl bg-zinc-50 dark:bg-[#141419] border p-5 flex flex-col justify-between shadow-xs group-hover:shadow-[0_20px_44px_-12px_rgba(24,24,27,0.16),0_8px_20px_-8px_rgba(225,29,72,0.12)] dark:shadow-[0_8px_24px_-12px_rgba(0,0,0,0.45)] dark:group-hover:shadow-[0_24px_50px_-12px_rgba(0,0,0,0.85),0_10px_28px_-10px_rgba(225,29,72,0.18)] transition-[border-color,box-shadow] duration-300 ease-out ${
                         isHighlighted
                           ? 'border-rose-500 ring-2 ring-rose-500/25'
-                          : 'border-zinc-300 dark:border-zinc-700/80'
+                          : 'border-zinc-300 dark:border-zinc-700/80 group-hover:border-zinc-400 dark:group-hover:border-zinc-600'
                       }`}
                     >
                       <div className="space-y-3 overflow-y-auto pr-1">

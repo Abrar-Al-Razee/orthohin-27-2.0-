@@ -188,7 +188,7 @@
       "properties": {
         "src": {
           "type": "string",
-          "maxLength": 300000,
+          "maxLength": 350000,
           "description": "Compressed image data URL or empty string."
         },
         "title": {

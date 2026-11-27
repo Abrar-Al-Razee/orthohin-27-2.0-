@@ -3,6 +3,7 @@
   "appId": "1:614014941288:web:9a63e5c596ce214067e3dd",
   "apiKey": "AIzaSyDQropVFtEAleEJKqV784ZoKhlQ-ateMlo",
   "authDomain": "orthohin-27.firebaseapp.com",
+  "databaseURL": "https://orthohin-27-default-rtdb.asia-southeast1.firebasedatabase.app",
   "firestoreDatabaseId": "ai-studio-orthohin27-001b6d35-312f-416d-bbf0-ecc47bc5ba12",
   "storageBucket": "orthohin-27.firebasestorage.app",
   "messagingSenderId": "614014941288",
