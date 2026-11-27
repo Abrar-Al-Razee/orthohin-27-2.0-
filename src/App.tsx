@@ -32,8 +32,10 @@ import {
   createBatchmateInDb,
   createOrderInDb,
   fetchAdminData,
+  fetchCachedFirestoreSnapshot,
   fetchPublicPortal,
   isUsingFirestoreBackend,
+  migrateFirestoreToRtdb,
   subscribeAdminDataInFirestore,
   subscribePublicPortalInFirestore,
 } from './services/apiService';
@@ -162,6 +164,9 @@ export default function App() {
   const retryTimerRef = useRef<number | null>(null);
   const retryAttemptRef = useRef(0);
   const settingsSeededRef = useRef(false);
+  const rtdbSettingsMissingRef = useRef(false);
+  const autoMigrateAttemptedRef = useRef(false);
+  const cacheRecoveryAttemptedRef = useRef(false);
   const hydratedRef = useRef(false);
   const quotaNotifiedRef = useRef(false);
   const lastLocalEditAtRef = useRef(0);
@@ -170,6 +175,8 @@ export default function App() {
   const isFirebaseAdmin = Boolean(
     authUser && isAuthorizedAdminEmail(authUser.email) && authUser.emailVerified
   );
+  const isFirebaseAdminRef = useRef(isFirebaseAdmin);
+  isFirebaseAdminRef.current = isFirebaseAdmin;
 
   const hydrateBatchmatesWithContacts = useCallback(
     (items: Batchmate[], adminActive: boolean): Batchmate[] => {
@@ -382,6 +389,41 @@ export default function App() {
   }, [firestoreRealtimeActive, isFirebaseAdmin, refreshAdminData]);
 
   useEffect(() => {
+    setState((prev) => ({
+      ...prev,
+      batchmates: hydrateBatchmatesWithContacts(prev.batchmates, isFirebaseAdmin),
+    }));
+  }, [isFirebaseAdmin, hydrateBatchmatesWithContacts]);
+
+  useEffect(() => {
+    if (!isFirebaseAdmin || !isPortalHydrated || autoMigrateAttemptedRef.current) return;
+    try {
+      if (localStorage.getItem('orthohin27_rtdb_migrated_v1') === 'true') return;
+    } catch {
+      // Ignore storage access errors
+    }
+    if (!rtdbSettingsMissingRef.current) return;
+    autoMigrateAttemptedRef.current = true;
+    void migrateFirestoreToRtdb(state)
+      .then((res) => {
+        if (res.totalMoved > 0) {
+          try {
+            localStorage.setItem('orthohin27_rtdb_migrated_v1', 'true');
+          } catch {
+            // Ignore storage access errors
+          }
+          showToast(
+            `Migrated ${res.batchmates} batchmates, ${res.gallery} photos & ${res.orders} orders to Realtime DB.`,
+            'success'
+          );
+        }
+      })
+      .catch(() => {
+        // Firestore quota may still be cooling down; admin can retry from Security & Backup tab
+      });
+  }, [isFirebaseAdmin, isPortalHydrated, state, showToast]);
+
+  useEffect(() => {
     if (!firestoreRealtimeActive) return;
     const defaults = createDefaultState();
     return subscribePublicPortalInFirestore({
@@ -393,7 +435,7 @@ export default function App() {
         setIsPortalHydrated(true);
         setState((prev) => ({
           ...prev,
-          batchmates: hydrateBatchmatesWithContacts(batchmates, isFirebaseAdmin),
+          batchmates: hydrateBatchmatesWithContacts(batchmates, isFirebaseAdminRef.current),
         }));
       },
       onNotices: (notices) => {
@@ -447,6 +489,7 @@ export default function App() {
         setRtdbRulesNeeded(false);
         setIsPortalHydrated(true);
         if (settings !== null) {
+          rtdbSettingsMissingRef.current = false;
           settingsSeededRef.current = true;
           setState((prev) => ({
             ...prev,
@@ -454,6 +497,33 @@ export default function App() {
             hoodieConfig: mergeHoodieConfig(settings.hoodieConfig),
             siteConfig: mergeSiteConfig(settings.siteConfig),
           }));
+        } else {
+          rtdbSettingsMissingRef.current = true;
+          if (!cacheRecoveryAttemptedRef.current) {
+            cacheRecoveryAttemptedRef.current = true;
+            void fetchCachedFirestoreSnapshot().then((cached) => {
+              if (!cached) return;
+              setState((prev) => ({
+                ...prev,
+                batchmates:
+                  prev.batchmates.length > 0
+                    ? prev.batchmates
+                    : hydrateBatchmatesWithContacts(cached.batchmates, isFirebaseAdminRef.current),
+                notices: prev.notices.length > 0 ? prev.notices : cached.notices,
+                gallery: prev.gallery.length > 0 ? prev.gallery : cached.gallery,
+                adminTeam: (prev.adminTeam || []).length > 0 ? prev.adminTeam : cached.adminTeam || [],
+                publicOrders:
+                  (prev.publicOrders || []).length > 0 ? prev.publicOrders : cached.publicOrders || [],
+                profile: cached.settings?.profile || prev.profile,
+                hoodieConfig: cached.settings?.hoodieConfig
+                  ? mergeHoodieConfig(cached.settings.hoodieConfig)
+                  : prev.hoodieConfig,
+                siteConfig: cached.settings?.siteConfig
+                  ? mergeSiteConfig(cached.settings.siteConfig)
+                  : prev.siteConfig,
+              }));
+            });
+          }
         }
       },
       onError: (err) => {
@@ -477,7 +547,7 @@ export default function App() {
         }
       },
     });
-  }, [firestoreRealtimeActive, hydrateBatchmatesWithContacts, isFirebaseAdmin, showToast]);
+  }, [firestoreRealtimeActive, hydrateBatchmatesWithContacts, showToast]);
 
   useEffect(() => {
     if (!firestoreRealtimeActive || !isFirebaseAdmin) return;

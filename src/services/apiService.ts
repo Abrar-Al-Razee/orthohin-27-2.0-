@@ -12,24 +12,11 @@ import type {
   SiteConfig,
 } from '../types';
 import {
-  addActivityLogInFirestore,
-  createBatchmateInFirestore,
-  createNoticeInFirestore,
-  createOrderInFirestore,
-  deleteAdminTeamMemberInFirestore,
-  deleteBatchmateInFirestore,
-  deleteGalleryItemInFirestore,
-  deleteNoticeInFirestore,
-  deleteOrderInFirestore,
   fetchAdminDataFromFirestore,
+  fetchAdminDataFromFirestoreCacheOnly,
   fetchPublicPortalFromFirestore,
-  saveAdminTeamMemberInFirestore,
-  saveGalleryItemInFirestore,
-  saveSettingsInFirestore,
+  fetchPublicPortalFromFirestoreCacheOnly,
   syncPortalStateInFirestore,
-  updateBatchmateInFirestore,
-  updateNoticeInFirestore,
-  updateOrderStatusInFirestore,
   type AdminFirestoreCallbacks,
   type PublicFirestoreCallbacks,
 } from './firestoreFallback';
@@ -56,12 +43,6 @@ import {
   updateNoticeInRtdb,
   updateOrderStatusInRtdb,
 } from './rtdbService';
-
-const FIRESTORE_IMAGE_CAP = 350000;
-
-function fitsFirestoreImage(val: string | undefined): boolean {
-  return !val || val.length <= FIRESTORE_IMAGE_CAP;
-}
 
 export function isUsingFirestoreBackend(): boolean {
   return true;
@@ -102,30 +83,35 @@ export async function fetchAdminData(): Promise<AdminPortalPayload> {
   return fetchAdminDataFromRtdb();
 }
 
-export async function createBatchmateInDb(bm: Batchmate): Promise<Batchmate> {
-  const saved = await createBatchmateInRtdb(bm);
-  if (fitsFirestoreImage(bm.photo)) {
-    void createBatchmateInFirestore(bm).catch(() => {});
+export async function fetchCachedFirestoreSnapshot(): Promise<PublicPortalPayload | null> {
+  try {
+    const cached = await fetchPublicPortalFromFirestoreCacheOnly();
+    const hasData =
+      cached.settings !== null ||
+      cached.batchmates.length > 0 ||
+      cached.gallery.length > 0 ||
+      cached.notices.length > 0 ||
+      (cached.adminTeam?.length || 0) > 0;
+    return hasData ? cached : null;
+  } catch {
+    return null;
   }
-  return saved;
+}
+
+export async function createBatchmateInDb(bm: Batchmate): Promise<Batchmate> {
+  return createBatchmateInRtdb(bm);
 }
 
 export async function updateBatchmateInDb(bm: Batchmate): Promise<void> {
-  await updateBatchmateInRtdb(bm);
-  if (fitsFirestoreImage(bm.photo)) {
-    void updateBatchmateInFirestore(bm).catch(() => {});
-  }
+  return updateBatchmateInRtdb(bm);
 }
 
 export async function deleteBatchmateInDb(id: string): Promise<void> {
-  await deleteBatchmateInRtdb(id);
-  void deleteBatchmateInFirestore(id).catch(() => {});
+  return deleteBatchmateInRtdb(id);
 }
 
 export async function createOrderInDb(order: HoodieOrder): Promise<HoodieOrder> {
-  const saved = await createOrderInRtdb(order);
-  void createOrderInFirestore(order).catch(() => {});
-  return saved;
+  return createOrderInRtdb(order);
 }
 
 export async function updateOrderStatusInDb(
@@ -134,60 +120,47 @@ export async function updateOrderStatusInDb(
   notes?: string,
   extra?: Partial<Pick<HoodieOrder, 'customerName' | 'roll' | 'size' | 'quantity' | 'contact' | 'email' | 'paymentStatus'>>
 ): Promise<void> {
-  await updateOrderStatusInRtdb(id, status, notes, extra);
-  void updateOrderStatusInFirestore(id, status, notes, extra).catch(() => {});
+  return updateOrderStatusInRtdb(id, status, notes, extra);
 }
 
 export async function deleteOrderInDb(id: string): Promise<void> {
-  await deleteOrderInRtdb(id);
-  void deleteOrderInFirestore(id).catch(() => {});
+  return deleteOrderInRtdb(id);
 }
 
 export async function createNoticeInDb(notice: BatchNotice): Promise<void> {
-  await createNoticeInRtdb(notice);
-  void createNoticeInFirestore(notice).catch(() => {});
+  return createNoticeInRtdb(notice);
 }
 
 export async function updateNoticeInDb(notice: BatchNotice): Promise<void> {
-  await updateNoticeInRtdb(notice);
-  void updateNoticeInFirestore(notice).catch(() => {});
+  return updateNoticeInRtdb(notice);
 }
 
 export async function deleteNoticeInDb(id: string): Promise<void> {
-  await deleteNoticeInRtdb(id);
-  void deleteNoticeInFirestore(id).catch(() => {});
+  return deleteNoticeInRtdb(id);
 }
 
 export async function saveGalleryItemInDb(item: GalleryItem, sortOrder: number): Promise<void> {
-  await saveGalleryItemInRtdb(item, sortOrder);
-  if (fitsFirestoreImage(item.src)) {
-    void saveGalleryItemInFirestore(item, sortOrder).catch(() => {});
-  }
+  return saveGalleryItemInRtdb(item, sortOrder);
 }
 
 export async function reorderGalleryInDb(items: GalleryItem[]): Promise<void> {
-  await Promise.all(items.map((item, idx) => saveGalleryItemInDb(item, idx)));
+  await Promise.all(items.map((item, idx) => saveGalleryItemInRtdb(item, idx)));
 }
 
 export async function deleteGalleryItemInDb(id: string): Promise<void> {
-  await deleteGalleryItemInRtdb(id);
-  void deleteGalleryItemInFirestore(id).catch(() => {});
+  return deleteGalleryItemInRtdb(id);
 }
 
 export async function saveAdminTeamMemberInDb(member: AdminTeamMember, sortOrder: number): Promise<void> {
-  await saveAdminTeamMemberInRtdb(member, sortOrder);
-  if (fitsFirestoreImage(member.photo)) {
-    void saveAdminTeamMemberInFirestore(member, sortOrder).catch(() => {});
-  }
+  return saveAdminTeamMemberInRtdb(member, sortOrder);
 }
 
 export async function reorderAdminTeamInDb(members: AdminTeamMember[]): Promise<void> {
-  await Promise.all(members.map((m, idx) => saveAdminTeamMemberInDb(m, idx)));
+  await Promise.all(members.map((m, idx) => saveAdminTeamMemberInRtdb(m, idx)));
 }
 
 export async function deleteAdminTeamMemberInDb(id: string): Promise<void> {
-  await deleteAdminTeamMemberInRtdb(id);
-  void deleteAdminTeamMemberInFirestore(id).catch(() => {});
+  return deleteAdminTeamMemberInRtdb(id);
 }
 
 export async function saveSettingsInDb(
@@ -195,20 +168,11 @@ export async function saveSettingsInDb(
   hoodieConfig: HoodieConfig,
   siteConfig: SiteConfig
 ): Promise<void> {
-  await saveSettingsInRtdb(profile, hoodieConfig, siteConfig);
-  if (
-    fitsFirestoreImage(profile) &&
-    fitsFirestoreImage(hoodieConfig.frontImage) &&
-    fitsFirestoreImage(hoodieConfig.backImage) &&
-    fitsFirestoreImage(siteConfig.heroImage)
-  ) {
-    void saveSettingsInFirestore(profile, hoodieConfig, siteConfig).catch(() => {});
-  }
+  return saveSettingsInRtdb(profile, hoodieConfig, siteConfig);
 }
 
 export async function addActivityLogInDb(action: string, detail: string): Promise<void> {
-  await addActivityLogInRtdb(action, detail);
-  void addActivityLogInFirestore(action, detail).catch(() => {});
+  return addActivityLogInRtdb(action, detail);
 }
 
 export async function seedDefaultsIfEmptyInDb(defaults: PortalState): Promise<void> {
@@ -216,27 +180,59 @@ export async function seedDefaultsIfEmptyInDb(defaults: PortalState): Promise<vo
 }
 
 export async function syncPortalStateInDb(state: PortalState, replaceCollections: boolean): Promise<void> {
-  await syncPortalStateInRtdb(state, replaceCollections);
-  void syncPortalStateInFirestore(state, replaceCollections).catch(() => {});
+  return syncPortalStateInRtdb(state, replaceCollections);
 }
 
-export async function migrateFirestoreToRtdb(currentFallback: PortalState): Promise<{
+export async function migrateFirestoreToRtdb(
+  currentFallback: PortalState,
+  options?: { cacheOnly?: boolean }
+): Promise<{
   batchmates: number;
   gallery: number;
   orders: number;
   notices: number;
+  totalMoved: number;
 }> {
-  const pub = await fetchPublicPortalFromFirestore();
+  let pub = await fetchPublicPortalFromFirestoreCacheOnly().catch(() => null);
+  let hasPublicCache =
+    pub !== null &&
+    (pub.settings !== null ||
+      pub.batchmates.length > 0 ||
+      pub.gallery.length > 0 ||
+      pub.notices.length > 0 ||
+      (pub.adminTeam?.length || 0) > 0);
+
+  if (!hasPublicCache && !options?.cacheOnly) {
+    pub = await fetchPublicPortalFromFirestore();
+  }
+
+  if (!pub) {
+    return { batchmates: 0, gallery: 0, orders: 0, notices: 0, totalMoved: 0 };
+  }
+
   let orders: HoodieOrder[] = [];
-  let contactsByBmId: Record<string, BatchmateContact> = {};
+  const contactsByBmId: Record<string, BatchmateContact> = {};
   let activityLog: ActivityLogEntry[] = [];
 
   try {
-    const adminData = await fetchAdminDataFromFirestore();
-    orders = adminData.orders;
-    activityLog = adminData.activityLog;
-    for (const c of adminData.batchmateContacts || []) {
-      contactsByBmId[c.batchmateId] = c;
+    const cachedAdmin = await fetchAdminDataFromFirestoreCacheOnly();
+    if (
+      cachedAdmin.orders.length > 0 ||
+      cachedAdmin.batchmateContacts.length > 0 ||
+      cachedAdmin.activityLog.length > 0
+    ) {
+      orders = cachedAdmin.orders;
+      activityLog = cachedAdmin.activityLog;
+      for (const c of cachedAdmin.batchmateContacts) {
+        contactsByBmId[c.batchmateId] = c;
+      }
+    } else if (!options?.cacheOnly) {
+      const adminData = await fetchAdminDataFromFirestore();
+      orders = adminData.orders;
+      activityLog = adminData.activityLog;
+      for (const c of adminData.batchmateContacts || []) {
+        contactsByBmId[c.batchmateId] = c;
+      }
     }
   } catch {
     orders = pub.publicOrders || [];
@@ -247,6 +243,18 @@ export async function migrateFirestoreToRtdb(currentFallback: PortalState): Prom
     email: contactsByBmId[bm.id]?.email ?? bm.email,
     phone: contactsByBmId[bm.id]?.phone ?? bm.phone,
   }));
+
+  const totalMoved =
+    hydratedBatchmates.length +
+    pub.gallery.length +
+    orders.length +
+    pub.notices.length +
+    (pub.adminTeam?.length || 0) +
+    (pub.settings ? 1 : 0);
+
+  if (totalMoved === 0) {
+    return { batchmates: 0, gallery: 0, orders: 0, notices: 0, totalMoved: 0 };
+  }
 
   const nextState: PortalState = {
     batchmates: hydratedBatchmates,
@@ -268,5 +276,10 @@ export async function migrateFirestoreToRtdb(currentFallback: PortalState): Prom
     gallery: nextState.gallery.length,
     orders: nextState.orders.length,
     notices: nextState.notices.length,
+    totalMoved,
   };
+}
+
+export async function backupRtdbToFirestore(state: PortalState): Promise<void> {
+  await syncPortalStateInFirestore(state, false);
 }

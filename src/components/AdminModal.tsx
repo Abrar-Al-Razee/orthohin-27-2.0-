@@ -56,6 +56,7 @@ import {
 import { auth, googleProvider } from '../firebase';
 import {
   addActivityLogInDb,
+  backupRtdbToFirestore,
   createBatchmateInDb,
   createNoticeInDb,
   createOrderInDb,
@@ -6864,19 +6865,46 @@ export function AdminModal({
                           try {
                             const counts = await migrateFirestoreToRtdb(state);
                             await onRefreshData();
-                            onToast(
-                              `Synced ${counts.batchmates} batchmates, ${counts.gallery} photos & ${counts.orders} orders to Realtime DB.`,
-                              'success'
-                            );
+                            if (counts.totalMoved > 0) {
+                              try {
+                                localStorage.setItem('orthohin27_rtdb_migrated_v1', 'true');
+                              } catch {
+                                // Ignore storage errors
+                              }
+                              onToast(
+                                `Migrated ${counts.batchmates} batchmates, ${counts.gallery} photos & ${counts.orders} orders to Realtime DB.`,
+                                'success'
+                              );
+                            } else {
+                              onToast('No Firestore records found to migrate.', 'info');
+                            }
                           } catch {
-                            onToast('Firestore read quota still exceeded or RTDB rules need publishing.', 'error');
+                            onToast('Firestore read quota still exceeded. Try again after daily reset.', 'error');
                           } finally {
                             setIsSyncing(false);
                           }
                         }}
                         className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-xs font-semibold text-white cursor-pointer disabled:opacity-50"
                       >
-                        <RefreshCw className="w-3.5 h-3.5" /> Sync Firestore → Realtime DB
+                        <RefreshCw className="w-3.5 h-3.5" /> Migrate Firestore → Realtime DB
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isSyncing}
+                        onClick={async () => {
+                          setIsSyncing(true);
+                          try {
+                            await backupRtdbToFirestore(state);
+                            onToast('Backed up Realtime DB snapshot to Firestore.', 'success');
+                          } catch {
+                            onToast('Firestore backup failed (check Firestore quota or 1MB image limit).', 'error');
+                          } finally {
+                            setIsSyncing(false);
+                          }
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-transparent text-xs font-medium text-zinc-900 dark:text-white cursor-pointer disabled:opacity-50"
+                      >
+                        <Upload className="w-3.5 h-3.5" /> Backup Realtime DB → Firestore
                       </button>
 
                       {confirmReset ? (

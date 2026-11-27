@@ -3,7 +3,9 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  getDocFromCache,
   getDocs,
+  getDocsFromCache,
   limit,
   onSnapshot,
   orderBy,
@@ -431,6 +433,76 @@ export async function fetchAdminDataFromFirestore() {
   const orders: HoodieOrder[] = orderSnap.docs.map(mapOrderDoc);
   const activityLog: ActivityLogEntry[] = logSnap.docs.map(mapActivityLogDoc);
   const batchmateContacts: BatchmateContact[] = contactSnap.docs.map(mapBatchmateContactDoc);
+
+  return { orders, activityLog, batchmateContacts };
+}
+
+export async function fetchPublicPortalFromFirestoreCacheOnly() {
+  const [bmRes, noticeRes, galleryRes, adminTeamRes, publicOrdersRes, settingsRes] = await Promise.allSettled([
+    getDocsFromCache(collection(db, 'batchmates')),
+    getDocsFromCache(collection(db, 'notices')),
+    getDocsFromCache(collection(db, 'gallery')),
+    getDocsFromCache(collection(db, 'adminTeam')),
+    getDocsFromCache(collection(db, 'publicHoodieOrders')),
+    getDocFromCache(doc(db, 'settings', 'main')),
+  ]);
+
+  const batchmates: Batchmate[] =
+    bmRes.status === 'fulfilled'
+      ? sortByTimestampDesc(bmRes.value.docs, 'createdAt', 'registeredAt').map(mapBatchmateDoc)
+      : [];
+  const notices: BatchNotice[] =
+    noticeRes.status === 'fulfilled'
+      ? sortByTimestampDesc(noticeRes.value.docs, 'updatedAt', 'createdAt').map(mapNoticeDoc)
+      : [];
+  const gallery: GalleryItem[] =
+    galleryRes.status === 'fulfilled'
+      ? sortBySortOrderAsc(galleryRes.value.docs).map(mapGalleryDoc)
+      : [];
+  const adminTeam: AdminTeamMember[] =
+    adminTeamRes.status === 'fulfilled'
+      ? sortBySortOrderAsc(adminTeamRes.value.docs).map(mapAdminTeamDoc)
+      : [];
+  const publicOrders: HoodieOrder[] =
+    publicOrdersRes.status === 'fulfilled'
+      ? sortByTimestampDesc(publicOrdersRes.value.docs, 'createdAt').map(mapPublicOrderDoc)
+      : [];
+  const settingsData =
+    settingsRes.status === 'fulfilled' && settingsRes.value.exists() ? settingsRes.value.data() : null;
+
+  return {
+    batchmates,
+    notices,
+    gallery,
+    adminTeam,
+    publicOrders,
+    settings: settingsData
+      ? {
+          profile: String(settingsData.profile || ''),
+          hoodieConfig: settingsData.hoodieConfig as HoodieConfig,
+          siteConfig: settingsData.siteConfig as SiteConfig,
+        }
+      : null,
+  };
+}
+
+export async function fetchAdminDataFromFirestoreCacheOnly() {
+  const [orderRes, logRes, contactRes] = await Promise.allSettled([
+    getDocsFromCache(collection(db, 'orders')),
+    getDocsFromCache(collection(db, 'activityLogs')),
+    getDocsFromCache(collection(db, 'batchmateContacts')),
+  ]);
+
+  const orders: HoodieOrder[] =
+    orderRes.status === 'fulfilled'
+      ? sortByTimestampDesc(orderRes.value.docs, 'createdAt').map(mapOrderDoc)
+      : [];
+  const activityLog: ActivityLogEntry[] =
+    logRes.status === 'fulfilled'
+      ? sortByTimestampDesc(logRes.value.docs, 'createdAt').slice(0, 50).map(mapActivityLogDoc)
+      : [];
+  const batchmateContacts: BatchmateContact[] =
+    contactRes.status === 'fulfilled' ? contactRes.value.docs.map(mapBatchmateContactDoc) : [];
 
   return { orders, activityLog, batchmateContacts };
 }
