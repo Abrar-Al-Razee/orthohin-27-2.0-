@@ -32,7 +32,7 @@ import {
   createBatchmateInDb,
   createOrderInDb,
   fetchAdminData,
-  fetchCachedFirestoreSnapshot,
+  fetchLiveFirestoreSnapshot,
   fetchPublicPortal,
   isUsingFirestoreBackend,
   migrateFirestoreToRtdb,
@@ -166,7 +166,13 @@ export default function App() {
   const settingsSeededRef = useRef(false);
   const rtdbSettingsMissingRef = useRef(false);
   const autoMigrateAttemptedRef = useRef(false);
-  const cacheRecoveryAttemptedRef = useRef(false);
+  const firestoreFallbackAttemptedRef = useRef(false);
+  const showingFirestoreRecoveryRef = useRef(false);
+  const rtdbRawStateRef = useRef<{
+    batchmates: Batchmate[];
+    gallery: GalleryItem[];
+    publicOrders: HoodieOrder[];
+  }>({ batchmates: [], gallery: [], publicOrders: [] });
   const hydratedRef = useRef(false);
   const quotaNotifiedRef = useRef(false);
   const lastLocalEditAtRef = useRef(0);
@@ -395,25 +401,68 @@ export default function App() {
     }));
   }, [isFirebaseAdmin, hydrateBatchmatesWithContacts]);
 
+  const isOnlySampleDefaults = useCallback(
+    (batchmates: Batchmate[], gallery: GalleryItem[], publicOrders: HoodieOrder[]) => {
+      const bmDefault = batchmates.length === 0 || batchmates.every((b) => /^bm-[1-6]$/.test(b.id));
+      const galDefault = gallery.length === 0 || gallery.every((g) => /^gal-[1-3]$/.test(g.id));
+      const ordersDefault = (publicOrders || []).length === 0;
+      return bmDefault && galDefault && ordersDefault;
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (!isPortalHydrated || firestoreFallbackAttemptedRef.current) return;
+    const raw = rtdbRawStateRef.current;
+    if (!rtdbSettingsMissingRef.current && !isOnlySampleDefaults(raw.batchmates, raw.gallery, raw.publicOrders)) {
+      return;
+    }
+    firestoreFallbackAttemptedRef.current = true;
+    void fetchLiveFirestoreSnapshot().then((live) => {
+      if (!live) return;
+      if (isOnlySampleDefaults(live.batchmates, live.gallery, live.publicOrders || [])) return;
+      showingFirestoreRecoveryRef.current = true;
+      setState((prev) => ({
+        ...prev,
+        batchmates: hydrateBatchmatesWithContacts(live.batchmates, isFirebaseAdminRef.current),
+        notices: live.notices,
+        gallery: live.gallery,
+        adminTeam: live.adminTeam || [],
+        publicOrders: live.publicOrders || [],
+        profile: live.settings?.profile || prev.profile,
+        hoodieConfig: live.settings?.hoodieConfig
+          ? mergeHoodieConfig(live.settings.hoodieConfig)
+          : prev.hoodieConfig,
+        siteConfig: live.settings?.siteConfig ? mergeSiteConfig(live.settings.siteConfig) : prev.siteConfig,
+      }));
+    });
+  }, [isPortalHydrated, hydrateBatchmatesWithContacts, isOnlySampleDefaults]);
+
   useEffect(() => {
     if (!isFirebaseAdmin || !isPortalHydrated || autoMigrateAttemptedRef.current) return;
-    try {
-      if (localStorage.getItem('orthohin27_rtdb_migrated_v1') === 'true') return;
-    } catch {
-      // Ignore storage access errors
+    const raw = rtdbRawStateRef.current;
+    const needsMigration =
+      rtdbSettingsMissingRef.current || isOnlySampleDefaults(raw.batchmates, raw.gallery, raw.publicOrders);
+    if (!needsMigration) {
+      try {
+        localStorage.setItem('orthohin27_rtdb_migrated_v2', 'true');
+      } catch {
+        // Ignore storage errors
+      }
+      return;
     }
-    if (!rtdbSettingsMissingRef.current) return;
     autoMigrateAttemptedRef.current = true;
     void migrateFirestoreToRtdb(state)
       .then((res) => {
         if (res.totalMoved > 0) {
+          showingFirestoreRecoveryRef.current = false;
           try {
-            localStorage.setItem('orthohin27_rtdb_migrated_v1', 'true');
+            localStorage.setItem('orthohin27_rtdb_migrated_v2', 'true');
           } catch {
             // Ignore storage access errors
           }
           showToast(
-            `Migrated ${res.batchmates} batchmates, ${res.gallery} photos & ${res.orders} orders to Realtime DB.`,
+            `Transferred ${res.batchmates} batchmates, ${res.gallery} photos & ${res.orders} orders to Realtime DB.`,
             'success'
           );
         }
@@ -421,7 +470,7 @@ export default function App() {
       .catch(() => {
         // Firestore quota may still be cooling down; admin can retry from Security & Backup tab
       });
-  }, [isFirebaseAdmin, isPortalHydrated, state, showToast]);
+  }, [isFirebaseAdmin, isPortalHydrated, state, showToast, isOnlySampleDefaults]);
 
   useEffect(() => {
     if (!firestoreRealtimeActive) return;
@@ -429,10 +478,16 @@ export default function App() {
     return subscribePublicPortalInFirestore({
       onBatchmates: (batchmates) => {
         if (Date.now() - lastLocalEditAtRef.current < 1600) return;
+        rtdbRawStateRef.current.batchmates = batchmates;
+        const raw = rtdbRawStateRef.current;
+        if (!isOnlySampleDefaults(raw.batchmates, raw.gallery, raw.publicOrders)) {
+          showingFirestoreRecoveryRef.current = false;
+        }
         hydratedRef.current = true;
         setQuotaReached(false);
         setRtdbRulesNeeded(false);
         setIsPortalHydrated(true);
+        if (showingFirestoreRecoveryRef.current) return;
         setState((prev) => ({
           ...prev,
           batchmates: hydrateBatchmatesWithContacts(batchmates, isFirebaseAdminRef.current),
@@ -444,6 +499,7 @@ export default function App() {
         setQuotaReached(false);
         setRtdbRulesNeeded(false);
         setIsPortalHydrated(true);
+        if (showingFirestoreRecoveryRef.current) return;
         setState((prev) => ({
           ...prev,
           notices,
@@ -451,10 +507,16 @@ export default function App() {
       },
       onGallery: (gallery) => {
         if (Date.now() - lastLocalEditAtRef.current < 1600) return;
+        rtdbRawStateRef.current.gallery = gallery;
+        const raw = rtdbRawStateRef.current;
+        if (!isOnlySampleDefaults(raw.batchmates, raw.gallery, raw.publicOrders)) {
+          showingFirestoreRecoveryRef.current = false;
+        }
         hydratedRef.current = true;
         setQuotaReached(false);
         setRtdbRulesNeeded(false);
         setIsPortalHydrated(true);
+        if (showingFirestoreRecoveryRef.current) return;
         setState((prev) => ({
           ...prev,
           gallery,
@@ -466,6 +528,7 @@ export default function App() {
         setQuotaReached(false);
         setRtdbRulesNeeded(false);
         setIsPortalHydrated(true);
+        if (showingFirestoreRecoveryRef.current) return;
         setState((prev) => ({
           ...prev,
           adminTeam,
@@ -473,10 +536,16 @@ export default function App() {
       },
       onPublicOrders: (publicOrders) => {
         if (Date.now() - lastLocalEditAtRef.current < 1600) return;
+        rtdbRawStateRef.current.publicOrders = publicOrders;
+        const raw = rtdbRawStateRef.current;
+        if (!isOnlySampleDefaults(raw.batchmates, raw.gallery, raw.publicOrders)) {
+          showingFirestoreRecoveryRef.current = false;
+        }
         hydratedRef.current = true;
         setQuotaReached(false);
         setRtdbRulesNeeded(false);
         setIsPortalHydrated(true);
+        if (showingFirestoreRecoveryRef.current) return;
         setState((prev) => ({
           ...prev,
           publicOrders,
@@ -491,6 +560,7 @@ export default function App() {
         if (settings !== null) {
           rtdbSettingsMissingRef.current = false;
           settingsSeededRef.current = true;
+          if (showingFirestoreRecoveryRef.current) return;
           setState((prev) => ({
             ...prev,
             profile: settings.profile || defaults.profile,
@@ -499,31 +569,6 @@ export default function App() {
           }));
         } else {
           rtdbSettingsMissingRef.current = true;
-          if (!cacheRecoveryAttemptedRef.current) {
-            cacheRecoveryAttemptedRef.current = true;
-            void fetchCachedFirestoreSnapshot().then((cached) => {
-              if (!cached) return;
-              setState((prev) => ({
-                ...prev,
-                batchmates:
-                  prev.batchmates.length > 0
-                    ? prev.batchmates
-                    : hydrateBatchmatesWithContacts(cached.batchmates, isFirebaseAdminRef.current),
-                notices: prev.notices.length > 0 ? prev.notices : cached.notices,
-                gallery: prev.gallery.length > 0 ? prev.gallery : cached.gallery,
-                adminTeam: (prev.adminTeam || []).length > 0 ? prev.adminTeam : cached.adminTeam || [],
-                publicOrders:
-                  (prev.publicOrders || []).length > 0 ? prev.publicOrders : cached.publicOrders || [],
-                profile: cached.settings?.profile || prev.profile,
-                hoodieConfig: cached.settings?.hoodieConfig
-                  ? mergeHoodieConfig(cached.settings.hoodieConfig)
-                  : prev.hoodieConfig,
-                siteConfig: cached.settings?.siteConfig
-                  ? mergeSiteConfig(cached.settings.siteConfig)
-                  : prev.siteConfig,
-              }));
-            });
-          }
         }
       },
       onError: (err) => {
@@ -547,7 +592,7 @@ export default function App() {
         }
       },
     });
-  }, [firestoreRealtimeActive, hydrateBatchmatesWithContacts, showToast]);
+  }, [firestoreRealtimeActive, hydrateBatchmatesWithContacts, isOnlySampleDefaults, showToast]);
 
   useEffect(() => {
     if (!firestoreRealtimeActive || !isFirebaseAdmin) return;

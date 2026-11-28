@@ -417,9 +417,13 @@ export async function createBatchmateInRtdb(bm: Batchmate): Promise<Batchmate> {
   const superpower = clampStr(bm.superpower, 140);
   const email = clampStr(bm.email, 160);
   const phone = clampStr(bm.phone, 40);
-  const registeredAt = clampStr(bm.registeredAt || new Date().toISOString().slice(0, 10), 32);
-
   const nowIso = new Date().toISOString();
+  const todayIsoDate = nowIso.slice(0, 10);
+  const registeredAt = clampStr(bm.registeredAt || todayIsoDate, 32);
+  const createdTimestamp =
+    registeredAt && registeredAt !== todayIsoDate && /^\d{4}-\d{2}-\d{2}/.test(registeredAt)
+      ? `${registeredAt}T00:00:00.000Z`
+      : nowIso;
   const fields = stripUndefined<Record<string, unknown>>({
     name,
     roll,
@@ -436,7 +440,7 @@ export async function createBatchmateInRtdb(bm: Batchmate): Promise<Batchmate> {
     ...(birthday ? { birthday } : {}),
     ...(superpower ? { superpower } : {}),
     ...(registeredAt ? { registeredAt } : {}),
-    createdAt: nowIso,
+    createdAt: createdTimestamp,
   });
 
   await set(ref(rtdb, `batchmates/${id}`), fields);
@@ -941,6 +945,13 @@ export async function syncPortalStateInRtdb(nextState: PortalState, replaceColle
     ...nextState.gallery.map((g, idx) => saveGalleryItemInRtdb(g, idx)),
     ...(nextState.adminTeam || []).map((m, idx) => saveAdminTeamMemberInRtdb(m, idx)),
     ...(nextState.orders || []).map((o) => createOrderInRtdb(o)),
+    ...(nextState.activityLog || []).slice(0, 50).map((log) =>
+      set(ref(rtdb, `activityLogs/${sanitizeId(log.id, 'log')}`), {
+        action: clampStr(log.action, 80) || 'Admin Action',
+        detail: clampStr(log.detail, 300) || 'Action recorded',
+        createdAt: log.timestamp || new Date().toISOString(),
+      })
+    ),
     saveSettingsInRtdb(nextState.profile, nextState.hoodieConfig, nextState.siteConfig),
   ]);
 
@@ -976,4 +987,23 @@ export async function syncPortalStateInRtdb(nextState: PortalState, replaceColle
         .map((e) => remove(ref(rtdb, `adminTeam/${e.id}`))),
     ]);
   }
+}
+
+export async function removeSampleDefaultsFromRtdb(migrated: PortalState): Promise<void> {
+  const sampleBmIds = ['bm-1', 'bm-2', 'bm-3', 'bm-4', 'bm-5', 'bm-6'];
+  const sampleGalIds = ['gal-1', 'gal-2', 'gal-3'];
+  const sampleNoticeIds = ['notice-1'];
+  const sampleAdminIds = ['admin-1'];
+
+  const keepBm = new Set(migrated.batchmates.map((b) => b.id));
+  const keepGal = new Set(migrated.gallery.map((g) => g.id));
+  const keepNot = new Set((migrated.notices || []).map((n) => n.id));
+  const keepAdm = new Set((migrated.adminTeam || []).map((m) => m.id));
+
+  await Promise.all([
+    ...sampleBmIds.filter((id) => !keepBm.has(id)).map((id) => remove(ref(rtdb, `batchmates/${id}`))),
+    ...sampleGalIds.filter((id) => !keepGal.has(id)).map((id) => remove(ref(rtdb, `gallery/${id}`))),
+    ...sampleNoticeIds.filter((id) => !keepNot.has(id)).map((id) => remove(ref(rtdb, `notices/${id}`))),
+    ...sampleAdminIds.filter((id) => !keepAdm.has(id)).map((id) => remove(ref(rtdb, `adminTeam/${id}`))),
+  ]);
 }

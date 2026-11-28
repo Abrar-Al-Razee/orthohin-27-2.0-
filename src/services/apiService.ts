@@ -32,6 +32,7 @@ import {
   deleteOrderInRtdb,
   fetchAdminDataFromRtdb,
   fetchPublicPortalFromRtdb,
+  removeSampleDefaultsFromRtdb,
   saveAdminTeamMemberInRtdb,
   saveGalleryItemInRtdb,
   saveSettingsInRtdb,
@@ -95,6 +96,21 @@ export async function fetchCachedFirestoreSnapshot(): Promise<PublicPortalPayloa
     return hasData ? cached : null;
   } catch {
     return null;
+  }
+}
+
+export async function fetchLiveFirestoreSnapshot(): Promise<PublicPortalPayload | null> {
+  try {
+    const live = await fetchPublicPortalFromFirestore();
+    const hasData =
+      live.settings !== null ||
+      live.batchmates.length > 0 ||
+      live.gallery.length > 0 ||
+      live.notices.length > 0 ||
+      (live.adminTeam?.length || 0) > 0;
+    return hasData ? live : null;
+  } catch {
+    return fetchCachedFirestoreSnapshot();
   }
 }
 
@@ -183,6 +199,14 @@ export async function syncPortalStateInDb(state: PortalState, replaceCollections
   return syncPortalStateInRtdb(state, replaceCollections);
 }
 
+let activeMigrationPromise: Promise<{
+  batchmates: number;
+  gallery: number;
+  orders: number;
+  notices: number;
+  totalMoved: number;
+}> | null = null;
+
 export async function migrateFirestoreToRtdb(
   currentFallback: PortalState,
   options?: { cacheOnly?: boolean }
@@ -193,17 +217,46 @@ export async function migrateFirestoreToRtdb(
   notices: number;
   totalMoved: number;
 }> {
-  let pub = await fetchPublicPortalFromFirestoreCacheOnly().catch(() => null);
-  let hasPublicCache =
-    pub !== null &&
-    (pub.settings !== null ||
-      pub.batchmates.length > 0 ||
-      pub.gallery.length > 0 ||
-      pub.notices.length > 0 ||
-      (pub.adminTeam?.length || 0) > 0);
+  if (activeMigrationPromise) {
+    return activeMigrationPromise;
+  }
+  activeMigrationPromise = runMigrateFirestoreToRtdb(currentFallback, options).finally(() => {
+    activeMigrationPromise = null;
+  });
+  return activeMigrationPromise;
+}
 
-  if (!hasPublicCache && !options?.cacheOnly) {
-    pub = await fetchPublicPortalFromFirestore();
+async function runMigrateFirestoreToRtdb(
+  currentFallback: PortalState,
+  options?: { cacheOnly?: boolean }
+): Promise<{
+  batchmates: number;
+  gallery: number;
+  orders: number;
+  notices: number;
+  totalMoved: number;
+}> {
+  let pub: PublicPortalPayload | null = null;
+
+  if (options?.cacheOnly) {
+    pub = await fetchPublicPortalFromFirestoreCacheOnly().catch(() => null);
+  } else {
+    try {
+      pub = await fetchPublicPortalFromFirestore();
+    } catch (serverErr) {
+      const cached = await fetchPublicPortalFromFirestoreCacheOnly().catch(() => null);
+      const hasCached =
+        cached !== null &&
+        (cached.settings !== null ||
+          cached.batchmates.length > 0 ||
+          cached.gallery.length > 0 ||
+          cached.notices.length > 0 ||
+          (cached.adminTeam?.length || 0) > 0);
+      if (!hasCached) {
+        throw serverErr;
+      }
+      pub = cached;
+    }
   }
 
   if (!pub) {
@@ -215,18 +268,14 @@ export async function migrateFirestoreToRtdb(
   let activityLog: ActivityLogEntry[] = [];
 
   try {
-    const cachedAdmin = await fetchAdminDataFromFirestoreCacheOnly();
-    if (
-      cachedAdmin.orders.length > 0 ||
-      cachedAdmin.batchmateContacts.length > 0 ||
-      cachedAdmin.activityLog.length > 0
-    ) {
+    if (options?.cacheOnly) {
+      const cachedAdmin = await fetchAdminDataFromFirestoreCacheOnly();
       orders = cachedAdmin.orders;
       activityLog = cachedAdmin.activityLog;
       for (const c of cachedAdmin.batchmateContacts) {
         contactsByBmId[c.batchmateId] = c;
       }
-    } else if (!options?.cacheOnly) {
+    } else {
       const adminData = await fetchAdminDataFromFirestore();
       orders = adminData.orders;
       activityLog = adminData.activityLog;
@@ -235,7 +284,16 @@ export async function migrateFirestoreToRtdb(
       }
     }
   } catch {
-    orders = pub.publicOrders || [];
+    try {
+      const cachedAdmin = await fetchAdminDataFromFirestoreCacheOnly();
+      orders = cachedAdmin.orders.length > 0 ? cachedAdmin.orders : pub.publicOrders || [];
+      activityLog = cachedAdmin.activityLog;
+      for (const c of cachedAdmin.batchmateContacts) {
+        contactsByBmId[c.batchmateId] = c;
+      }
+    } catch {
+      orders = pub.publicOrders || [];
+    }
   }
 
   const hydratedBatchmates = pub.batchmates.map((bm) => ({
@@ -270,6 +328,7 @@ export async function migrateFirestoreToRtdb(
   };
 
   await syncPortalStateInRtdb(nextState, false);
+  await removeSampleDefaultsFromRtdb(nextState).catch(() => {});
 
   return {
     batchmates: nextState.batchmates.length,

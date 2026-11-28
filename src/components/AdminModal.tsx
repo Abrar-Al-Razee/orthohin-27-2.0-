@@ -71,7 +71,6 @@ import {
   migrateFirestoreToRtdb,
   saveGalleryItemInDb,
   saveSettingsInDb,
-  seedDefaultsIfEmptyInDb,
   syncPortalStateInDb,
   updateBatchmateInDb,
   updateNoticeInDb,
@@ -1239,7 +1238,19 @@ export function AdminModal({
     setPasswordInput('');
     setFailedAttempts(0);
     try {
-      await seedDefaultsIfEmptyInDb(createDefaultState());
+      const onlySampleDefaults =
+        (state.batchmates.length === 0 || state.batchmates.every((b) => /^bm-[1-6]$/.test(b.id))) &&
+        (state.gallery.length === 0 || state.gallery.every((g) => /^gal-[1-3]$/.test(g.id))) &&
+        state.orders.length === 0;
+      if (onlySampleDefaults) {
+        const res = await migrateFirestoreToRtdb(state).catch(() => null);
+        if (res && res.totalMoved > 0) {
+          onToast(
+            `Transferred ${res.batchmates} batchmates, ${res.gallery} photos & ${res.orders} orders to Realtime DB.`,
+            'success'
+          );
+        }
+      }
       await addActivityLogInDb('Admin Signed In', `Authorized session started by ${verifiedEmail}`);
       await onRefreshData();
     } catch {
@@ -6867,7 +6878,7 @@ export function AdminModal({
                             await onRefreshData();
                             if (counts.totalMoved > 0) {
                               try {
-                                localStorage.setItem('orthohin27_rtdb_migrated_v1', 'true');
+                                localStorage.setItem('orthohin27_rtdb_migrated_v2', 'true');
                               } catch {
                                 // Ignore storage errors
                               }
